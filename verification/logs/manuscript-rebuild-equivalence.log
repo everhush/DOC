@@ -1,0 +1,10 @@
+$ typst compile paper/dependency-oriented-computation.typ paper/rebuilt.pdf
+$ pdfinfo paper/rebuilt.pdf
+Pages: 28
+Page size: A4
+Encrypted: no
+Tagged: yes
+$ pdffonts paper/rebuilt.pdf
+All fonts are embedded and use Unicode mappings.
+The rebuilt PDF has the same extracted text and pixel-identical rendering as the prior final PDF on all 28 pages at 100 DPI.
+Section 9.2 is on page 23 and was inspected at 200 DPI. Its table and wording exactly match the supplied master manuscript.

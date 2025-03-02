@@ -1,0 +1,11 @@
+$ TSAN_OPTIONS=halt_on_error=1 ctest --test-dir build/tsan --output-on-failure -R "^(doc_tests|doc_benchmark_generator)$"
+Internal ctest changing into directory: build/tsan
+Test project build/tsan
+    Start 1: doc_tests
+1/2 Test #1: doc_tests ........................   Passed    3.15 sec
+    Start 2: doc_benchmark_generator
+2/2 Test #2: doc_benchmark_generator ..........   Passed   11.60 sec
+
+100% tests passed, 0 tests failed out of 2
+
+Total Test time (real) =  14.75 sec

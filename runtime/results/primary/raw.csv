@@ -1,0 +1,401 @@
+name,group,label,sample,external_workers,scenario,changed,direct_ms,cached_ms,doc_ms,elapsed_ms,direct_cold_ms,doc_cold_ms,direct_update_ms,doc_update_ms,evaluations,update_evaluations,cutoffs,participants,owner_jobs,worker_jobs,states,comparators,units,periods,value
+cold,core,"Cold 2,048-leaf reduction",1,1,cold,,355.354899,,299.064389,,,,,,4095,,,1,,,,,,,
+density-1,core,1 changed source,1,1,density,1,295.942235,,0.3761,,,,,,12,,0,,,,,,,,222052
+density-8,core,8 changed sources,1,1,density,8,282.718294,,1.268929,,,,,,23,,0,,,,,,,,222024
+density-64,core,64 changed sources,1,1,density,64,299.809263,,9.090582,,,,,,132,,0,,,,,,,,221808
+density-512,core,512 changed sources,1,1,density,512,290.298601,,70.3987,,,,,,1007,,26,,,,,,,,221398
+density-2048,core,"2,048 changed sources",1,1,density,2048,277.768741,,282.318207,,,,,,4038,,93,,,,,,,,209944
+cutoff,core,Exact equality cutoff,1,1,cutoff,,,,,0.001915,,,,,1,,1,,,,,,,,
+dense-cheap,core,Dense cheap negative control,1,1,dense-cheap,,0.224898,,35.560142,,,,,,245730,,,,,,,,,,
+parallel-1,parallel,1 participant,1,1,parallel,,,,,225.533352,,,,,79,,,1,79,0,,,,,
+parallel-2,parallel,2 participants,1,2,parallel,,,,,117.022589,,,,,79,,,2,59,20,,,,,
+parallel-3,parallel,3 participants,1,3,parallel,,,,,82.673688,,,,,79,,,3,51,28,,,,,
+parallel-4,parallel,4 participants,1,4,parallel,,,,,74.396898,,,,,79,,,4,21,58,,,,,
+financial-1,financial,1 changed business unit,1,1,financial,1,4.516737,0.001222,1.76084,,,,,,13,,0,,,,,,4096,360,2638904283
+financial-64,financial,64 changed business units,1,1,financial,64,4.560564,0.074109,1.873644,,,,,,133,,0,,,,,,4096,360,2639583043
+financial-1024,financial,"1,024 changed business units",1,1,financial,1024,4.6371,1.250629,3.153208,,,,,,2049,,0,,,,,,4096,360,2649926332
+bitonic-1,bitonic,1 changed input,1,1,bitonic,1,,,,,0.301154,9.049363,0.043369,8.8553,,1986,691,,,,23552,11520,,,
+bitonic-8,bitonic,8 changed inputs,1,1,bitonic,8,,,,,0.329073,8.911603,0.044062,8.510928,,2830,763,,,,23552,11520,,,
+bitonic-64,bitonic,64 changed inputs,1,1,bitonic,64,,,,,0.295986,8.714485,0.046384,9.305295,,8828,994,,,,23552,11520,,,
+bitonic-256,bitonic,256 changed inputs,1,1,bitonic,256,,,,,0.312123,9.842007,0.040378,9.665165,,13808,256,,,,23552,11520,,,
+bitonic-512,bitonic,512 changed inputs,1,1,bitonic,512,,,,,0.301083,14.034849,0.031348,9.453244,,23040,0,,,,23552,11520,,,
+bitonic-512,bitonic,512 changed inputs,2,1,bitonic,512,,,,,0.34002,9.945626,0.031643,8.753308,,23040,0,,,,23552,11520,,,
+bitonic-256,bitonic,256 changed inputs,2,1,bitonic,256,,,,,0.330195,8.781369,0.038695,9.004144,,13808,256,,,,23552,11520,,,
+bitonic-64,bitonic,64 changed inputs,2,1,bitonic,64,,,,,0.302225,9.931626,0.048105,8.259255,,8828,994,,,,23552,11520,,,
+bitonic-8,bitonic,8 changed inputs,2,1,bitonic,8,,,,,0.305464,9.009331,0.04702,12.67305,,2830,763,,,,23552,11520,,,
+bitonic-1,bitonic,1 changed input,2,1,bitonic,1,,,,,0.294632,9.058168,0.046514,8.196109,,1986,691,,,,23552,11520,,,
+financial-1024,financial,"1,024 changed business units",2,1,financial,1024,4.964187,1.186648,3.924438,,,,,,2049,,0,,,,,,4096,360,2649926332
+financial-64,financial,64 changed business units,2,1,financial,64,4.502874,0.074567,1.857621,,,,,,133,,0,,,,,,4096,360,2639583043
+financial-1,financial,1 changed business unit,2,1,financial,1,4.558254,0.001225,3.712776,,,,,,13,,0,,,,,,4096,360,2638904283
+parallel-4,parallel,4 participants,2,4,parallel,,,,,75.269785,,,,,79,,,4,46,33,,,,,
+parallel-3,parallel,3 participants,2,3,parallel,,,,,110.746714,,,,,79,,,3,59,20,,,,,
+parallel-2,parallel,2 participants,2,2,parallel,,,,,114.01226,,,,,79,,,2,59,20,,,,,
+parallel-1,parallel,1 participant,2,1,parallel,,,,,221.911786,,,,,79,,,1,79,0,,,,,
+dense-cheap,core,Dense cheap negative control,2,1,dense-cheap,,0.353301,,39.290557,,,,,,245730,,,,,,,,,,
+cutoff,core,Exact equality cutoff,2,1,cutoff,,,,,0.002821,,,,,1,,1,,,,,,,,
+density-2048,core,"2,048 changed sources",2,1,density,2048,283.485555,,277.666055,,,,,,4038,,93,,,,,,,,209944
+density-512,core,512 changed sources,2,1,density,512,282.017291,,75.073929,,,,,,1007,,26,,,,,,,,221398
+density-64,core,64 changed sources,2,1,density,64,277.362395,,8.370237,,,,,,132,,0,,,,,,,,221808
+density-8,core,8 changed sources,2,1,density,8,280.423446,,1.358322,,,,,,23,,0,,,,,,,,222024
+density-1,core,1 changed source,2,1,density,1,278.014146,,0.334378,,,,,,12,,0,,,,,,,,222052
+cold,core,"Cold 2,048-leaf reduction",2,1,cold,,281.408663,,279.970327,,,,,,4095,,,1,,,,,,,
+cold,core,"Cold 2,048-leaf reduction",3,1,cold,,277.701735,,283.971076,,,,,,4095,,,1,,,,,,,
+density-1,core,1 changed source,3,1,density,1,281.173023,,0.326649,,,,,,12,,0,,,,,,,,222052
+density-8,core,8 changed sources,3,1,density,8,282.228404,,1.433226,,,,,,23,,0,,,,,,,,222024
+density-64,core,64 changed sources,3,1,density,64,278.025383,,8.620164,,,,,,132,,0,,,,,,,,221808
+density-512,core,512 changed sources,3,1,density,512,279.49974,,69.438342,,,,,,1007,,26,,,,,,,,221398
+density-2048,core,"2,048 changed sources",3,1,density,2048,310.681661,,299.57551,,,,,,4038,,93,,,,,,,,209944
+cutoff,core,Exact equality cutoff,3,1,cutoff,,,,,0.003309,,,,,1,,1,,,,,,,,
+dense-cheap,core,Dense cheap negative control,3,1,dense-cheap,,0.203617,,37.489648,,,,,,245730,,,,,,,,,,
+parallel-1,parallel,1 participant,3,1,parallel,,,,,295.773294,,,,,79,,,1,79,0,,,,,
+parallel-2,parallel,2 participants,3,2,parallel,,,,,113.982756,,,,,79,,,2,60,19,,,,,
+parallel-3,parallel,3 participants,3,3,parallel,,,,,88.109643,,,,,79,,,3,52,27,,,,,
+parallel-4,parallel,4 participants,3,4,parallel,,,,,195.069242,,,,,79,,,4,19,60,,,,,
+financial-1,financial,1 changed business unit,3,1,financial,1,4.859114,0.00137,1.737803,,,,,,13,,0,,,,,,4096,360,2638904283
+financial-64,financial,64 changed business units,3,1,financial,64,4.924588,0.074539,1.851144,,,,,,133,,0,,,,,,4096,360,2639583043
+financial-1024,financial,"1,024 changed business units",3,1,financial,1024,6.222374,1.236868,4.021887,,,,,,2049,,0,,,,,,4096,360,2649926332
+bitonic-1,bitonic,1 changed input,3,1,bitonic,1,,,,,0.348871,8.864769,0.045417,9.884597,,1986,691,,,,23552,11520,,,
+bitonic-8,bitonic,8 changed inputs,3,1,bitonic,8,,,,,0.411972,9.604389,0.047654,8.830818,,2830,763,,,,23552,11520,,,
+bitonic-64,bitonic,64 changed inputs,3,1,bitonic,64,,,,,0.297833,9.261087,0.047085,19.077403,,8828,994,,,,23552,11520,,,
+bitonic-256,bitonic,256 changed inputs,3,1,bitonic,256,,,,,0.308472,9.075442,0.039038,8.849875,,13808,256,,,,23552,11520,,,
+bitonic-512,bitonic,512 changed inputs,3,1,bitonic,512,,,,,0.309441,9.168971,0.031117,8.910334,,23040,0,,,,23552,11520,,,
+bitonic-512,bitonic,512 changed inputs,4,1,bitonic,512,,,,,0.307275,9.707589,0.031455,9.065612,,23040,0,,,,23552,11520,,,
+bitonic-256,bitonic,256 changed inputs,4,1,bitonic,256,,,,,0.375215,9.380526,0.041919,9.046956,,13808,256,,,,23552,11520,,,
+bitonic-64,bitonic,64 changed inputs,4,1,bitonic,64,,,,,0.369069,8.681425,0.042818,8.639777,,8828,994,,,,23552,11520,,,
+bitonic-8,bitonic,8 changed inputs,4,1,bitonic,8,,,,,0.300686,8.779522,0.044449,8.459078,,2830,763,,,,23552,11520,,,
+bitonic-1,bitonic,1 changed input,4,1,bitonic,1,,,,,0.308393,8.777186,0.043877,8.258772,,1986,691,,,,23552,11520,,,
+financial-1024,financial,"1,024 changed business units",4,1,financial,1024,4.818206,1.232487,3.305967,,,,,,2049,,0,,,,,,4096,360,2649926332
+financial-64,financial,64 changed business units,4,1,financial,64,5.206107,0.074529,1.894071,,,,,,133,,0,,,,,,4096,360,2639583043
+financial-1,financial,1 changed business unit,4,1,financial,1,4.410345,0.001181,1.924923,,,,,,13,,0,,,,,,4096,360,2638904283
+parallel-4,parallel,4 participants,4,4,parallel,,,,,74.543248,,,,,79,,,4,27,52,,,,,
+parallel-3,parallel,3 participants,4,3,parallel,,,,,110.539667,,,,,79,,,3,49,30,,,,,
+parallel-2,parallel,2 participants,4,2,parallel,,,,,107.412334,,,,,79,,,2,59,20,,,,,
+parallel-1,parallel,1 participant,4,1,parallel,,,,,244.379368,,,,,79,,,1,79,0,,,,,
+dense-cheap,core,Dense cheap negative control,4,1,dense-cheap,,0.27422,,34.213355,,,,,,245730,,,,,,,,,,
+cutoff,core,Exact equality cutoff,4,1,cutoff,,,,,0.002391,,,,,1,,1,,,,,,,,
+density-2048,core,"2,048 changed sources",4,1,density,2048,274.271197,,277.695041,,,,,,4038,,93,,,,,,,,209944
+density-512,core,512 changed sources,4,1,density,512,280.631693,,68.668086,,,,,,1007,,26,,,,,,,,221398
+density-64,core,64 changed sources,4,1,density,64,287.211969,,8.741554,,,,,,132,,0,,,,,,,,221808
+density-8,core,8 changed sources,4,1,density,8,289.106149,,1.282434,,,,,,23,,0,,,,,,,,222024
+density-1,core,1 changed source,4,1,density,1,296.310214,,0.327951,,,,,,12,,0,,,,,,,,222052
+cold,core,"Cold 2,048-leaf reduction",4,1,cold,,299.162865,,290.286589,,,,,,4095,,,1,,,,,,,
+cold,core,"Cold 2,048-leaf reduction",5,1,cold,,291.326925,,291.12328,,,,,,4095,,,1,,,,,,,
+density-1,core,1 changed source,5,1,density,1,288.05196,,0.331521,,,,,,12,,0,,,,,,,,222052
+density-8,core,8 changed sources,5,1,density,8,298.995927,,1.265759,,,,,,23,,0,,,,,,,,222024
+density-64,core,64 changed sources,5,1,density,64,287.309606,,8.67806,,,,,,132,,0,,,,,,,,221808
+density-512,core,512 changed sources,5,1,density,512,291.059395,,69.337725,,,,,,1007,,26,,,,,,,,221398
+density-2048,core,"2,048 changed sources",5,1,density,2048,279.698854,,283.384014,,,,,,4038,,93,,,,,,,,209944
+cutoff,core,Exact equality cutoff,5,1,cutoff,,,,,0.002395,,,,,1,,1,,,,,,,,
+dense-cheap,core,Dense cheap negative control,5,1,dense-cheap,,0.218407,,35.512161,,,,,,245730,,,,,,,,,,
+parallel-1,parallel,1 participant,5,1,parallel,,,,,217.094358,,,,,79,,,1,79,0,,,,,
+parallel-2,parallel,2 participants,5,2,parallel,,,,,114.166563,,,,,79,,,2,39,40,,,,,
+parallel-3,parallel,3 participants,5,3,parallel,,,,,109.149516,,,,,79,,,3,59,20,,,,,
+parallel-4,parallel,4 participants,5,4,parallel,,,,,76.682619,,,,,79,,,4,51,28,,,,,
+financial-1,financial,1 changed business unit,5,1,financial,1,5.094275,0.001351,1.939026,,,,,,13,,0,,,,,,4096,360,2638904283
+financial-64,financial,64 changed business units,5,1,financial,64,4.585348,0.074143,1.91666,,,,,,133,,0,,,,,,4096,360,2639583043
+financial-1024,financial,"1,024 changed business units",5,1,financial,1024,4.604073,1.184294,4.649445,,,,,,2049,,0,,,,,,4096,360,2649926332
+bitonic-1,bitonic,1 changed input,5,1,bitonic,1,,,,,0.446863,12.548072,0.051997,11.113693,,1986,691,,,,23552,11520,,,
+bitonic-8,bitonic,8 changed inputs,5,1,bitonic,8,,,,,0.305069,9.390658,0.045621,8.203161,,2830,763,,,,23552,11520,,,
+bitonic-64,bitonic,64 changed inputs,5,1,bitonic,64,,,,,0.307107,8.928832,0.046601,9.461591,,8828,994,,,,23552,11520,,,
+bitonic-256,bitonic,256 changed inputs,5,1,bitonic,256,,,,,0.302662,9.123634,0.039147,11.694298,,13808,256,,,,23552,11520,,,
+bitonic-512,bitonic,512 changed inputs,5,1,bitonic,512,,,,,0.305004,9.419733,0.06713,15.075295,,23040,0,,,,23552,11520,,,
+bitonic-512,bitonic,512 changed inputs,6,1,bitonic,512,,,,,0.299419,8.934335,0.030488,9.4499,,23040,0,,,,23552,11520,,,
+bitonic-256,bitonic,256 changed inputs,6,1,bitonic,256,,,,,0.308936,20.457075,0.043459,16.534357,,13808,256,,,,23552,11520,,,
+bitonic-64,bitonic,64 changed inputs,6,1,bitonic,64,,,,,0.35776,22.022519,0.052653,10.867959,,8828,994,,,,23552,11520,,,
+bitonic-8,bitonic,8 changed inputs,6,1,bitonic,8,,,,,0.350124,9.682608,0.051624,16.967403,,2830,763,,,,23552,11520,,,
+bitonic-1,bitonic,1 changed input,6,1,bitonic,1,,,,,1.419129,13.06274,0.051356,9.351599,,1986,691,,,,23552,11520,,,
+financial-1024,financial,"1,024 changed business units",6,1,financial,1024,5.236849,1.20228,3.10006,,,,,,2049,,0,,,,,,4096,360,2649926332
+financial-64,financial,64 changed business units,6,1,financial,64,4.537936,0.07421,1.797593,,,,,,133,,0,,,,,,4096,360,2639583043
+financial-1,financial,1 changed business unit,6,1,financial,1,4.518538,0.00122,1.764453,,,,,,13,,0,,,,,,4096,360,2638904283
+parallel-4,parallel,4 participants,6,4,parallel,,,,,95.963727,,,,,79,,,4,51,28,,,,,
+parallel-3,parallel,3 participants,6,3,parallel,,,,,466.044721,,,,,79,,,3,52,27,,,,,
+parallel-2,parallel,2 participants,6,2,parallel,,,,,143.058773,,,,,79,,,2,58,21,,,,,
+parallel-1,parallel,1 participant,6,1,parallel,,,,,245.231953,,,,,79,,,1,79,0,,,,,
+dense-cheap,core,Dense cheap negative control,6,1,dense-cheap,,0.21444,,35.795816,,,,,,245730,,,,,,,,,,
+cutoff,core,Exact equality cutoff,6,1,cutoff,,,,,0.002385,,,,,1,,1,,,,,,,,
+density-2048,core,"2,048 changed sources",6,1,density,2048,290.256639,,289.743103,,,,,,4038,,93,,,,,,,,209944
+density-512,core,512 changed sources,6,1,density,512,285.61888,,77.056985,,,,,,1007,,26,,,,,,,,221398
+density-64,core,64 changed sources,6,1,density,64,644.199491,,8.415084,,,,,,132,,0,,,,,,,,221808
+density-8,core,8 changed sources,6,1,density,8,410.510359,,1.357516,,,,,,23,,0,,,,,,,,222024
+density-1,core,1 changed source,6,1,density,1,393.426621,,0.350751,,,,,,12,,0,,,,,,,,222052
+cold,core,"Cold 2,048-leaf reduction",6,1,cold,,353.664344,,344.592855,,,,,,4095,,,1,,,,,,,
+cold,core,"Cold 2,048-leaf reduction",7,1,cold,,293.361032,,285.208276,,,,,,4095,,,1,,,,,,,
+density-1,core,1 changed source,7,1,density,1,365.156162,,0.327405,,,,,,12,,0,,,,,,,,222052
+density-8,core,8 changed sources,7,1,density,8,289.554562,,1.24528,,,,,,23,,0,,,,,,,,222024
+density-64,core,64 changed sources,7,1,density,64,295.641726,,8.764531,,,,,,132,,0,,,,,,,,221808
+density-512,core,512 changed sources,7,1,density,512,305.542242,,69.928762,,,,,,1007,,26,,,,,,,,221398
+density-2048,core,"2,048 changed sources",7,1,density,2048,279.157728,,280.66263,,,,,,4038,,93,,,,,,,,209944
+cutoff,core,Exact equality cutoff,7,1,cutoff,,,,,0.001966,,,,,1,,1,,,,,,,,
+dense-cheap,core,Dense cheap negative control,7,1,dense-cheap,,0.227192,,33.861213,,,,,,245730,,,,,,,,,,
+parallel-1,parallel,1 participant,7,1,parallel,,,,,221.894923,,,,,79,,,1,79,0,,,,,
+parallel-2,parallel,2 participants,7,2,parallel,,,,,113.136108,,,,,79,,,2,59,20,,,,,
+parallel-3,parallel,3 participants,7,3,parallel,,,,,74.801081,,,,,79,,,3,52,27,,,,,
+parallel-4,parallel,4 participants,7,4,parallel,,,,,94.749475,,,,,79,,,4,50,29,,,,,
+financial-1,financial,1 changed business unit,7,1,financial,1,4.496972,0.001209,1.762378,,,,,,13,,0,,,,,,4096,360,2638904283
+financial-64,financial,64 changed business units,7,1,financial,64,4.658512,0.074261,1.90506,,,,,,133,,0,,,,,,4096,360,2639583043
+financial-1024,financial,"1,024 changed business units",7,1,financial,1024,4.567923,1.200097,3.271444,,,,,,2049,,0,,,,,,4096,360,2649926332
+bitonic-1,bitonic,1 changed input,7,1,bitonic,1,,,,,0.333144,8.753323,0.048592,9.186391,,1986,691,,,,23552,11520,,,
+bitonic-8,bitonic,8 changed inputs,7,1,bitonic,8,,,,,0.298003,8.744469,0.048629,8.180247,,2830,763,,,,23552,11520,,,
+bitonic-64,bitonic,64 changed inputs,7,1,bitonic,64,,,,,0.333949,10.245307,0.048121,8.785366,,8828,994,,,,23552,11520,,,
+bitonic-256,bitonic,256 changed inputs,7,1,bitonic,256,,,,,0.291988,9.321048,0.036995,8.255088,,13808,256,,,,23552,11520,,,
+bitonic-512,bitonic,512 changed inputs,7,1,bitonic,512,,,,,0.308498,9.326105,0.031434,8.985733,,23040,0,,,,23552,11520,,,
+bitonic-512,bitonic,512 changed inputs,8,1,bitonic,512,,,,,0.311157,11.187962,0.0315,9.337243,,23040,0,,,,23552,11520,,,
+bitonic-256,bitonic,256 changed inputs,8,1,bitonic,256,,,,,0.308397,8.840569,0.038599,9.100578,,13808,256,,,,23552,11520,,,
+bitonic-64,bitonic,64 changed inputs,8,1,bitonic,64,,,,,0.29899,9.521311,0.046373,8.445962,,8828,994,,,,23552,11520,,,
+bitonic-8,bitonic,8 changed inputs,8,1,bitonic,8,,,,,0.446736,9.036318,0.047897,8.462734,,2830,763,,,,23552,11520,,,
+bitonic-1,bitonic,1 changed input,8,1,bitonic,1,,,,,0.309693,9.142078,0.04776,8.483886,,1986,691,,,,23552,11520,,,
+financial-1024,financial,"1,024 changed business units",8,1,financial,1024,4.531119,1.207998,3.435288,,,,,,2049,,0,,,,,,4096,360,2649926332
+financial-64,financial,64 changed business units,8,1,financial,64,4.462139,0.071968,2.100895,,,,,,133,,0,,,,,,4096,360,2639583043
+financial-1,financial,1 changed business unit,8,1,financial,1,4.99474,0.001385,2.178981,,,,,,13,,0,,,,,,4096,360,2638904283
+parallel-4,parallel,4 participants,8,4,parallel,,,,,75.733832,,,,,79,,,4,52,27,,,,,
+parallel-3,parallel,3 participants,8,3,parallel,,,,,79.01978,,,,,79,,,3,52,27,,,,,
+parallel-2,parallel,2 participants,8,2,parallel,,,,,112.556224,,,,,79,,,2,59,20,,,,,
+parallel-1,parallel,1 participant,8,1,parallel,,,,,226.583711,,,,,79,,,1,79,0,,,,,
+dense-cheap,core,Dense cheap negative control,8,1,dense-cheap,,0.226671,,34.970111,,,,,,245730,,,,,,,,,,
+cutoff,core,Exact equality cutoff,8,1,cutoff,,,,,0.001509,,,,,1,,1,,,,,,,,
+density-2048,core,"2,048 changed sources",8,1,density,2048,283.750151,,604.387213,,,,,,4038,,93,,,,,,,,209944
+density-512,core,512 changed sources,8,1,density,512,294.618722,,72.930909,,,,,,1007,,26,,,,,,,,221398
+density-64,core,64 changed sources,8,1,density,64,296.008499,,8.646389,,,,,,132,,0,,,,,,,,221808
+density-8,core,8 changed sources,8,1,density,8,286.173774,,1.240939,,,,,,23,,0,,,,,,,,222024
+density-1,core,1 changed source,8,1,density,1,346.450531,,0.326601,,,,,,12,,0,,,,,,,,222052
+cold,core,"Cold 2,048-leaf reduction",8,1,cold,,292.129806,,282.609316,,,,,,4095,,,1,,,,,,,
+cold,core,"Cold 2,048-leaf reduction",9,1,cold,,279.519834,,282.094864,,,,,,4095,,,1,,,,,,,
+density-1,core,1 changed source,9,1,density,1,289.43016,,0.457766,,,,,,12,,0,,,,,,,,222052
+density-8,core,8 changed sources,9,1,density,8,299.584714,,1.233529,,,,,,23,,0,,,,,,,,222024
+density-64,core,64 changed sources,9,1,density,64,559.324426,,9.821499,,,,,,132,,0,,,,,,,,221808
+density-512,core,512 changed sources,9,1,density,512,280.944827,,71.710071,,,,,,1007,,26,,,,,,,,221398
+density-2048,core,"2,048 changed sources",9,1,density,2048,279.14262,,282.180231,,,,,,4038,,93,,,,,,,,209944
+cutoff,core,Exact equality cutoff,9,1,cutoff,,,,,0.002199,,,,,1,,1,,,,,,,,
+dense-cheap,core,Dense cheap negative control,9,1,dense-cheap,,0.229138,,36.663199,,,,,,245730,,,,,,,,,,
+parallel-1,parallel,1 participant,9,1,parallel,,,,,218.120241,,,,,79,,,1,79,0,,,,,
+parallel-2,parallel,2 participants,9,2,parallel,,,,,128.122887,,,,,79,,,2,59,20,,,,,
+parallel-3,parallel,3 participants,9,3,parallel,,,,,79.47095,,,,,79,,,3,33,46,,,,,
+parallel-4,parallel,4 participants,9,4,parallel,,,,,99.221411,,,,,79,,,4,47,32,,,,,
+financial-1,financial,1 changed business unit,9,1,financial,1,4.542637,0.001281,2.011433,,,,,,13,,0,,,,,,4096,360,2638904283
+financial-64,financial,64 changed business units,9,1,financial,64,4.511729,0.084812,1.917529,,,,,,133,,0,,,,,,4096,360,2639583043
+financial-1024,financial,"1,024 changed business units",9,1,financial,1024,4.627752,1.197709,3.315949,,,,,,2049,,0,,,,,,4096,360,2649926332
+bitonic-1,bitonic,1 changed input,9,1,bitonic,1,,,,,0.302171,9.532773,0.047332,8.616321,,1986,691,,,,23552,11520,,,
+bitonic-8,bitonic,8 changed inputs,9,1,bitonic,8,,,,,0.299906,9.042074,0.049843,8.682461,,2830,763,,,,23552,11520,,,
+bitonic-64,bitonic,64 changed inputs,9,1,bitonic,64,,,,,0.319825,9.045506,0.066357,9.182911,,8828,994,,,,23552,11520,,,
+bitonic-256,bitonic,256 changed inputs,9,1,bitonic,256,,,,,0.3043,8.977042,0.038707,10.029616,,13808,256,,,,23552,11520,,,
+bitonic-512,bitonic,512 changed inputs,9,1,bitonic,512,,,,,0.311471,10.58267,0.03183,8.877832,,23040,0,,,,23552,11520,,,
+bitonic-512,bitonic,512 changed inputs,10,1,bitonic,512,,,,,0.691533,14.109031,0.030867,14.975477,,23040,0,,,,23552,11520,,,
+bitonic-256,bitonic,256 changed inputs,10,1,bitonic,256,,,,,0.311922,9.14376,0.038628,9.027822,,13808,256,,,,23552,11520,,,
+bitonic-64,bitonic,64 changed inputs,10,1,bitonic,64,,,,,0.298218,9.104253,0.046173,9.033823,,8828,994,,,,23552,11520,,,
+bitonic-8,bitonic,8 changed inputs,10,1,bitonic,8,,,,,0.307709,9.14434,0.046883,8.898313,,2830,763,,,,23552,11520,,,
+bitonic-1,bitonic,1 changed input,10,1,bitonic,1,,,,,0.304013,10.826335,0.065692,10.942156,,1986,691,,,,23552,11520,,,
+financial-1024,financial,"1,024 changed business units",10,1,financial,1024,4.646742,1.571766,4.978547,,,,,,2049,,0,,,,,,4096,360,2649926332
+financial-64,financial,64 changed business units,10,1,financial,64,4.512749,0.074027,1.860482,,,,,,133,,0,,,,,,4096,360,2639583043
+financial-1,financial,1 changed business unit,10,1,financial,1,4.807624,0.001541,2.031094,,,,,,13,,0,,,,,,4096,360,2638904283
+parallel-4,parallel,4 participants,10,4,parallel,,,,,80.119304,,,,,79,,,4,45,34,,,,,
+parallel-3,parallel,3 participants,10,3,parallel,,,,,87.250668,,,,,79,,,3,51,28,,,,,
+parallel-2,parallel,2 participants,10,2,parallel,,,,,116.414452,,,,,79,,,2,59,20,,,,,
+parallel-1,parallel,1 participant,10,1,parallel,,,,,322.345869,,,,,79,,,1,79,0,,,,,
+dense-cheap,core,Dense cheap negative control,10,1,dense-cheap,,0.212526,,43.18603,,,,,,245730,,,,,,,,,,
+cutoff,core,Exact equality cutoff,10,1,cutoff,,,,,0.001834,,,,,1,,1,,,,,,,,
+density-2048,core,"2,048 changed sources",10,1,density,2048,274.55434,,277.777387,,,,,,4038,,93,,,,,,,,209944
+density-512,core,512 changed sources,10,1,density,512,287.024182,,91.815923,,,,,,1007,,26,,,,,,,,221398
+density-64,core,64 changed sources,10,1,density,64,316.683361,,8.29069,,,,,,132,,0,,,,,,,,221808
+density-8,core,8 changed sources,10,1,density,8,284.758488,,1.325849,,,,,,23,,0,,,,,,,,222024
+density-1,core,1 changed source,10,1,density,1,282.528381,,0.451886,,,,,,12,,0,,,,,,,,222052
+cold,core,"Cold 2,048-leaf reduction",10,1,cold,,311.975711,,347.540801,,,,,,4095,,,1,,,,,,,
+cold,core,"Cold 2,048-leaf reduction",11,1,cold,,287.008427,,281.807006,,,,,,4095,,,1,,,,,,,
+density-1,core,1 changed source,11,1,density,1,412.398615,,0.319373,,,,,,12,,0,,,,,,,,222052
+density-8,core,8 changed sources,11,1,density,8,285.067142,,1.885381,,,,,,23,,0,,,,,,,,222024
+density-64,core,64 changed sources,11,1,density,64,350.410194,,9.549014,,,,,,132,,0,,,,,,,,221808
+density-512,core,512 changed sources,11,1,density,512,285.918655,,75.687835,,,,,,1007,,26,,,,,,,,221398
+density-2048,core,"2,048 changed sources",11,1,density,2048,291.896473,,276.618858,,,,,,4038,,93,,,,,,,,209944
+cutoff,core,Exact equality cutoff,11,1,cutoff,,,,,0.002013,,,,,1,,1,,,,,,,,
+dense-cheap,core,Dense cheap negative control,11,1,dense-cheap,,0.196081,,51.340692,,,,,,245730,,,,,,,,,,
+parallel-1,parallel,1 participant,11,1,parallel,,,,,216.966093,,,,,79,,,1,79,0,,,,,
+parallel-2,parallel,2 participants,11,2,parallel,,,,,115.96151,,,,,79,,,2,41,38,,,,,
+parallel-3,parallel,3 participants,11,3,parallel,,,,,74.376404,,,,,79,,,3,53,26,,,,,
+parallel-4,parallel,4 participants,11,4,parallel,,,,,105.693627,,,,,79,,,4,31,48,,,,,
+financial-1,financial,1 changed business unit,11,1,financial,1,4.995912,0.001359,2.264535,,,,,,13,,0,,,,,,4096,360,2638904283
+financial-64,financial,64 changed business units,11,1,financial,64,5.027909,0.077006,1.939356,,,,,,133,,0,,,,,,4096,360,2639583043
+financial-1024,financial,"1,024 changed business units",11,1,financial,1024,4.683974,1.183472,3.389499,,,,,,2049,,0,,,,,,4096,360,2649926332
+bitonic-1,bitonic,1 changed input,11,1,bitonic,1,,,,,0.567057,13.604399,0.048148,8.529901,,1986,691,,,,23552,11520,,,
+bitonic-8,bitonic,8 changed inputs,11,1,bitonic,8,,,,,0.723031,8.963682,0.047775,8.288726,,2830,763,,,,23552,11520,,,
+bitonic-64,bitonic,64 changed inputs,11,1,bitonic,64,,,,,0.324194,10.19839,0.793565,10.897535,,8828,994,,,,23552,11520,,,
+bitonic-256,bitonic,256 changed inputs,11,1,bitonic,256,,,,,0.312194,9.016458,0.039927,9.14005,,13808,256,,,,23552,11520,,,
+bitonic-512,bitonic,512 changed inputs,11,1,bitonic,512,,,,,0.311023,9.638624,0.031885,9.248497,,23040,0,,,,23552,11520,,,
+bitonic-512,bitonic,512 changed inputs,12,1,bitonic,512,,,,,0.325002,8.640918,0.031586,9.840419,,23040,0,,,,23552,11520,,,
+bitonic-256,bitonic,256 changed inputs,12,1,bitonic,256,,,,,0.43167,11.209937,0.039012,8.639478,,13808,256,,,,23552,11520,,,
+bitonic-64,bitonic,64 changed inputs,12,1,bitonic,64,,,,,0.310863,8.872544,0.046045,8.99958,,8828,994,,,,23552,11520,,,
+bitonic-8,bitonic,8 changed inputs,12,1,bitonic,8,,,,,0.301524,9.014195,0.048107,8.909699,,2830,763,,,,23552,11520,,,
+bitonic-1,bitonic,1 changed input,12,1,bitonic,1,,,,,0.306672,9.801247,0.048002,9.497217,,1986,691,,,,23552,11520,,,
+financial-1024,financial,"1,024 changed business units",12,1,financial,1024,5.300535,1.197839,3.137573,,,,,,2049,,0,,,,,,4096,360,2649926332
+financial-64,financial,64 changed business units,12,1,financial,64,4.589465,0.07413,2.151251,,,,,,133,,0,,,,,,4096,360,2639583043
+financial-1,financial,1 changed business unit,12,1,financial,1,4.524898,0.00122,1.98766,,,,,,13,,0,,,,,,4096,360,2638904283
+parallel-4,parallel,4 participants,12,4,parallel,,,,,87.62889,,,,,79,,,4,45,34,,,,,
+parallel-3,parallel,3 participants,12,3,parallel,,,,,123.090927,,,,,79,,,3,49,30,,,,,
+parallel-2,parallel,2 participants,12,2,parallel,,,,,131.161388,,,,,79,,,2,60,19,,,,,
+parallel-1,parallel,1 participant,12,1,parallel,,,,,221.381248,,,,,79,,,1,79,0,,,,,
+dense-cheap,core,Dense cheap negative control,12,1,dense-cheap,,0.248096,,34.782736,,,,,,245730,,,,,,,,,,
+cutoff,core,Exact equality cutoff,12,1,cutoff,,,,,0.001369,,,,,1,,1,,,,,,,,
+density-2048,core,"2,048 changed sources",12,1,density,2048,316.824711,,299.584981,,,,,,4038,,93,,,,,,,,209944
+density-512,core,512 changed sources,12,1,density,512,321.722112,,75.869266,,,,,,1007,,26,,,,,,,,221398
+density-64,core,64 changed sources,12,1,density,64,295.489755,,10.253477,,,,,,132,,0,,,,,,,,221808
+density-8,core,8 changed sources,12,1,density,8,310.901886,,1.245777,,,,,,23,,0,,,,,,,,222024
+density-1,core,1 changed source,12,1,density,1,292.886915,,0.327389,,,,,,12,,0,,,,,,,,222052
+cold,core,"Cold 2,048-leaf reduction",12,1,cold,,299.223249,,297.322511,,,,,,4095,,,1,,,,,,,
+cold,core,"Cold 2,048-leaf reduction",13,1,cold,,283.426531,,289.296233,,,,,,4095,,,1,,,,,,,
+density-1,core,1 changed source,13,1,density,1,282.81172,,0.348489,,,,,,12,,0,,,,,,,,222052
+density-8,core,8 changed sources,13,1,density,8,320.391135,,2.052019,,,,,,23,,0,,,,,,,,222024
+density-64,core,64 changed sources,13,1,density,64,396.429189,,8.916882,,,,,,132,,0,,,,,,,,221808
+density-512,core,512 changed sources,13,1,density,512,283.594182,,75.367017,,,,,,1007,,26,,,,,,,,221398
+density-2048,core,"2,048 changed sources",13,1,density,2048,332.985796,,322.141399,,,,,,4038,,93,,,,,,,,209944
+cutoff,core,Exact equality cutoff,13,1,cutoff,,,,,0.001399,,,,,1,,1,,,,,,,,
+dense-cheap,core,Dense cheap negative control,13,1,dense-cheap,,0.22887,,85.027071,,,,,,245730,,,,,,,,,,
+parallel-1,parallel,1 participant,13,1,parallel,,,,,356.193024,,,,,79,,,1,79,0,,,,,
+parallel-2,parallel,2 participants,13,2,parallel,,,,,153.25425,,,,,79,,,2,65,14,,,,,
+parallel-3,parallel,3 participants,13,3,parallel,,,,,141.88466,,,,,79,,,3,30,49,,,,,
+parallel-4,parallel,4 participants,13,4,parallel,,,,,75.175004,,,,,79,,,4,46,33,,,,,
+financial-1,financial,1 changed business unit,13,1,financial,1,4.526172,0.00125,1.771988,,,,,,13,,0,,,,,,4096,360,2638904283
+financial-64,financial,64 changed business units,13,1,financial,64,5.08188,0.074534,1.839041,,,,,,133,,0,,,,,,4096,360,2639583043
+financial-1024,financial,"1,024 changed business units",13,1,financial,1024,4.814545,1.286247,3.291252,,,,,,2049,,0,,,,,,4096,360,2649926332
+bitonic-1,bitonic,1 changed input,13,1,bitonic,1,,,,,0.308245,8.667558,0.045498,9.756469,,1986,691,,,,23552,11520,,,
+bitonic-8,bitonic,8 changed inputs,13,1,bitonic,8,,,,,0.384856,9.256318,0.047244,8.950758,,2830,763,,,,23552,11520,,,
+bitonic-64,bitonic,64 changed inputs,13,1,bitonic,64,,,,,0.308599,9.244443,0.046213,8.671299,,8828,994,,,,23552,11520,,,
+bitonic-256,bitonic,256 changed inputs,13,1,bitonic,256,,,,,0.298791,8.986444,0.040889,8.605727,,13808,256,,,,23552,11520,,,
+bitonic-512,bitonic,512 changed inputs,13,1,bitonic,512,,,,,0.320145,8.974098,0.03074,8.949182,,23040,0,,,,23552,11520,,,
+bitonic-512,bitonic,512 changed inputs,14,1,bitonic,512,,,,,0.325753,10.633642,0.03103,9.800147,,23040,0,,,,23552,11520,,,
+bitonic-256,bitonic,256 changed inputs,14,1,bitonic,256,,,,,0.297088,8.834058,0.038532,11.454789,,13808,256,,,,23552,11520,,,
+bitonic-64,bitonic,64 changed inputs,14,1,bitonic,64,,,,,0.340696,11.890283,0.047589,9.248283,,8828,994,,,,23552,11520,,,
+bitonic-8,bitonic,8 changed inputs,14,1,bitonic,8,,,,,0.305362,9.051304,0.047852,10.463545,,2830,763,,,,23552,11520,,,
+bitonic-1,bitonic,1 changed input,14,1,bitonic,1,,,,,0.413295,10.048464,0.051042,9.81086,,1986,691,,,,23552,11520,,,
+financial-1024,financial,"1,024 changed business units",14,1,financial,1024,4.50594,1.204845,3.127126,,,,,,2049,,0,,,,,,4096,360,2649926332
+financial-64,financial,64 changed business units,14,1,financial,64,4.656817,0.074123,2.258519,,,,,,133,,0,,,,,,4096,360,2639583043
+financial-1,financial,1 changed business unit,14,1,financial,1,4.868601,0.001292,2.222944,,,,,,13,,0,,,,,,4096,360,2638904283
+parallel-4,parallel,4 participants,14,4,parallel,,,,,74.224142,,,,,79,,,4,46,33,,,,,
+parallel-3,parallel,3 participants,14,3,parallel,,,,,109.182347,,,,,79,,,3,49,30,,,,,
+parallel-2,parallel,2 participants,14,2,parallel,,,,,213.539781,,,,,79,,,2,59,20,,,,,
+parallel-1,parallel,1 participant,14,1,parallel,,,,,219.935128,,,,,79,,,1,79,0,,,,,
+dense-cheap,core,Dense cheap negative control,14,1,dense-cheap,,0.225339,,37.885892,,,,,,245730,,,,,,,,,,
+cutoff,core,Exact equality cutoff,14,1,cutoff,,,,,0.003017,,,,,1,,1,,,,,,,,
+density-2048,core,"2,048 changed sources",14,1,density,2048,276.815899,,288.707733,,,,,,4038,,93,,,,,,,,209944
+density-512,core,512 changed sources,14,1,density,512,285.096849,,67.841699,,,,,,1007,,26,,,,,,,,221398
+density-64,core,64 changed sources,14,1,density,64,277.7057,,8.438212,,,,,,132,,0,,,,,,,,221808
+density-8,core,8 changed sources,14,1,density,8,276.030036,,1.59143,,,,,,23,,0,,,,,,,,222024
+density-1,core,1 changed source,14,1,density,1,296.827703,,0.401046,,,,,,12,,0,,,,,,,,222052
+cold,core,"Cold 2,048-leaf reduction",14,1,cold,,278.302989,,280.450853,,,,,,4095,,,1,,,,,,,
+cold,core,"Cold 2,048-leaf reduction",15,1,cold,,290.509699,,282.026882,,,,,,4095,,,1,,,,,,,
+density-1,core,1 changed source,15,1,density,1,276.004682,,0.328938,,,,,,12,,0,,,,,,,,222052
+density-8,core,8 changed sources,15,1,density,8,292.959221,,1.243998,,,,,,23,,0,,,,,,,,222024
+density-64,core,64 changed sources,15,1,density,64,280.177957,,8.416004,,,,,,132,,0,,,,,,,,221808
+density-512,core,512 changed sources,15,1,density,512,278.025677,,71.085382,,,,,,1007,,26,,,,,,,,221398
+density-2048,core,"2,048 changed sources",15,1,density,2048,403.768139,,307.935055,,,,,,4038,,93,,,,,,,,209944
+cutoff,core,Exact equality cutoff,15,1,cutoff,,,,,0.002767,,,,,1,,1,,,,,,,,
+dense-cheap,core,Dense cheap negative control,15,1,dense-cheap,,0.209056,,121.126148,,,,,,245730,,,,,,,,,,
+parallel-1,parallel,1 participant,15,1,parallel,,,,,244.061203,,,,,79,,,1,79,0,,,,,
+parallel-2,parallel,2 participants,15,2,parallel,,,,,131.307625,,,,,79,,,2,57,22,,,,,
+parallel-3,parallel,3 participants,15,3,parallel,,,,,169.067474,,,,,79,,,3,23,56,,,,,
+parallel-4,parallel,4 participants,15,4,parallel,,,,,85.385649,,,,,79,,,4,54,25,,,,,
+financial-1,financial,1 changed business unit,15,1,financial,1,4.568449,0.001238,1.821277,,,,,,13,,0,,,,,,4096,360,2638904283
+financial-64,financial,64 changed business units,15,1,financial,64,4.567682,0.074157,2.076938,,,,,,133,,0,,,,,,4096,360,2639583043
+financial-1024,financial,"1,024 changed business units",15,1,financial,1024,4.502955,1.184359,3.128925,,,,,,2049,,0,,,,,,4096,360,2649926332
+bitonic-1,bitonic,1 changed input,15,1,bitonic,1,,,,,0.310296,40.813449,0.046391,21.976848,,1986,691,,,,23552,11520,,,
+bitonic-8,bitonic,8 changed inputs,15,1,bitonic,8,,,,,0.492751,14.647351,0.049919,10.698872,,2830,763,,,,23552,11520,,,
+bitonic-64,bitonic,64 changed inputs,15,1,bitonic,64,,,,,0.309248,10.008105,0.0502,10.172754,,8828,994,,,,23552,11520,,,
+bitonic-256,bitonic,256 changed inputs,15,1,bitonic,256,,,,,0.493907,9.273411,0.03906,22.345125,,13808,256,,,,23552,11520,,,
+bitonic-512,bitonic,512 changed inputs,15,1,bitonic,512,,,,,0.402249,9.126406,0.030971,9.125257,,23040,0,,,,23552,11520,,,
+bitonic-512,bitonic,512 changed inputs,16,1,bitonic,512,,,,,0.311282,9.161343,0.030985,9.049045,,23040,0,,,,23552,11520,,,
+bitonic-256,bitonic,256 changed inputs,16,1,bitonic,256,,,,,0.312021,15.807619,0.082401,10.718748,,13808,256,,,,23552,11520,,,
+bitonic-64,bitonic,64 changed inputs,16,1,bitonic,64,,,,,0.304026,9.081118,0.045801,8.547478,,8828,994,,,,23552,11520,,,
+bitonic-8,bitonic,8 changed inputs,16,1,bitonic,8,,,,,0.456083,8.809302,0.050038,8.513223,,2830,763,,,,23552,11520,,,
+bitonic-1,bitonic,1 changed input,16,1,bitonic,1,,,,,0.298082,9.190802,0.048107,8.58657,,1986,691,,,,23552,11520,,,
+financial-1024,financial,"1,024 changed business units",16,1,financial,1024,4.639689,1.251605,3.11965,,,,,,2049,,0,,,,,,4096,360,2649926332
+financial-64,financial,64 changed business units,16,1,financial,64,4.606899,0.074109,2.160496,,,,,,133,,0,,,,,,4096,360,2639583043
+financial-1,financial,1 changed business unit,16,1,financial,1,4.700481,0.001331,1.830807,,,,,,13,,0,,,,,,4096,360,2638904283
+parallel-4,parallel,4 participants,16,4,parallel,,,,,82.106088,,,,,79,,,4,54,25,,,,,
+parallel-3,parallel,3 participants,16,3,parallel,,,,,95.89518,,,,,79,,,3,54,25,,,,,
+parallel-2,parallel,2 participants,16,2,parallel,,,,,134.774273,,,,,79,,,2,62,17,,,,,
+parallel-1,parallel,1 participant,16,1,parallel,,,,,218.613628,,,,,79,,,1,79,0,,,,,
+dense-cheap,core,Dense cheap negative control,16,1,dense-cheap,,0.197175,,38.561551,,,,,,245730,,,,,,,,,,
+cutoff,core,Exact equality cutoff,16,1,cutoff,,,,,0.00202,,,,,1,,1,,,,,,,,
+density-2048,core,"2,048 changed sources",16,1,density,2048,273.575127,,278.367901,,,,,,4038,,93,,,,,,,,209944
+density-512,core,512 changed sources,16,1,density,512,289.815545,,76.05349,,,,,,1007,,26,,,,,,,,221398
+density-64,core,64 changed sources,16,1,density,64,281.91775,,8.404607,,,,,,132,,0,,,,,,,,221808
+density-8,core,8 changed sources,16,1,density,8,277.353729,,1.236851,,,,,,23,,0,,,,,,,,222024
+density-1,core,1 changed source,16,1,density,1,283.618808,,0.328045,,,,,,12,,0,,,,,,,,222052
+cold,core,"Cold 2,048-leaf reduction",16,1,cold,,275.357723,,285.253572,,,,,,4095,,,1,,,,,,,
+cold,core,"Cold 2,048-leaf reduction",17,1,cold,,286.137866,,291.008532,,,,,,4095,,,1,,,,,,,
+density-1,core,1 changed source,17,1,density,1,281.557545,,0.329818,,,,,,12,,0,,,,,,,,222052
+density-8,core,8 changed sources,17,1,density,8,277.761683,,1.216867,,,,,,23,,0,,,,,,,,222024
+density-64,core,64 changed sources,17,1,density,64,276.070002,,8.279585,,,,,,132,,0,,,,,,,,221808
+density-512,core,512 changed sources,17,1,density,512,292.546276,,73.877387,,,,,,1007,,26,,,,,,,,221398
+density-2048,core,"2,048 changed sources",17,1,density,2048,280.16052,,278.754487,,,,,,4038,,93,,,,,,,,209944
+cutoff,core,Exact equality cutoff,17,1,cutoff,,,,,0.002739,,,,,1,,1,,,,,,,,
+dense-cheap,core,Dense cheap negative control,17,1,dense-cheap,,0.195335,,35.322015,,,,,,245730,,,,,,,,,,
+parallel-1,parallel,1 participant,17,1,parallel,,,,,213.504112,,,,,79,,,1,79,0,,,,,
+parallel-2,parallel,2 participants,17,2,parallel,,,,,141.088719,,,,,79,,,2,65,14,,,,,
+parallel-3,parallel,3 participants,17,3,parallel,,,,,144.020853,,,,,79,,,3,65,14,,,,,
+parallel-4,parallel,4 participants,17,4,parallel,,,,,75.861357,,,,,79,,,4,53,26,,,,,
+financial-1,financial,1 changed business unit,17,1,financial,1,8.906732,0.00157,4.534715,,,,,,13,,0,,,,,,4096,360,2638904283
+financial-64,financial,64 changed business units,17,1,financial,64,6.979831,0.074825,1.886352,,,,,,133,,0,,,,,,4096,360,2639583043
+financial-1024,financial,"1,024 changed business units",17,1,financial,1024,6.241949,1.335577,11.413075,,,,,,2049,,0,,,,,,4096,360,2649926332
+bitonic-1,bitonic,1 changed input,17,1,bitonic,1,,,,,0.888235,9.56652,0.049335,11.246209,,1986,691,,,,23552,11520,,,
+bitonic-8,bitonic,8 changed inputs,17,1,bitonic,8,,,,,0.294151,12.822973,0.047631,9.135336,,2830,763,,,,23552,11520,,,
+bitonic-64,bitonic,64 changed inputs,17,1,bitonic,64,,,,,0.346041,16.077089,0.048032,14.495556,,8828,994,,,,23552,11520,,,
+bitonic-256,bitonic,256 changed inputs,17,1,bitonic,256,,,,,0.296827,8.453218,0.037334,8.454733,,13808,256,,,,23552,11520,,,
+bitonic-512,bitonic,512 changed inputs,17,1,bitonic,512,,,,,0.311405,25.703325,0.030972,18.018271,,23040,0,,,,23552,11520,,,
+bitonic-512,bitonic,512 changed inputs,18,1,bitonic,512,,,,,0.29375,8.591611,0.030417,8.874973,,23040,0,,,,23552,11520,,,
+bitonic-256,bitonic,256 changed inputs,18,1,bitonic,256,,,,,0.34621,11.168909,0.037035,9.040104,,13808,256,,,,23552,11520,,,
+bitonic-64,bitonic,64 changed inputs,18,1,bitonic,64,,,,,0.360795,8.749928,0.048521,15.778098,,8828,994,,,,23552,11520,,,
+bitonic-8,bitonic,8 changed inputs,18,1,bitonic,8,,,,,0.31069,9.020532,0.047463,19.120554,,2830,763,,,,23552,11520,,,
+bitonic-1,bitonic,1 changed input,18,1,bitonic,1,,,,,0.298247,8.425899,0.045324,7.929456,,1986,691,,,,23552,11520,,,
+financial-1024,financial,"1,024 changed business units",18,1,financial,1024,7.656787,1.216387,4.629512,,,,,,2049,,0,,,,,,4096,360,2649926332
+financial-64,financial,64 changed business units,18,1,financial,64,4.50159,0.074099,1.851129,,,,,,133,,0,,,,,,4096,360,2639583043
+financial-1,financial,1 changed business unit,18,1,financial,1,8.111111,0.001585,5.796905,,,,,,13,,0,,,,,,4096,360,2638904283
+parallel-4,parallel,4 participants,18,4,parallel,,,,,93.706018,,,,,79,,,4,55,24,,,,,
+parallel-3,parallel,3 participants,18,3,parallel,,,,,185.276432,,,,,79,,,3,65,14,,,,,
+parallel-2,parallel,2 participants,18,2,parallel,,,,,167.317172,,,,,79,,,2,69,10,,,,,
+parallel-1,parallel,1 participant,18,1,parallel,,,,,219.219658,,,,,79,,,1,79,0,,,,,
+dense-cheap,core,Dense cheap negative control,18,1,dense-cheap,,0.201308,,35.156014,,,,,,245730,,,,,,,,,,
+cutoff,core,Exact equality cutoff,18,1,cutoff,,,,,0.001245,,,,,1,,1,,,,,,,,
+density-2048,core,"2,048 changed sources",18,1,density,2048,284.989425,,303.312173,,,,,,4038,,93,,,,,,,,209944
+density-512,core,512 changed sources,18,1,density,512,408.853281,,73.142004,,,,,,1007,,26,,,,,,,,221398
+density-64,core,64 changed sources,18,1,density,64,287.329373,,14.459734,,,,,,132,,0,,,,,,,,221808
+density-8,core,8 changed sources,18,1,density,8,318.175141,,1.221642,,,,,,23,,0,,,,,,,,222024
+density-1,core,1 changed source,18,1,density,1,285.106801,,0.343901,,,,,,12,,0,,,,,,,,222052
+cold,core,"Cold 2,048-leaf reduction",18,1,cold,,279.813019,,279.252647,,,,,,4095,,,1,,,,,,,
+cold,core,"Cold 2,048-leaf reduction",19,1,cold,,292.356522,,282.501583,,,,,,4095,,,1,,,,,,,
+density-1,core,1 changed source,19,1,density,1,274.37398,,0.329245,,,,,,12,,0,,,,,,,,222052
+density-8,core,8 changed sources,19,1,density,8,281.559622,,1.213864,,,,,,23,,0,,,,,,,,222024
+density-64,core,64 changed sources,19,1,density,64,324.665292,,9.664314,,,,,,132,,0,,,,,,,,221808
+density-512,core,512 changed sources,19,1,density,512,279.004282,,69.432678,,,,,,1007,,26,,,,,,,,221398
+density-2048,core,"2,048 changed sources",19,1,density,2048,275.182821,,277.610433,,,,,,4038,,93,,,,,,,,209944
+cutoff,core,Exact equality cutoff,19,1,cutoff,,,,,0.00172,,,,,1,,1,,,,,,,,
+dense-cheap,core,Dense cheap negative control,19,1,dense-cheap,,0.236438,,33.051903,,,,,,245730,,,,,,,,,,
+parallel-1,parallel,1 participant,19,1,parallel,,,,,213.406344,,,,,79,,,1,79,0,,,,,
+parallel-2,parallel,2 participants,19,2,parallel,,,,,227.667157,,,,,79,,,2,59,20,,,,,
+parallel-3,parallel,3 participants,19,3,parallel,,,,,116.323641,,,,,79,,,3,59,20,,,,,
+parallel-4,parallel,4 participants,19,4,parallel,,,,,106.635929,,,,,79,,,4,49,30,,,,,
+financial-1,financial,1 changed business unit,19,1,financial,1,4.709574,0.001285,1.78871,,,,,,13,,0,,,,,,4096,360,2638904283
+financial-64,financial,64 changed business units,19,1,financial,64,4.684324,0.074186,1.873953,,,,,,133,,0,,,,,,4096,360,2639583043
+financial-1024,financial,"1,024 changed business units",19,1,financial,1024,4.726752,1.173816,3.331283,,,,,,2049,,0,,,,,,4096,360,2649926332
+bitonic-1,bitonic,1 changed input,19,1,bitonic,1,,,,,0.310276,8.695365,0.044658,8.419772,,1986,691,,,,23552,11520,,,
+bitonic-8,bitonic,8 changed inputs,19,1,bitonic,8,,,,,0.299089,9.03828,0.04589,8.916974,,2830,763,,,,23552,11520,,,
+bitonic-64,bitonic,64 changed inputs,19,1,bitonic,64,,,,,0.296052,8.403667,0.043142,9.678545,,8828,994,,,,23552,11520,,,
+bitonic-256,bitonic,256 changed inputs,19,1,bitonic,256,,,,,0.312971,9.61504,0.039917,8.788634,,13808,256,,,,23552,11520,,,
+bitonic-512,bitonic,512 changed inputs,19,1,bitonic,512,,,,,0.365033,8.898511,0.031787,8.673367,,23040,0,,,,23552,11520,,,
+bitonic-512,bitonic,512 changed inputs,20,1,bitonic,512,,,,,0.312861,8.89287,0.031953,8.810984,,23040,0,,,,23552,11520,,,
+bitonic-256,bitonic,256 changed inputs,20,1,bitonic,256,,,,,0.305046,8.376659,0.037934,8.28285,,13808,256,,,,23552,11520,,,
+bitonic-64,bitonic,64 changed inputs,20,1,bitonic,64,,,,,0.307694,8.81719,0.045898,8.573653,,8828,994,,,,23552,11520,,,
+bitonic-8,bitonic,8 changed inputs,20,1,bitonic,8,,,,,0.297549,8.648711,0.046137,8.315547,,2830,763,,,,23552,11520,,,
+bitonic-1,bitonic,1 changed input,20,1,bitonic,1,,,,,0.296478,8.822977,0.042933,8.063315,,1986,691,,,,23552,11520,,,
+financial-1024,financial,"1,024 changed business units",20,1,financial,1024,8.347369,1.19244,5.555765,,,,,,2049,,0,,,,,,4096,360,2649926332
+financial-64,financial,64 changed business units,20,1,financial,64,4.412728,0.072019,1.823937,,,,,,133,,0,,,,,,4096,360,2639583043
+financial-1,financial,1 changed business unit,20,1,financial,1,9.605768,0.001522,2.276321,,,,,,13,,0,,,,,,4096,360,2638904283
+parallel-4,parallel,4 participants,20,4,parallel,,,,,94.113336,,,,,79,,,4,25,54,,,,,
+parallel-3,parallel,3 participants,20,3,parallel,,,,,162.631972,,,,,79,,,3,64,15,,,,,
+parallel-2,parallel,2 participants,20,2,parallel,,,,,137.632475,,,,,79,,,2,65,14,,,,,
+parallel-1,parallel,1 participant,20,1,parallel,,,,,228.524654,,,,,79,,,1,79,0,,,,,
+dense-cheap,core,Dense cheap negative control,20,1,dense-cheap,,0.224052,,35.161777,,,,,,245730,,,,,,,,,,
+cutoff,core,Exact equality cutoff,20,1,cutoff,,,,,0.001541,,,,,1,,1,,,,,,,,
+density-2048,core,"2,048 changed sources",20,1,density,2048,282.815345,,284.536142,,,,,,4038,,93,,,,,,,,209944
+density-512,core,512 changed sources,20,1,density,512,290.631553,,71.484158,,,,,,1007,,26,,,,,,,,221398
+density-64,core,64 changed sources,20,1,density,64,294.592292,,9.670819,,,,,,132,,0,,,,,,,,221808
+density-8,core,8 changed sources,20,1,density,8,296.73542,,1.238453,,,,,,23,,0,,,,,,,,222024
+density-1,core,1 changed source,20,1,density,1,390.08162,,0.327582,,,,,,12,,0,,,,,,,,222052
+cold,core,"Cold 2,048-leaf reduction",20,1,cold,,318.092115,,299.439492,,,,,,4095,,,1,,,,,,,
