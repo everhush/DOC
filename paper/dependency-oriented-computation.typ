@@ -94,7 +94,7 @@
     #body
   ],
   caption: caption,
-  kind: "diagram",
+  kind: "figure",
   supplement: [Figure],
   numbering: "1",
 )
@@ -1108,6 +1108,9 @@ The dense cheap negative control uses 4,096 sources, 4,096 identity leaf definit
     #dlabel(165pt, 114pt, [changed sources in the 2,048-leaf reduction], size: 7.5pt)
   ],
   caption: [Repair work grows with update density. Bars show selected definitions as a fraction of the 4,095 derived definitions; equality cutoff leaves the full-change row slightly below 100%.],
+  kind: "figure",
+  supplement: [Figure],
+  numbering: "1",
 ) <fig:repair-density>
 
 The structural trend in @fig:repair-density is the main result of this workload: sparse updates reconsider only the changed leaves and their ancestors, while dense updates approach complete work. Exact equality cutoff required one producer evaluation and one cutoff in its dedicated microbenchmark. Cold DOC and direct execution are near parity on this expensive reduction, whereas a complete source change also approaches parity. The deliberately cheap dense graph is a negative control: DOC is roughly two orders of magnitude slower because metadata, frontier construction, and synchronization dominate the useful arithmetic. The model therefore predicts *where work may be avoided*, not a universal timing improvement.
@@ -1150,6 +1153,9 @@ The structural trend in @fig:repair-density is the main result of this workload:
     #dlabel(185pt, 114pt, [externally allowed participants], size: 7.5pt)
   ],
   caption: [Single-host ready-frontier speedup. The result demonstrates use of granted parallel capacity for a coarse frontier; it is not evidence of distributed scalability.],
+  kind: "figure",
+  supplement: [Figure],
+  numbering: "1",
 ) <fig:parallel-speedup>
 
 The reproduced single-host result reaches a raw-mean speedup of $3.237 times$ at four participants. The first frontier contains 40 independent expensive leaf definitions, so there is enough coarse work to amortize runtime overhead. @fig:parallel-speedup must not be extrapolated to more cores or multiple hosts: the experiment contains no inter-host transport and the cgroup allows only four CPUs. It supports only the narrower claim that a dependency-minimal frontier can consume externally granted local capacity without a worker count in the program.
