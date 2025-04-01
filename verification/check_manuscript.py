@@ -64,7 +64,7 @@ if re.search(r"\b(?:Section|Table|Figure)\s+\d+(?:\.\d+)*\b", source):
 bib_text = BIB.read_text(encoding="utf-8")
 bib_keys = set(re.findall(r"@[A-Za-z]+\s*\{\s*([^,\s]+)", bib_text))
 structural = ("fig:", "tab:", "alg:", "eq:", "sec:", "thm:", "lem:", "cor:", "def:", "app:")
-citations = {r for r in refs if not r.startswith(structural)}
+citations = {r for r in refs if not r.startswith(structural) and r != "gmail"}
 missing = sorted(citations - bib_keys)
 unused = sorted(bib_keys - citations)
 if missing:
