@@ -4,7 +4,6 @@
 #include <condition_variable>
 #include <cstddef>
 #include <cstdint>
-#include <deque>
 #include <exception>
 #include <functional>
 #include <mutex>
@@ -120,8 +119,9 @@ private:
     bool stopping_ = false;
     std::uint64_t generation_ = 0;
     std::uint64_t completed_generation_ = 0;
-    std::deque<std::size_t> queue_;
-    std::size_t outstanding_ = 0;
+    std::size_t count_ = 0;
+    std::atomic<std::size_t> next_index_{0};
+    std::size_t completed_workers_ = 0;
     bool job_active_ = false;
     std::function<void(std::size_t, bool)> function_;
     std::exception_ptr exception_;
