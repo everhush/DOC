@@ -269,11 +269,11 @@ std::uint64_t WorkerPool::generation() const noexcept {
     return generation_;
 }
 
-void WorkerPool::parallel_for(
+std::pair<std::size_t, std::size_t> WorkerPool::parallel_for(
     std::size_t count,
-    const std::function<void(std::size_t, bool)>& function) {
+    const std::function<void(std::size_t)>& function) {
     if (count == 0U) {
-        return;
+        return {0U, 0U};
     }
     if (count == 1U || workers_.empty()) {
         {
@@ -282,9 +282,9 @@ void WorkerPool::parallel_for(
             completed_generation_ = generation_;
         }
         for (std::size_t i = 0; i < count; ++i) {
-            function(i, false);
+            function(i);
         }
-        return;
+        return {count, 0U};
     }
 
     {
@@ -305,13 +305,15 @@ void WorkerPool::parallel_for(
     // Task zero is reserved for the epoch owner, so owner participation is
     // guaranteed. All participants then draw further work from one atomic
     // index, avoiding a lock and queue operation for every frontier element.
-    execute_task(0U, false);
+    std::size_t owner_jobs = 1U;
+    execute_task(0U);
     while (true) {
         const auto index = next_index_.fetch_add(1U, std::memory_order_relaxed);
         if (index >= count) {
             break;
         }
-        execute_task(index, false);
+        execute_task(index);
+        ++owner_jobs;
     }
 
     {
@@ -326,11 +328,12 @@ void WorkerPool::parallel_for(
     if (exception_) {
         std::rethrow_exception(exception_);
     }
+    return {owner_jobs, count - owner_jobs};
 }
 
-void WorkerPool::execute_task(std::size_t index, bool worker_thread) {
+void WorkerPool::execute_task(std::size_t index) {
     try {
-        function_(index, worker_thread);
+        function_(index);
     } catch (...) {
         std::lock_guard lock(mutex_);
         if (!exception_) {
@@ -358,7 +361,7 @@ void WorkerPool::worker_loop() {
             if (index >= count_) {
                 break;
             }
-            execute_task(index, true);
+            execute_task(index);
         }
 
         {
@@ -529,18 +532,12 @@ bool Runtime::stabilize_locked(std::string* error) {
             }
         }
 
-        std::uint64_t owner_jobs = 0U;
-        std::atomic<std::uint64_t> worker_jobs{0};
+        std::pair<std::size_t, std::size_t> job_counts;
         try {
-            pool_.parallel_for(frontier.size(), [&](std::size_t i, bool worker_thread) {
+            job_counts = pool_.parallel_for(frontier.size(), [&](std::size_t i) {
                 const auto state = frontier[i];
                 const auto& definition = *graph_.states[state].definition;
                 candidates[i] = Candidate{state, definition.function(inputs[i])};
-                if (worker_thread) {
-                    worker_jobs.fetch_add(1U, std::memory_order_relaxed);
-                } else {
-                    ++owner_jobs;
-                }
             });
         } catch (const std::exception& exception) {
             if (error) {
@@ -556,8 +553,8 @@ bool Runtime::stabilize_locked(std::string* error) {
 
         ++stats_.frontiers;
         stats_.evaluations += static_cast<std::uint64_t>(frontier.size());
-        stats_.owner_jobs += owner_jobs;
-        stats_.worker_jobs += worker_jobs.load(std::memory_order_relaxed);
+        stats_.owner_jobs += static_cast<std::uint64_t>(job_counts.first);
+        stats_.worker_jobs += static_cast<std::uint64_t>(job_counts.second);
 
         for (const auto state : frontier) {
             active_[state] = 0U;
