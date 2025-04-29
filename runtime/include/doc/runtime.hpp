@@ -103,12 +103,13 @@ public:
     [[nodiscard]] std::size_t worker_threads() const noexcept;
     [[nodiscard]] std::uint64_t generation() const noexcept;
 
-    void parallel_for(std::size_t count,
-                      const std::function<void(std::size_t, bool)>& function);
+    [[nodiscard]] std::pair<std::size_t, std::size_t> parallel_for(
+        std::size_t count,
+        const std::function<void(std::size_t)>& function);
 
 private:
     void worker_loop();
-    void execute_task(std::size_t index, bool worker_thread);
+    void execute_task(std::size_t index);
 
     std::size_t participant_capacity_ = 1;
     std::vector<std::thread> workers_;
@@ -123,7 +124,7 @@ private:
     std::atomic<std::size_t> next_index_{0};
     std::size_t completed_workers_ = 0;
     bool job_active_ = false;
-    std::function<void(std::size_t, bool)> function_;
+    std::function<void(std::size_t)> function_;
     std::exception_ptr exception_;
 };
 
