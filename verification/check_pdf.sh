@@ -34,8 +34,11 @@ if command -v pdffonts >/dev/null 2>&1; then
     echo "PDF preflight failed: no fonts detected" >&2
     exit 1
   fi
-  # The emb column is the fourth field in standard pdffonts output.
-  if printf '%s\n' "$FONTS" | awk 'NF && $4 != "yes" {bad=1} END {exit bad ? 0 : 1}'; then
+  # In Poppler's standard pdffonts table, the emb flag is field 6:
+  # name, type, encoding, emb, sub, uni are visually aligned, but font names
+  # may contain spaces only inside the fixed-width name column. The parsed
+  # data rows used here place "emb" at field 6.
+  if printf '%s\n' "$FONTS" | awk 'NF >= 8 && $6 != "yes" {bad=1} END {exit bad ? 0 : 1}'; then
     echo "PDF preflight failed: one or more fonts are not embedded" >&2
     exit 1
   fi
