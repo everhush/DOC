@@ -79,6 +79,7 @@ jobs:
       - name: Upload runtime logs
         if: always()
         uses: actions/upload-artifact@v7
+        continue-on-error: true
         with:
           name: runtime-${{ matrix.compiler }}-${{ github.sha }}-attempt-${{ github.run_attempt }}
           path: ci-artifacts/runtime-${{ matrix.compiler }}/
@@ -137,6 +138,7 @@ jobs:
       - name: Upload sanitizer logs
         if: always()
         uses: actions/upload-artifact@v7
+        continue-on-error: true
         with:
           name: sanitizer-${{ matrix.sanitizer }}-${{ github.sha }}-attempt-${{ github.run_attempt }}
           path: ci-artifacts/sanitizer-${{ matrix.sanitizer }}/
@@ -220,6 +222,7 @@ jobs:
       - name: Upload manuscript and renders
         if: always()
         uses: actions/upload-artifact@v7
+        continue-on-error: true
         with:
           name: manuscript-${{ github.sha }}-attempt-${{ github.run_attempt }}
           path: ci-artifacts/manuscript/
@@ -262,6 +265,12 @@ jobs:
           python verification/check_benchmark_artifact.py ci-artifacts/benchmarks \
             2>&1 | tee ci-artifacts/benchmarks/artifact-validation.log
 
+      - name: Print benchmark evidence
+        run: |
+          cat ci-artifacts/benchmarks/BENCHMARK-REPORT.md
+          printf '\n--- machine.json ---\n'
+          cat ci-artifacts/benchmarks/machine.json
+
       - name: Record CI provenance
         if: always()
         run: |
@@ -278,6 +287,7 @@ jobs:
       - name: Upload raw benchmark evidence
         if: always()
         uses: actions/upload-artifact@v7
+        continue-on-error: true
         with:
           name: benchmarks-${{ github.sha }}-attempt-${{ github.run_attempt }}
           path: ci-artifacts/benchmarks/
