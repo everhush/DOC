@@ -4,6 +4,7 @@
 #include <condition_variable>
 #include <cstddef>
 #include <cstdint>
+#include <deque>
 #include <exception>
 #include <functional>
 #include <mutex>
@@ -103,13 +104,12 @@ public:
     [[nodiscard]] std::size_t worker_threads() const noexcept;
     [[nodiscard]] std::uint64_t generation() const noexcept;
 
-    [[nodiscard]] std::pair<std::size_t, std::size_t> parallel_for(
-        std::size_t count,
-        const std::function<void(std::size_t)>& function);
+    void parallel_for(std::size_t count,
+                      const std::function<void(std::size_t, bool)>& function);
 
 private:
     void worker_loop();
-    void execute_task(std::size_t index);
+    void execute_task(std::size_t index, bool worker_thread);
 
     std::size_t participant_capacity_ = 1;
     std::vector<std::thread> workers_;
@@ -120,11 +120,10 @@ private:
     bool stopping_ = false;
     std::uint64_t generation_ = 0;
     std::uint64_t completed_generation_ = 0;
-    std::size_t count_ = 0;
-    std::atomic<std::size_t> next_index_{0};
-    std::size_t completed_workers_ = 0;
+    std::deque<std::size_t> queue_;
+    std::size_t outstanding_ = 0;
     bool job_active_ = false;
-    std::function<void(std::size_t)> function_;
+    std::function<void(std::size_t, bool)> function_;
     std::exception_ptr exception_;
 };
 
