@@ -13,8 +13,7 @@ The paper's finite metatheory is a mathematical argument. The executable materia
 - `runtime/tests` — native and randomized/differential tests;
 - `runtime/formal` — five bounded model checkers;
 - `runtime/benchmarks` and `runtime/scripts` — benchmark implementation and complete campaign driver;
-- `runtime/results/primary` — preserved 20-process-per-row campaign for sparse/dense, cutoff, financial, and sorting-network results;
-- `runtime/results/scaling` — preserved local-machine scaling evidence and a summary matching Section 9.2;
+- `runtime/results/revision-2026-09-29` — authoritative 20-process-per-row campaign for sparse/dense repair, cutoff, ready-frontier scaling, financial, and sorting-network results;
 - `verification/` — one consolidated verification report, supporting logs, and the citation ledger.
 
 ## Dependencies
@@ -81,10 +80,10 @@ The supplied PDF was compiled with Typst 0.15.1.
 
 ## Raw data and summaries
 
-- `runtime/results/primary/raw.csv` is the unfiltered primary campaign.
-- `runtime/results/primary/statistics.csv` and `summary.csv` contain the generated distributions and filtered/raw summaries.
-- `runtime/results/scaling/raw.csv` preserves the supplied local-machine paired scaling measurements.
-- `runtime/results/scaling/SUMMARY.md` reproduces the Section 9.2 median-time and paired-speedup series.
+- `runtime/results/revision-2026-09-29/raw.csv` is the complete unfiltered campaign.
+- `runtime/results/revision-2026-09-29/statistics.csv` and `summary.csv` contain the generated distributions and filtered/raw summaries.
+- `runtime/results/revision-2026-09-29/machine.json` records the benchmark host, compiler, CPU visibility/quota, binary hash, and methodology.
+- `runtime/results/revision-2026-09-29/BENCHMARK-REPORT.md` reproduces the manuscript-facing benchmark series and evidence boundaries.
 
 
 
