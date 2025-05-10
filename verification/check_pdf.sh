@@ -34,11 +34,10 @@ if command -v pdffonts >/dev/null 2>&1; then
     echo "PDF preflight failed: no fonts detected" >&2
     exit 1
   fi
-  # In Poppler's standard pdffonts table, the emb flag is field 6:
-  # name, type, encoding, emb, sub, uni are visually aligned, but font names
-  # may contain spaces only inside the fixed-width name column. The parsed
-  # data rows used here place "emb" at field 6.
-  if printf '%s\n' "$FONTS" | awk 'NF >= 8 && $6 != "yes" {bad=1} END {exit bad ? 0 : 1}'; then
+  # The final five whitespace fields are: emb, sub, uni, object, ID.
+  # Parsing from the right is robust to font-type names such as
+  # "CID Type 0C" and "CID TrueType", which occupy different field counts.
+  if printf '%s\n' "$FONTS" | awk 'NF >= 6 && $(NF-4) != "yes" {bad=1} END {exit bad ? 0 : 1}'; then
     echo "PDF preflight failed: one or more fonts are not embedded" >&2
     exit 1
   fi
