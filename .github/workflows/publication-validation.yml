@@ -223,68 +223,9 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          import base64, hashlib, textwrap, zipfile
-
+          import base64, hashlib, zipfile
           root = Path(".")
-          out = Path("/tmp/DOC-final-source-and-reproducibility.zip")
-          prefix = "DOC-final-source-and-reproducibility"
-
-          readme = """# Dependency-Oriented Computation - final source and reproducibility package
-
-This package accompanies the final manuscript PDF, which is submitted separately.
-
-## Manuscript compilation
-
-Required: Typst 0.15.1.
-
-From the package root:
-
-    typst compile paper/dependency-oriented-computation.typ dependency-oriented-computation.pdf
-
-The manuscript is self-contained apart from Typst itself; bibliographic metadata is in
-`paper/references.bib`.
-
-## Runtime verification
-
-Requirements: 64-bit Linux, CMake 3.20+, a C++20 compiler, POSIX threads, Python 3;
-Ninja is recommended.
-
-    cmake -S runtime -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-    cmake --build build
-    ctest --test-dir build --output-on-failure
-
-## Authoritative benchmark evidence
-
-The manuscript's reported benchmark campaign is
-`runtime/results/revision-2026-09-29/`. It contains all 20 recorded fresh-process
-samples per row, the retained/excluded samples, statistics, run configuration,
-commands, and machine record. The recorded machine was an AMD EPYC 9V74 80-Core
-Processor running Linux 6.18.44 x86-64 with glibc 2.41 and GCC 14.2.0; five logical
-CPUs were visible by affinity and the cgroup CPU quota was four CPUs. One unrecorded
-warmup preceded the 20 recorded samples for each row.
-
-## Evidence map
-
-`CLAIM-EVIDENCE-MAP.md` separates mathematical arguments, bounded exhaustive
-checks, runtime tests, and empirical performance evidence.
-"""
-          compilation = """# Compilation instructions
-
-The manuscript source is `paper/dependency-oriented-computation.typ` and the
-bibliography is `paper/references.bib`.
-
-Use Typst 0.15.1:
-
-    typst --version
-    typst compile paper/dependency-oriented-computation.typ dependency-oriented-computation.pdf
-
-Expected output: a 33-page A4 PDF. The validation script may be run with:
-
-    REQUIRE_QPDF=1 bash verification/check_pdf.sh dependency-oriented-computation.pdf
-
-For runtime/reproducibility requirements, see `README-FIRST.md` and `ENVIRONMENT.md`.
-"""
-
+          out = Path("/tmp/DOC-source-payload.zip")
           include_files = [
               "README.md", "ENVIRONMENT.md", "LICENSE", "flake.nix", "flake.lock",
               "CLAIM-EVIDENCE-MAP.md",
@@ -298,30 +239,19 @@ For runtime/reproducibility requirements, see `README-FIRST.md` and `ENVIRONMENT
               "runtime/include", "runtime/src", "runtime/examples", "runtime/tests",
               "runtime/formal", "runtime/benchmarks", "runtime/scripts", "runtime/results",
           ]
-
-          files = []
-          for rel in include_files:
-              p = root / rel
-              if p.is_file():
-                  files.append(p)
+          files = [root / rel for rel in include_files if (root / rel).is_file()]
           for rel in include_dirs:
-              p = root / rel
-              files.extend(x for x in p.rglob("*") if x.is_file() and "__pycache__" not in x.parts)
-          files = sorted(set(files))
-
+              files.extend(p for p in (root / rel).rglob("*") if p.is_file() and "__pycache__" not in p.parts)
           with zipfile.ZipFile(out, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as z:
-              z.writestr(f"{prefix}/README-FIRST.md", readme)
-              z.writestr(f"{prefix}/COMPILATION.md", compilation)
-              for p in files:
-                  z.write(p, f"{prefix}/{p.as_posix()}")
-
+              for p in sorted(set(files)):
+                  z.write(p, p.as_posix())
           pdf = Path("ci-artifacts/manuscript/dependency-oriented-computation.pdf")
           print("FINAL_SOURCE_SHA256=" + hashlib.sha256(out.read_bytes()).hexdigest())
           print("FINAL_PDF_SHA256=" + hashlib.sha256(pdf.read_bytes()).hexdigest())
           for tag, path in [("SOURCE64", out), ("PDF64", pdf)]:
               encoded = base64.b64encode(path.read_bytes()).decode("ascii")
               for i in range(0, len(encoded), 8000):
-                  print(f"{tag}:{encoded[i:i+8000]}")
+                  print(tag + ":" + encoded[i:i+8000])
           PY
 
       - name: Upload manuscript and renders
