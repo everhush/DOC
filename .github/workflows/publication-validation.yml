@@ -16,6 +16,10 @@ env:
   PYTHON_VERSION: "3.13"
   TYPST_VERSION: "0.15.1"
 
+defaults:
+  run:
+    shell: bash --noprofile --norc -eo pipefail {0}
+
 jobs:
   runtime:
     name: Runtime / ${{ matrix.compiler }}
@@ -219,41 +223,6 @@ jobs:
             python --version
           } > ci-artifacts/manuscript/ci-provenance.txt
 
-      - name: Emit final submission payload for retrieval
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          import base64, hashlib, zipfile
-          root = Path(".")
-          out = Path("/tmp/DOC-source-payload.zip")
-          include_files = [
-              "README.md", "ENVIRONMENT.md", "LICENSE", "flake.nix", "flake.lock",
-              "CLAIM-EVIDENCE-MAP.md",
-              "paper/dependency-oriented-computation.typ", "paper/references.bib",
-              "verification/CITATION-VERIFICATION-LEDGER.md",
-              "verification/check_manuscript.py",
-              "verification/check_benchmark_artifact.py",
-              "verification/check_pdf.sh",
-          ]
-          include_dirs = [
-              "runtime/include", "runtime/src", "runtime/examples", "runtime/tests",
-              "runtime/formal", "runtime/benchmarks", "runtime/scripts", "runtime/results",
-          ]
-          files = [root / rel for rel in include_files if (root / rel).is_file()]
-          for rel in include_dirs:
-              files.extend(p for p in (root / rel).rglob("*") if p.is_file() and "__pycache__" not in p.parts)
-          with zipfile.ZipFile(out, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as z:
-              for p in sorted(set(files)):
-                  z.write(p, p.as_posix())
-          pdf = Path("ci-artifacts/manuscript/dependency-oriented-computation.pdf")
-          print("FINAL_SOURCE_SHA256=" + hashlib.sha256(out.read_bytes()).hexdigest())
-          print("FINAL_PDF_SHA256=" + hashlib.sha256(pdf.read_bytes()).hexdigest())
-          for tag, path in [("SOURCE64", out), ("PDF64", pdf)]:
-              encoded = base64.b64encode(path.read_bytes()).decode("ascii")
-              for i in range(0, len(encoded), 8000):
-                  print(tag + ":" + encoded[i:i+8000])
-          PY
-
       - name: Upload manuscript and renders
         if: always()
         uses: actions/upload-artifact@v7
@@ -299,12 +268,6 @@ jobs:
         run: |
           python verification/check_benchmark_artifact.py ci-artifacts/benchmarks \
             2>&1 | tee ci-artifacts/benchmarks/artifact-validation.log
-
-      - name: Print benchmark evidence
-        run: |
-          cat ci-artifacts/benchmarks/BENCHMARK-REPORT.md
-          printf '\n--- machine.json ---\n'
-          cat ci-artifacts/benchmarks/machine.json
 
       - name: Record CI provenance
         if: always()
