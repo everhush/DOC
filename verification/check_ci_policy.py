@@ -20,6 +20,8 @@ required = [
     'TYPST_VERSION: "0.15.1"',
     "permissions:",
     "contents: read",
+    "defaults:",
+    "shell: bash",
     "verification/check_manuscript.py",
     "verification/check_pdf.sh",
     "verification/check_benchmark_artifact.py",
@@ -55,5 +57,6 @@ if errors:
 
 print("CI POLICY: PASS")
 print("- credential-free read-only workflow")
+print("- explicit bash run shell enables -e/-o pipefail semantics for piped validation commands")
 print("- pinned Typst and current action majors")
 print("- every uploaded artifact expires after one day")

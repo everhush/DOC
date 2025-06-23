@@ -34,8 +34,9 @@ if command -v pdffonts >/dev/null 2>&1; then
     echo "PDF preflight failed: no fonts detected" >&2
     exit 1
   fi
-  # The emb column is the fourth field in standard pdffonts output.
-  if printf '%s\n' "$FONTS" | awk 'NF && $4 != "yes" {bad=1} END {exit bad ? 0 : 1}'; then
+  # pdffonts rows end with: emb sub uni object-ID generation.
+  # Font type names may contain spaces, so locate emb relative to the final columns.
+  if printf '%s\n' "$FONTS" | awk 'NF && $(NF-4) != "yes" {bad=1} END {exit bad ? 0 : 1}'; then
     echo "PDF preflight failed: one or more fonts are not embedded" >&2
     exit 1
   fi

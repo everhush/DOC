@@ -23,4 +23,4 @@ The manuscript was compiled with Typst 0.15.1. Typst is not bundled; use a compa
 - Typst 0.15.1;
 - five visible logical CPUs, with a four-CPU cgroup quota during verification.
 
-The preserved headline benchmark campaigns record their own earlier host and run configuration in `runtime/results/primary/machine.json` and their raw CSV files. Timing values are host-specific; the fresh verification reruns correctness checks rather than relabeling new timings as the preserved campaign.
+The authoritative article benchmark campaign is `runtime/results/revision-2026-09-29/`. Its `machine.json` records Linux 6.18.44 x86-64 with glibc 2.41, GCC 14.2.0 in Release mode, Python 3.13.5, CMake 3.31.6, an AMD EPYC 9V74 80-Core Processor, five CPUs visible by affinity/OS, and a four-CPU cgroup quota (`cpu.max = 400000 100000`). Every reported row uses 20 fresh processes after one unrecorded warmup. Timing values remain host- and workload-specific.
