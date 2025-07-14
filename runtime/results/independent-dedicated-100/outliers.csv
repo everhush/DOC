@@ -1,0 +1,274 @@
+name,group,label,sample,external_workers,scenario,changed,direct_ms,cached_ms,doc_ms,elapsed_ms,direct_cold_ms,doc_cold_ms,direct_update_ms,doc_update_ms,evaluations,update_evaluations,cutoffs,participants,owner_jobs,worker_jobs,states,comparators,units,periods,value
+cold,core,"Cold 2,048-leaf reduction",18,1,cold,,382.721347,,362.754639,,,,,,4095,,,1,,,,,,,
+cold,core,"Cold 2,048-leaf reduction",21,1,cold,,350.763565,,384.261022,,,,,,4095,,,1,,,,,,,
+cold,core,"Cold 2,048-leaf reduction",53,1,cold,,366.353499,,401.484721,,,,,,4095,,,1,,,,,,,
+cold,core,"Cold 2,048-leaf reduction",64,1,cold,,394.825408,,353.925599,,,,,,4095,,,1,,,,,,,
+cold,core,"Cold 2,048-leaf reduction",90,1,cold,,375.061601,,379.7731,,,,,,4095,,,1,,,,,,,
+density-1,core,1 changed source,16,1,density,1,361.093108,,0.836595,,,,,,12,,0,,,,,,,,222052
+density-1,core,1 changed source,19,1,density,1,385.608943,,0.568998,,,,,,12,,0,,,,,,,,222052
+density-1,core,1 changed source,20,1,density,1,349.208233,,0.813338,,,,,,12,,0,,,,,,,,222052
+density-1,core,1 changed source,23,1,density,1,346.018399,,0.779797,,,,,,12,,0,,,,,,,,222052
+density-1,core,1 changed source,30,1,density,1,381.343111,,0.863056,,,,,,12,,0,,,,,,,,222052
+density-1,core,1 changed source,35,1,density,1,343.547072,,0.782929,,,,,,12,,0,,,,,,,,222052
+density-1,core,1 changed source,37,1,density,1,353.655838,,0.848331,,,,,,12,,0,,,,,,,,222052
+density-1,core,1 changed source,38,1,density,1,391.802389,,0.649163,,,,,,12,,0,,,,,,,,222052
+density-1,core,1 changed source,40,1,density,1,349.682271,,0.832753,,,,,,12,,0,,,,,,,,222052
+density-1,core,1 changed source,44,1,density,1,350.63877,,0.826534,,,,,,12,,0,,,,,,,,222052
+density-1,core,1 changed source,46,1,density,1,374.489222,,1.16814,,,,,,12,,0,,,,,,,,222052
+density-1,core,1 changed source,47,1,density,1,354.359851,,1.15786,,,,,,12,,0,,,,,,,,222052
+density-1,core,1 changed source,51,1,density,1,353.050525,,0.822018,,,,,,12,,0,,,,,,,,222052
+density-1,core,1 changed source,53,1,density,1,362.050749,,0.955787,,,,,,12,,0,,,,,,,,222052
+density-1,core,1 changed source,56,1,density,1,346.482532,,0.929911,,,,,,12,,0,,,,,,,,222052
+density-1,core,1 changed source,74,1,density,1,343.825477,,0.987354,,,,,,12,,0,,,,,,,,222052
+density-1,core,1 changed source,75,1,density,1,361.450602,,0.77053,,,,,,12,,0,,,,,,,,222052
+density-1,core,1 changed source,83,1,density,1,362.86214,,1.896067,,,,,,12,,0,,,,,,,,222052
+density-1,core,1 changed source,87,1,density,1,352.011092,,0.808503,,,,,,12,,0,,,,,,,,222052
+density-1,core,1 changed source,97,1,density,1,375.373932,,0.960491,,,,,,12,,0,,,,,,,,222052
+density-1,core,1 changed source,100,1,density,1,361.530524,,0.831669,,,,,,12,,0,,,,,,,,222052
+density-8,core,8 changed sources,5,1,density,8,384.019984,,1.786449,,,,,,23,,0,,,,,,,,222024
+density-8,core,8 changed sources,10,1,density,8,382.429536,,2.38514,,,,,,23,,0,,,,,,,,222024
+density-8,core,8 changed sources,19,1,density,8,366.223265,,1.870784,,,,,,23,,0,,,,,,,,222024
+density-8,core,8 changed sources,37,1,density,8,386.193696,,1.762995,,,,,,23,,0,,,,,,,,222024
+density-8,core,8 changed sources,38,1,density,8,354.176358,,1.883329,,,,,,23,,0,,,,,,,,222024
+density-8,core,8 changed sources,40,1,density,8,350.001104,,1.863404,,,,,,23,,0,,,,,,,,222024
+density-8,core,8 changed sources,41,1,density,8,451.399977,,1.695173,,,,,,23,,0,,,,,,,,222024
+density-8,core,8 changed sources,51,1,density,8,351.683129,,2.036866,,,,,,23,,0,,,,,,,,222024
+density-8,core,8 changed sources,52,1,density,8,373.501338,,2.109383,,,,,,23,,0,,,,,,,,222024
+density-8,core,8 changed sources,53,1,density,8,370.917654,,2.548229,,,,,,23,,0,,,,,,,,222024
+density-8,core,8 changed sources,77,1,density,8,358.5797,,1.933133,,,,,,23,,0,,,,,,,,222024
+density-8,core,8 changed sources,79,1,density,8,364.742347,,2.28958,,,,,,23,,0,,,,,,,,222024
+density-8,core,8 changed sources,90,1,density,8,390.089089,,1.68727,,,,,,23,,0,,,,,,,,222024
+density-64,core,64 changed sources,11,1,density,64,363.065848,,13.300912,,,,,,132,,0,,,,,,,,221808
+density-64,core,64 changed sources,12,1,density,64,361.764109,,11.449608,,,,,,132,,0,,,,,,,,221808
+density-64,core,64 changed sources,18,1,density,64,385.310983,,10.967669,,,,,,132,,0,,,,,,,,221808
+density-64,core,64 changed sources,20,1,density,64,354.872666,,12.830545,,,,,,132,,0,,,,,,,,221808
+density-64,core,64 changed sources,21,1,density,64,348.458631,,13.425709,,,,,,132,,0,,,,,,,,221808
+density-64,core,64 changed sources,36,1,density,64,380.524769,,10.688219,,,,,,132,,0,,,,,,,,221808
+density-64,core,64 changed sources,40,1,density,64,356.28324,,12.565803,,,,,,132,,0,,,,,,,,221808
+density-64,core,64 changed sources,61,1,density,64,389.252615,,11.043566,,,,,,132,,0,,,,,,,,221808
+density-64,core,64 changed sources,73,1,density,64,339.35632,,11.281429,,,,,,132,,0,,,,,,,,221808
+density-64,core,64 changed sources,78,1,density,64,378.1086,,14.326982,,,,,,132,,0,,,,,,,,221808
+density-64,core,64 changed sources,79,1,density,64,372.387609,,10.677262,,,,,,132,,0,,,,,,,,221808
+density-64,core,64 changed sources,84,1,density,64,358.490612,,11.779492,,,,,,132,,0,,,,,,,,221808
+density-64,core,64 changed sources,85,1,density,64,349.77385,,12.682776,,,,,,132,,0,,,,,,,,221808
+density-64,core,64 changed sources,87,1,density,64,342.131236,,13.160046,,,,,,132,,0,,,,,,,,221808
+density-64,core,64 changed sources,91,1,density,64,347.507767,,15.124542,,,,,,132,,0,,,,,,,,221808
+density-64,core,64 changed sources,100,1,density,64,349.814508,,12.721812,,,,,,132,,0,,,,,,,,221808
+density-512,core,512 changed sources,15,1,density,512,348.711524,,101.200784,,,,,,1007,,26,,,,,,,,221398
+density-512,core,512 changed sources,18,1,density,512,381.280012,,88.927966,,,,,,1007,,26,,,,,,,,221398
+density-512,core,512 changed sources,19,1,density,512,378.307751,,87.938038,,,,,,1007,,26,,,,,,,,221398
+density-512,core,512 changed sources,27,1,density,512,351.200044,,104.94568,,,,,,1007,,26,,,,,,,,221398
+density-512,core,512 changed sources,28,1,density,512,354.522492,,96.451861,,,,,,1007,,26,,,,,,,,221398
+density-512,core,512 changed sources,31,1,density,512,382.308149,,85.292363,,,,,,1007,,26,,,,,,,,221398
+density-512,core,512 changed sources,37,1,density,512,356.266897,,98.454429,,,,,,1007,,26,,,,,,,,221398
+density-512,core,512 changed sources,46,1,density,512,354.564531,,102.835024,,,,,,1007,,26,,,,,,,,221398
+density-512,core,512 changed sources,51,1,density,512,360.937463,,93.62972,,,,,,1007,,26,,,,,,,,221398
+density-512,core,512 changed sources,52,1,density,512,342.880118,,96.492142,,,,,,1007,,26,,,,,,,,221398
+density-512,core,512 changed sources,53,1,density,512,374.333334,,93.875451,,,,,,1007,,26,,,,,,,,221398
+density-512,core,512 changed sources,54,1,density,512,340.652999,,100.136428,,,,,,1007,,26,,,,,,,,221398
+density-512,core,512 changed sources,58,1,density,512,375.331389,,89.352478,,,,,,1007,,26,,,,,,,,221398
+density-512,core,512 changed sources,61,1,density,512,367.244596,,93.03073,,,,,,1007,,26,,,,,,,,221398
+density-512,core,512 changed sources,79,1,density,512,368.855483,,96.829859,,,,,,1007,,26,,,,,,,,221398
+density-512,core,512 changed sources,81,1,density,512,356.349558,,98.78163,,,,,,1007,,26,,,,,,,,221398
+density-512,core,512 changed sources,82,1,density,512,353.873599,,96.911271,,,,,,1007,,26,,,,,,,,221398
+density-512,core,512 changed sources,98,1,density,512,357.817646,,98.291348,,,,,,1007,,26,,,,,,,,221398
+density-2048,core,"2,048 changed sources",16,1,density,2048,339.369295,,369.519459,,,,,,4038,,93,,,,,,,,209944
+density-2048,core,"2,048 changed sources",19,1,density,2048,378.168203,,371.833037,,,,,,4038,,93,,,,,,,,209944
+density-2048,core,"2,048 changed sources",20,1,density,2048,388.97488,,364.832809,,,,,,4038,,93,,,,,,,,209944
+density-2048,core,"2,048 changed sources",22,1,density,2048,370.122866,,360.586989,,,,,,4038,,93,,,,,,,,209944
+density-2048,core,"2,048 changed sources",26,1,density,2048,379.433184,,358.263911,,,,,,4038,,93,,,,,,,,209944
+density-2048,core,"2,048 changed sources",28,1,density,2048,343.158095,,383.577071,,,,,,4038,,93,,,,,,,,209944
+density-2048,core,"2,048 changed sources",31,1,density,2048,353.728172,,385.495552,,,,,,4038,,93,,,,,,,,209944
+density-2048,core,"2,048 changed sources",37,1,density,2048,380.162332,,395.973815,,,,,,4038,,93,,,,,,,,209944
+density-2048,core,"2,048 changed sources",39,1,density,2048,374.25699,,350.497445,,,,,,4038,,93,,,,,,,,209944
+density-2048,core,"2,048 changed sources",40,1,density,2048,401.547062,,379.654925,,,,,,4038,,93,,,,,,,,209944
+density-2048,core,"2,048 changed sources",41,1,density,2048,348.33133,,368.178818,,,,,,4038,,93,,,,,,,,209944
+density-2048,core,"2,048 changed sources",51,1,density,2048,350.319569,,385.103555,,,,,,4038,,93,,,,,,,,209944
+density-2048,core,"2,048 changed sources",79,1,density,2048,356.934042,,377.09822,,,,,,4038,,93,,,,,,,,209944
+density-2048,core,"2,048 changed sources",84,1,density,2048,350.284436,,385.033244,,,,,,4038,,93,,,,,,,,209944
+density-2048,core,"2,048 changed sources",100,1,density,2048,378.944576,,340.734633,,,,,,4038,,93,,,,,,,,209944
+cutoff,core,Exact equality cutoff,11,1,cutoff,,,,,0.002605,,,,,1,,1,,,,,,,,
+cutoff,core,Exact equality cutoff,37,1,cutoff,,,,,0.007814,,,,,1,,1,,,,,,,,
+cutoff,core,Exact equality cutoff,49,1,cutoff,,,,,0.006913,,,,,1,,1,,,,,,,,
+cutoff,core,Exact equality cutoff,78,1,cutoff,,,,,0.007715,,,,,1,,1,,,,,,,,
+cutoff,core,Exact equality cutoff,81,1,cutoff,,,,,0.006752,,,,,1,,1,,,,,,,,
+dense-cheap,core,Dense cheap negative control,5,1,dense-cheap,,0.284032,,69.689588,,,,,,245730,,,,,,,,,,
+dense-cheap,core,Dense cheap negative control,9,1,dense-cheap,,0.351681,,58.86637,,,,,,245730,,,,,,,,,,
+dense-cheap,core,Dense cheap negative control,16,1,dense-cheap,,0.354827,,51.57669,,,,,,245730,,,,,,,,,,
+dense-cheap,core,Dense cheap negative control,18,1,dense-cheap,,0.409167,,62.927151,,,,,,245730,,,,,,,,,,
+dense-cheap,core,Dense cheap negative control,19,1,dense-cheap,,0.494501,,87.307037,,,,,,245730,,,,,,,,,,
+dense-cheap,core,Dense cheap negative control,31,1,dense-cheap,,0.457576,,73.820275,,,,,,245730,,,,,,,,,,
+dense-cheap,core,Dense cheap negative control,46,1,dense-cheap,,0.353777,,54.783939,,,,,,245730,,,,,,,,,,
+dense-cheap,core,Dense cheap negative control,48,1,dense-cheap,,0.558327,,75.46624,,,,,,245730,,,,,,,,,,
+dense-cheap,core,Dense cheap negative control,54,1,dense-cheap,,0.346124,,69.178841,,,,,,245730,,,,,,,,,,
+dense-cheap,core,Dense cheap negative control,63,1,dense-cheap,,0.283418,,71.497319,,,,,,245730,,,,,,,,,,
+dense-cheap,core,Dense cheap negative control,78,1,dense-cheap,,0.383376,,52.140612,,,,,,245730,,,,,,,,,,
+dense-cheap,core,Dense cheap negative control,84,1,dense-cheap,,0.404416,,52.57765,,,,,,245730,,,,,,,,,,
+dense-cheap,core,Dense cheap negative control,85,1,dense-cheap,,0.445674,,76.706375,,,,,,245730,,,,,,,,,,
+dense-cheap,core,Dense cheap negative control,86,1,dense-cheap,,0.404467,,56.147784,,,,,,245730,,,,,,,,,,
+dense-cheap,core,Dense cheap negative control,91,1,dense-cheap,,0.402564,,58.631836,,,,,,245730,,,,,,,,,,
+dense-cheap,core,Dense cheap negative control,93,1,dense-cheap,,0.378469,,57.689312,,,,,,245730,,,,,,,,,,
+dense-cheap,core,Dense cheap negative control,94,1,dense-cheap,,0.285815,,70.317134,,,,,,245730,,,,,,,,,,
+dense-cheap,core,Dense cheap negative control,95,1,dense-cheap,,0.350127,,51.035461,,,,,,245730,,,,,,,,,,
+dense-cheap,core,Dense cheap negative control,97,1,dense-cheap,,0.288511,,75.696117,,,,,,245730,,,,,,,,,,
+dense-cheap,core,Dense cheap negative control,100,1,dense-cheap,,0.412725,,76.486096,,,,,,245730,,,,,,,,,,
+parallel-1,parallel,1 participant,31,1,parallel,,,,,296.513893,,,,,79,,,1,79,0,,,,,
+parallel-1,parallel,1 participant,54,1,parallel,,,,,310.946388,,,,,79,,,1,79,0,,,,,
+parallel-1,parallel,1 participant,85,1,parallel,,,,,315.580464,,,,,79,,,1,79,0,,,,,
+parallel-2,parallel,2 participants,17,2,parallel,,,,,153.43992,,,,,79,,,2,60,19,,,,,
+parallel-2,parallel,2 participants,46,2,parallel,,,,,153.242172,,,,,79,,,2,56,23,,,,,
+parallel-2,parallel,2 participants,85,2,parallel,,,,,152.201392,,,,,79,,,2,57,22,,,,,
+parallel-2,parallel,2 participants,94,2,parallel,,,,,159.974913,,,,,79,,,2,53,26,,,,,
+parallel-3,parallel,3 participants,54,3,parallel,,,,,119.158019,,,,,79,,,3,53,26,,,,,
+parallel-4,parallel,4 participants,28,4,parallel,,,,,87.435222,,,,,79,,,4,48,31,,,,,
+parallel-4,parallel,4 participants,54,4,parallel,,,,,86.493666,,,,,79,,,4,46,33,,,,,
+financial-1,financial,1 changed business unit,7,1,financial,1,7.952734,0.003066,2.220808,,,,,,13,,0,,,,,,4096,360,2638904283
+financial-1,financial,1 changed business unit,9,1,financial,1,8.095043,0.002335,1.916636,,,,,,13,,0,,,,,,4096,360,2638904283
+financial-1,financial,1 changed business unit,19,1,financial,1,10.605752,0.002435,3.147657,,,,,,13,,0,,,,,,4096,360,2638904283
+financial-1,financial,1 changed business unit,22,1,financial,1,9.112405,0.003326,2.848039,,,,,,13,,0,,,,,,4096,360,2638904283
+financial-1,financial,1 changed business unit,26,1,financial,1,9.387966,0.003497,2.891797,,,,,,13,,0,,,,,,4096,360,2638904283
+financial-1,financial,1 changed business unit,29,1,financial,1,8.640435,0.002564,2.317031,,,,,,13,,0,,,,,,4096,360,2638904283
+financial-1,financial,1 changed business unit,35,1,financial,1,10.818026,0.003055,2.334181,,,,,,13,,0,,,,,,4096,360,2638904283
+financial-1,financial,1 changed business unit,36,1,financial,1,8.206342,0.002394,1.909375,,,,,,13,,0,,,,,,4096,360,2638904283
+financial-1,financial,1 changed business unit,38,1,financial,1,8.16267,0.002224,2.126418,,,,,,13,,0,,,,,,4096,360,2638904283
+financial-1,financial,1 changed business unit,42,1,financial,1,9.146942,0.002394,2.802067,,,,,,13,,0,,,,,,4096,360,2638904283
+financial-1,financial,1 changed business unit,54,1,financial,1,10.647797,0.002955,3.006653,,,,,,13,,0,,,,,,4096,360,2638904283
+financial-1,financial,1 changed business unit,56,1,financial,1,7.596688,0.003036,2.191599,,,,,,13,,0,,,,,,4096,360,2638904283
+financial-1,financial,1 changed business unit,58,1,financial,1,10.602761,0.002564,3.578984,,,,,,13,,0,,,,,,4096,360,2638904283
+financial-1,financial,1 changed business unit,69,1,financial,1,8.279713,0.002345,2.530102,,,,,,13,,0,,,,,,4096,360,2638904283
+financial-1,financial,1 changed business unit,74,1,financial,1,7.497303,0.002955,2.172238,,,,,,13,,0,,,,,,4096,360,2638904283
+financial-1,financial,1 changed business unit,75,1,financial,1,7.632711,0.002595,2.817113,,,,,,13,,0,,,,,,4096,360,2638904283
+financial-1,financial,1 changed business unit,80,1,financial,1,8.34782,0.002144,2.973991,,,,,,13,,0,,,,,,4096,360,2638904283
+financial-1,financial,1 changed business unit,81,1,financial,1,8.176774,0.002495,2.084258,,,,,,13,,0,,,,,,4096,360,2638904283
+financial-1,financial,1 changed business unit,82,1,financial,1,11.232951,0.004218,3.376505,,,,,,13,,0,,,,,,4096,360,2638904283
+financial-1,financial,1 changed business unit,95,1,financial,1,7.515808,0.002485,2.874669,,,,,,13,,0,,,,,,4096,360,2638904283
+financial-64,financial,64 changed business units,3,1,financial,64,7.494103,0.140538,2.232161,,,,,,133,,0,,,,,,4096,360,2639583043
+financial-64,financial,64 changed business units,4,1,financial,64,11.200827,0.122694,2.104867,,,,,,133,,0,,,,,,4096,360,2639583043
+financial-64,financial,64 changed business units,9,1,financial,64,8.21893,0.136009,2.253278,,,,,,133,,0,,,,,,4096,360,2639583043
+financial-64,financial,64 changed business units,18,1,financial,64,7.436839,0.152391,2.094764,,,,,,133,,0,,,,,,4096,360,2639583043
+financial-64,financial,64 changed business units,19,1,financial,64,8.361028,0.122606,2.561057,,,,,,133,,0,,,,,,4096,360,2639583043
+financial-64,financial,64 changed business units,22,1,financial,64,10.803762,0.179421,3.46692,,,,,,133,,0,,,,,,4096,360,2639583043
+financial-64,financial,64 changed business units,25,1,financial,64,10.570658,0.17328,3.1481,,,,,,133,,0,,,,,,4096,360,2639583043
+financial-64,financial,64 changed business units,26,1,financial,64,9.050413,0.180874,3.800584,,,,,,133,,0,,,,,,4096,360,2639583043
+financial-64,financial,64 changed business units,36,1,financial,64,8.462236,0.12377,3.143218,,,,,,133,,0,,,,,,4096,360,2639583043
+financial-64,financial,64 changed business units,42,1,financial,64,7.642402,0.200822,2.294685,,,,,,133,,0,,,,,,4096,360,2639583043
+financial-64,financial,64 changed business units,44,1,financial,64,8.67695,0.122808,3.50858,,,,,,133,,0,,,,,,4096,360,2639583043
+financial-64,financial,64 changed business units,48,1,financial,64,7.94095,0.142585,2.458286,,,,,,133,,0,,,,,,4096,360,2639583043
+financial-64,financial,64 changed business units,52,1,financial,64,8.213492,0.15596,2.152503,,,,,,133,,0,,,,,,4096,360,2639583043
+financial-64,financial,64 changed business units,55,1,financial,64,8.482987,0.126295,2.249516,,,,,,133,,0,,,,,,4096,360,2639583043
+financial-64,financial,64 changed business units,57,1,financial,64,10.554721,0.127508,2.693164,,,,,,133,,0,,,,,,4096,360,2639583043
+financial-64,financial,64 changed business units,59,1,financial,64,8.476509,0.122569,2.593491,,,,,,133,,0,,,,,,4096,360,2639583043
+financial-64,financial,64 changed business units,68,1,financial,64,8.343336,0.122709,2.646868,,,,,,133,,0,,,,,,4096,360,2639583043
+financial-64,financial,64 changed business units,70,1,financial,64,8.99042,0.147355,3.489292,,,,,,133,,0,,,,,,4096,360,2639583043
+financial-64,financial,64 changed business units,81,1,financial,64,7.554971,0.137377,2.129663,,,,,,133,,0,,,,,,4096,360,2639583043
+financial-64,financial,64 changed business units,83,1,financial,64,8.058037,0.121938,2.991547,,,,,,133,,0,,,,,,4096,360,2639583043
+financial-64,financial,64 changed business units,88,1,financial,64,7.494231,0.147085,2.32865,,,,,,133,,0,,,,,,4096,360,2639583043
+financial-64,financial,64 changed business units,91,1,financial,64,10.854404,0.184105,3.408876,,,,,,133,,0,,,,,,4096,360,2639583043
+financial-64,financial,64 changed business units,94,1,financial,64,9.759169,0.150782,3.024428,,,,,,133,,0,,,,,,4096,360,2639583043
+financial-64,financial,64 changed business units,100,1,financial,64,10.286933,0.12784,2.382088,,,,,,133,,0,,,,,,4096,360,2639583043
+financial-1024,financial,"1,024 changed business units",4,1,financial,1024,8.049213,2.246868,4.173325,,,,,,2049,,0,,,,,,4096,360,2649926332
+financial-1024,financial,"1,024 changed business units",11,1,financial,1024,7.966566,2.231426,5.041526,,,,,,2049,,0,,,,,,4096,360,2649926332
+financial-1024,financial,"1,024 changed business units",17,1,financial,1024,7.764824,2.200125,3.981982,,,,,,2049,,0,,,,,,4096,360,2649926332
+financial-1024,financial,"1,024 changed business units",20,1,financial,1024,7.674945,2.153236,4.540452,,,,,,2049,,0,,,,,,4096,360,2649926332
+financial-1024,financial,"1,024 changed business units",22,1,financial,1024,9.720746,1.959732,4.274077,,,,,,2049,,0,,,,,,4096,360,2649926332
+financial-1024,financial,"1,024 changed business units",27,1,financial,1024,7.978454,2.345441,4.156335,,,,,,2049,,0,,,,,,4096,360,2649926332
+financial-1024,financial,"1,024 changed business units",28,1,financial,1024,8.318543,2.212436,4.52171,,,,,,2049,,0,,,,,,4096,360,2649926332
+financial-1024,financial,"1,024 changed business units",29,1,financial,1024,9.551258,1.954792,6.03413,,,,,,2049,,0,,,,,,4096,360,2649926332
+financial-1024,financial,"1,024 changed business units",30,1,financial,1024,10.675577,2.243065,4.214899,,,,,,2049,,0,,,,,,4096,360,2649926332
+financial-1024,financial,"1,024 changed business units",32,1,financial,1024,10.181867,2.582254,5.686545,,,,,,2049,,0,,,,,,4096,360,2649926332
+financial-1024,financial,"1,024 changed business units",33,1,financial,1024,8.004639,1.948796,5.160187,,,,,,2049,,0,,,,,,4096,360,2649926332
+financial-1024,financial,"1,024 changed business units",41,1,financial,1024,8.121931,1.988337,5.219779,,,,,,2049,,0,,,,,,4096,360,2649926332
+financial-1024,financial,"1,024 changed business units",43,1,financial,1024,11.494858,2.24227,5.194357,,,,,,2049,,0,,,,,,4096,360,2649926332
+financial-1024,financial,"1,024 changed business units",71,1,financial,1024,8.942276,2.321114,4.110485,,,,,,2049,,0,,,,,,4096,360,2649926332
+financial-1024,financial,"1,024 changed business units",80,1,financial,1024,8.076973,2.892068,4.555197,,,,,,2049,,0,,,,,,4096,360,2649926332
+financial-1024,financial,"1,024 changed business units",82,1,financial,1024,7.734778,2.284683,3.9241,,,,,,2049,,0,,,,,,4096,360,2649926332
+financial-1024,financial,"1,024 changed business units",83,1,financial,1024,7.735914,2.502793,4.154043,,,,,,2049,,0,,,,,,4096,360,2649926332
+financial-1024,financial,"1,024 changed business units",85,1,financial,1024,8.747973,1.962864,4.520902,,,,,,2049,,0,,,,,,4096,360,2649926332
+financial-1024,financial,"1,024 changed business units",91,1,financial,1024,11.218947,2.968522,7.233912,,,,,,2049,,0,,,,,,4096,360,2649926332
+financial-1024,financial,"1,024 changed business units",97,1,financial,1024,9.943715,2.679364,6.360557,,,,,,2049,,0,,,,,,4096,360,2649926332
+financial-1024,financial,"1,024 changed business units",100,1,financial,1024,9.615624,2.025428,4.584248,,,,,,2049,,0,,,,,,4096,360,2649926332
+bitonic-1,bitonic,1 changed input,5,1,bitonic,1,,,,,1.267649,14.51058,0.103968,13.724149,,1986,691,,,,23552,11520,,,
+bitonic-1,bitonic,1 changed input,18,1,bitonic,1,,,,,0.516134,11.073703,0.090482,9.991611,,1986,691,,,,23552,11520,,,
+bitonic-1,bitonic,1 changed input,26,1,bitonic,1,,,,,0.369181,16.663373,0.105625,13.487402,,1986,691,,,,23552,11520,,,
+bitonic-1,bitonic,1 changed input,27,1,bitonic,1,,,,,0.480277,12.436667,0.105755,13.764478,,1986,691,,,,23552,11520,,,
+bitonic-1,bitonic,1 changed input,43,1,bitonic,1,,,,,0.653983,12.328133,0.108522,9.885321,,1986,691,,,,23552,11520,,,
+bitonic-1,bitonic,1 changed input,49,1,bitonic,1,,,,,0.449145,14.569956,0.104283,12.858445,,1986,691,,,,23552,11520,,,
+bitonic-1,bitonic,1 changed input,54,1,bitonic,1,,,,,0.46789,12.382573,0.105256,12.169157,,1986,691,,,,23552,11520,,,
+bitonic-1,bitonic,1 changed input,60,1,bitonic,1,,,,,0.76239,15.814407,0.087323,13.681034,,1986,691,,,,23552,11520,,,
+bitonic-1,bitonic,1 changed input,70,1,bitonic,1,,,,,0.730494,17.45008,0.097933,16.307066,,1986,691,,,,23552,11520,,,
+bitonic-1,bitonic,1 changed input,77,1,bitonic,1,,,,,0.676534,17.714119,0.102492,14.512425,,1986,691,,,,23552,11520,,,
+bitonic-1,bitonic,1 changed input,79,1,bitonic,1,,,,,0.346308,12.036195,0.100829,10.583098,,1986,691,,,,23552,11520,,,
+bitonic-1,bitonic,1 changed input,81,1,bitonic,1,,,,,0.329727,11.164482,0.104987,9.756318,,1986,691,,,,23552,11520,,,
+bitonic-1,bitonic,1 changed input,90,1,bitonic,1,,,,,0.787034,15.716144,0.105418,13.838948,,1986,691,,,,23552,11520,,,
+bitonic-1,bitonic,1 changed input,91,1,bitonic,1,,,,,0.445484,11.278139,0.073368,13.32883,,1986,691,,,,23552,11520,,,
+bitonic-1,bitonic,1 changed input,95,1,bitonic,1,,,,,0.739016,17.917986,0.106068,18.127529,,1986,691,,,,23552,11520,,,
+bitonic-1,bitonic,1 changed input,99,1,bitonic,1,,,,,0.436228,14.599291,0.104707,11.184166,,1986,691,,,,23552,11520,,,
+bitonic-8,bitonic,8 changed inputs,3,1,bitonic,8,,,,,0.580248,14.097917,0.104349,12.081248,,2830,763,,,,23552,11520,,,
+bitonic-8,bitonic,8 changed inputs,5,1,bitonic,8,,,,,0.550982,17.332264,0.099229,19.512345,,2830,763,,,,23552,11520,,,
+bitonic-8,bitonic,8 changed inputs,11,1,bitonic,8,,,,,0.580357,12.10518,0.106283,11.765992,,2830,763,,,,23552,11520,,,
+bitonic-8,bitonic,8 changed inputs,25,1,bitonic,8,,,,,0.479104,11.799315,0.09198,15.158003,,2830,763,,,,23552,11520,,,
+bitonic-8,bitonic,8 changed inputs,30,1,bitonic,8,,,,,0.355337,11.089371,0.086439,11.904378,,2830,763,,,,23552,11520,,,
+bitonic-8,bitonic,8 changed inputs,35,1,bitonic,8,,,,,0.360978,12.176541,0.120403,11.708574,,2830,763,,,,23552,11520,,,
+bitonic-8,bitonic,8 changed inputs,49,1,bitonic,8,,,,,0.407166,11.549092,0.104083,10.557359,,2830,763,,,,23552,11520,,,
+bitonic-8,bitonic,8 changed inputs,57,1,bitonic,8,,,,,0.762199,11.506513,0.105115,14.044348,,2830,763,,,,23552,11520,,,
+bitonic-8,bitonic,8 changed inputs,63,1,bitonic,8,,,,,0.371272,13.322686,0.106538,12.910377,,2830,763,,,,23552,11520,,,
+bitonic-8,bitonic,8 changed inputs,69,1,bitonic,8,,,,,0.635806,14.100426,0.104676,24.995702,,2830,763,,,,23552,11520,,,
+bitonic-8,bitonic,8 changed inputs,70,1,bitonic,8,,,,,0.807647,16.123123,0.074519,15.002441,,2830,763,,,,23552,11520,,,
+bitonic-8,bitonic,8 changed inputs,77,1,bitonic,8,,,,,0.435003,11.743019,0.091642,12.041497,,2830,763,,,,23552,11520,,,
+bitonic-8,bitonic,8 changed inputs,82,1,bitonic,8,,,,,0.328775,14.455308,0.107191,11.076097,,2830,763,,,,23552,11520,,,
+bitonic-64,bitonic,64 changed inputs,13,1,bitonic,64,,,,,0.758357,10.897363,0.074342,15.82999,,8828,994,,,,23552,11520,,,
+bitonic-64,bitonic,64 changed inputs,22,1,bitonic,64,,,,,0.530047,14.771294,0.144456,11.667384,,8828,994,,,,23552,11520,,,
+bitonic-64,bitonic,64 changed inputs,37,1,bitonic,64,,,,,1.181589,16.158661,0.092812,16.389568,,8828,994,,,,23552,11520,,,
+bitonic-64,bitonic,64 changed inputs,50,1,bitonic,64,,,,,0.452741,13.943301,0.109754,18.463071,,8828,994,,,,23552,11520,,,
+bitonic-64,bitonic,64 changed inputs,52,1,bitonic,64,,,,,0.446621,16.143755,0.105156,16.310264,,8828,994,,,,23552,11520,,,
+bitonic-64,bitonic,64 changed inputs,61,1,bitonic,64,,,,,0.365712,17.094134,0.097181,16.383299,,8828,994,,,,23552,11520,,,
+bitonic-64,bitonic,64 changed inputs,73,1,bitonic,64,,,,,0.568262,12.527939,0.128961,11.64472,,8828,994,,,,23552,11520,,,
+bitonic-64,bitonic,64 changed inputs,74,1,bitonic,64,,,,,0.367116,12.645018,0.131796,15.246567,,8828,994,,,,23552,11520,,,
+bitonic-64,bitonic,64 changed inputs,93,1,bitonic,64,,,,,0.529212,20.202358,0.074129,16.070915,,8828,994,,,,23552,11520,,,
+bitonic-256,bitonic,256 changed inputs,17,1,bitonic,256,,,,,0.328446,11.189194,0.095332,13.569743,,13808,256,,,,23552,11520,,,
+bitonic-256,bitonic,256 changed inputs,22,1,bitonic,256,,,,,0.448126,10.729365,0.076801,10.393566,,13808,256,,,,23552,11520,,,
+bitonic-256,bitonic,256 changed inputs,33,1,bitonic,256,,,,,0.741632,12.969245,0.060452,12.376017,,13808,256,,,,23552,11520,,,
+bitonic-256,bitonic,256 changed inputs,35,1,bitonic,256,,,,,0.326956,12.671337,0.13999,11.340123,,13808,256,,,,23552,11520,,,
+bitonic-256,bitonic,256 changed inputs,37,1,bitonic,256,,,,,0.527437,11.872261,0.077423,13.633844,,13808,256,,,,23552,11520,,,
+bitonic-256,bitonic,256 changed inputs,45,1,bitonic,256,,,,,0.67368,13.80627,0.090138,9.926758,,13808,256,,,,23552,11520,,,
+bitonic-256,bitonic,256 changed inputs,50,1,bitonic,256,,,,,0.458873,16.379618,0.086471,11.973972,,13808,256,,,,23552,11520,,,
+bitonic-256,bitonic,256 changed inputs,53,1,bitonic,256,,,,,0.680646,14.231393,0.094216,13.92355,,13808,256,,,,23552,11520,,,
+bitonic-256,bitonic,256 changed inputs,54,1,bitonic,256,,,,,0.389004,11.98298,0.066303,12.71441,,13808,256,,,,23552,11520,,,
+bitonic-256,bitonic,256 changed inputs,55,1,bitonic,256,,,,,0.386089,12.326711,0.082514,12.763824,,13808,256,,,,23552,11520,,,
+bitonic-256,bitonic,256 changed inputs,56,1,bitonic,256,,,,,0.382462,10.383925,0.060423,13.149171,,13808,256,,,,23552,11520,,,
+bitonic-256,bitonic,256 changed inputs,61,1,bitonic,256,,,,,0.662274,15.031832,0.083636,13.972688,,13808,256,,,,23552,11520,,,
+bitonic-256,bitonic,256 changed inputs,64,1,bitonic,256,,,,,0.325316,10.296054,0.079027,9.961861,,13808,256,,,,23552,11520,,,
+bitonic-256,bitonic,256 changed inputs,68,1,bitonic,256,,,,,0.407821,10.273428,0.079308,9.911482,,13808,256,,,,23552,11520,,,
+bitonic-256,bitonic,256 changed inputs,72,1,bitonic,256,,,,,0.512266,10.87773,0.079689,10.907315,,13808,256,,,,23552,11520,,,
+bitonic-256,bitonic,256 changed inputs,77,1,bitonic,256,,,,,0.324597,11.366786,0.087654,9.744965,,13808,256,,,,23552,11520,,,
+bitonic-256,bitonic,256 changed inputs,85,1,bitonic,256,,,,,0.669303,10.234536,0.078717,9.970912,,13808,256,,,,23552,11520,,,
+bitonic-256,bitonic,256 changed inputs,86,1,bitonic,256,,,,,0.409066,11.338923,0.084168,11.113581,,13808,256,,,,23552,11520,,,
+bitonic-256,bitonic,256 changed inputs,89,1,bitonic,256,,,,,0.462697,14.647001,0.062598,13.272367,,13808,256,,,,23552,11520,,,
+bitonic-256,bitonic,256 changed inputs,93,1,bitonic,256,,,,,0.903102,14.442634,0.061225,16.085243,,13808,256,,,,23552,11520,,,
+bitonic-256,bitonic,256 changed inputs,94,1,bitonic,256,,,,,0.74196,14.906564,0.080351,12.414905,,13808,256,,,,23552,11520,,,
+bitonic-256,bitonic,256 changed inputs,95,1,bitonic,256,,,,,0.43227,10.587627,0.081383,10.547631,,13808,256,,,,23552,11520,,,
+bitonic-512,bitonic,512 changed inputs,2,1,bitonic,512,,,,,0.457323,10.209719,0.074843,14.233631,,23040,0,,,,23552,11520,,,
+bitonic-512,bitonic,512 changed inputs,5,1,bitonic,512,,,,,0.342864,10.904589,0.050256,9.728674,,23040,0,,,,23552,11520,,,
+bitonic-512,bitonic,512 changed inputs,6,1,bitonic,512,,,,,0.323077,10.19798,0.05773,10.130111,,23040,0,,,,23552,11520,,,
+bitonic-512,bitonic,512 changed inputs,17,1,bitonic,512,,,,,0.380075,14.364929,0.065725,11.652908,,23040,0,,,,23552,11520,,,
+bitonic-512,bitonic,512 changed inputs,24,1,bitonic,512,,,,,0.641442,17.276773,0.063948,14.971601,,23040,0,,,,23552,11520,,,
+bitonic-512,bitonic,512 changed inputs,26,1,bitonic,512,,,,,0.423191,11.621728,0.125722,10.291974,,23040,0,,,,23552,11520,,,
+bitonic-512,bitonic,512 changed inputs,30,1,bitonic,512,,,,,0.450662,13.433604,0.218634,11.208592,,23040,0,,,,23552,11520,,,
+bitonic-512,bitonic,512 changed inputs,31,1,bitonic,512,,,,,0.538325,11.141361,0.072043,10.241617,,23040,0,,,,23552,11520,,,
+bitonic-512,bitonic,512 changed inputs,36,1,bitonic,512,,,,,0.568682,20.108724,0.09713,20.045217,,23040,0,,,,23552,11520,,,
+bitonic-512,bitonic,512 changed inputs,37,1,bitonic,512,,,,,0.944329,12.943486,0.046707,15.394416,,23040,0,,,,23552,11520,,,
+bitonic-512,bitonic,512 changed inputs,40,1,bitonic,512,,,,,0.579033,15.173441,0.05409,15.230297,,23040,0,,,,23552,11520,,,
+bitonic-512,bitonic,512 changed inputs,43,1,bitonic,512,,,,,0.638124,10.507747,0.046266,13.587972,,23040,0,,,,23552,11520,,,
+bitonic-512,bitonic,512 changed inputs,47,1,bitonic,512,,,,,0.389753,12.009667,0.052588,10.555576,,23040,0,,,,23552,11520,,,
+bitonic-512,bitonic,512 changed inputs,50,1,bitonic,512,,,,,0.561814,10.812703,0.053159,11.840905,,23040,0,,,,23552,11520,,,
+bitonic-512,bitonic,512 changed inputs,55,1,bitonic,512,,,,,0.387612,11.229578,0.055253,10.174685,,23040,0,,,,23552,11520,,,
+bitonic-512,bitonic,512 changed inputs,60,1,bitonic,512,,,,,0.492898,16.742635,0.065723,13.929776,,23040,0,,,,23552,11520,,,
+bitonic-512,bitonic,512 changed inputs,62,1,bitonic,512,,,,,0.388173,9.985758,0.072255,9.739829,,23040,0,,,,23552,11520,,,
+bitonic-512,bitonic,512 changed inputs,68,1,bitonic,512,,,,,0.33212,10.447642,0.06447,10.133747,,23040,0,,,,23552,11520,,,
+bitonic-512,bitonic,512 changed inputs,80,1,bitonic,512,,,,,0.451234,10.31143,0.059321,10.138687,,23040,0,,,,23552,11520,,,
+bitonic-512,bitonic,512 changed inputs,86,1,bitonic,512,,,,,0.473857,17.800026,0.065422,14.294584,,23040,0,,,,23552,11520,,,
+bitonic-512,bitonic,512 changed inputs,90,1,bitonic,512,,,,,0.496079,10.250557,0.064721,10.982539,,23040,0,,,,23552,11520,,,
+bitonic-512,bitonic,512 changed inputs,93,1,bitonic,512,,,,,0.755436,16.96985,0.065553,20.201967,,23040,0,,,,23552,11520,,,
+bitonic-512,bitonic,512 changed inputs,94,1,bitonic,512,,,,,0.753422,15.874158,0.076493,15.628658,,23040,0,,,,23552,11520,,,
+bitonic-512,bitonic,512 changed inputs,98,1,bitonic,512,,,,,0.541887,10.308709,0.048902,9.817768,,23040,0,,,,23552,11520,,,
+bitonic-512,bitonic,512 changed inputs,100,1,bitonic,512,,,,,0.519364,13.449725,0.050214,12.544768,,23040,0,,,,23552,11520,,,
