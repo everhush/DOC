@@ -33,7 +33,7 @@
 #show heading.where(level: 2): it => block(above: 1.05em, below: 0.48em, sticky: true)[
   #text(size: 12pt, weight: "bold", fill: rgb("284d6d"))[#it]
 ]
-#show heading.where(level: 3): it => block(above: 0.92em, below: 0.38em, sticky: true)[
+#show heading.where(level: 3): it => block(above: 1.05em, below: 0.55em, sticky: true)[
   #text(size: 10.65pt, weight: "semibold", fill: rgb("354f63"))[#it]
 ]
 #show raw.where(block: true): it => block(
@@ -1059,7 +1059,7 @@ The benchmark executable checks every DOC output against an independent correctn
 
 The reproduced campaign used GCC 14.2.0 in Release mode on Linux 6.18.44 (x86-64, glibc 2.41) with an AMD EPYC 9V74 80-Core Processor. Five CPUs were visible by affinity and to the operating system, while the cgroup CPU quota was four CPUs (`cpu.max = 400000 100000`). The recorded environment also used Python 3.13.5 and CMake 3.31.6. Every reported row used 20 fresh processes plus one unrecorded warmup. Scenario order alternated forward and reverse between samples. Raw measurements are retained in full; the supplementary statistics also apply a symmetric Tukey 1.5-IQR sensitivity filter and report $n$, mean, median, standard deviation, 95% confidence interval, minimum, maximum, and filter sensitivity. Participant limits were 1--4 because of the four-CPU quota.
 
-The exact campaign command is `python3 runtime/scripts/run_all_benchmarks.py --samples 20 --warmups 1 --max-participants 4`. Its outputs are under `runtime/results/revision-2026-09-29/`: `raw.csv` contains every process measurement, `statistics.csv` the distributions, `summary.csv` the raw/filtered summaries, `machine.json` the host and binary hashes, and `commands.log` the executed commands. The reported numerical evidence is fixed at benchmark commit `d2e9edb4f962f132e96d7e342bd14f48ff8446cc`; the submission source package includes the exact machine record and stable links to these retained files.
+The exact campaign command is `python3 runtime/scripts/run_all_benchmarks.py --samples 20 --warmups 1 --max-participants 4`. Its outputs are under `runtime/results/revision-2026-09-29/`: `raw.csv` contains every process measurement, `statistics.csv` the distributions, `summary.csv` the raw/filtered summaries, `machine.json` the host and binary hashes, and `commands.log` the executed commands. The reported numerical evidence is fixed at benchmark commit `d2e9edb4f962f132e96d7e342bd14f48ff8446cc`; the submission source package includes the exact machine record and stable links to these retained files. A separate 100-sample-per-row follow-up campaign on bare-metal AMD Ryzen hardware is retained under `runtime/results/independent-dedicated-100/` as independent validation; it is not used to replace or recompute any numerical result printed in this article.
 
 === Workload structure and scheduler granularity
 
@@ -1368,7 +1368,7 @@ The sequence is a meta-level conformance test, not stored history or logical con
 
 #strong[Competing interests.] The author declares no competing interests.
 
-#strong[Code and data availability.] The manuscript source and compilation instructions are included with this submission. The complete runtime implementation, tests, bounded model checkers, benchmark driver, retained benchmark data, and verification materials are available in the repository submission snapshot #link("https://github.com/imxade/DOC/tree/submission-2026-09-30")[`submission-2026-09-30`]. The retained campaign used for the reported numerical results is fixed independently at benchmark commit #link("https://github.com/imxade/DOC/tree/d2e9edb4f962f132e96d7e342bd14f48ff8446cc/runtime/results/revision-2026-09-29")[`d2e9edb4f962f132e96d7e342bd14f48ff8446cc`].
+#strong[Code and data availability.] The manuscript source and compilation instructions are included with this submission. The complete runtime implementation, tests, bounded model checkers, benchmark driver, retained benchmark data, independent follow-up validation data, and verification materials are fixed at immutable repository revision #link("https://github.com/imxade/DOC/tree/8d3d647ea913732a39ad4cb83d17b9f7f3e20d17")[`8d3d647ea913732a39ad4cb83d17b9f7f3e20d17`]. The retained campaign used for the reported numerical results is fixed independently at benchmark commit #link("https://github.com/imxade/DOC/tree/d2e9edb4f962f132e96d7e342bd14f48ff8446cc/runtime/results/revision-2026-09-29")[`d2e9edb4f962f132e96d7e342bd14f48ff8446cc`].
 
 #strong[Generative-AI disclosure.] During the preparation of this work, the author used OpenAI ChatGPT to assist with language refinement, manuscript critique, implementation review, test design, and supporting development tasks. The author reviewed and edited all generated material, independently checked the formal claims, references, implementation, and reported results, and takes full responsibility for the content of the article.
 
