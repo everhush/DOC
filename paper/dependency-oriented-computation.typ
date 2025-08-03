@@ -179,7 +179,7 @@ A derived state $d$ has an ordered premise sequence $P_d$ and a pure, total, det
 
 For finite acyclic programs, the paper proves termination of every legal repair schedule, uniqueness of the stable valuation, agreement with complete topological reevaluation, schedule independence, a per-episode at-most-once evaluation bound, and dependency-local repair. The assumptions are explicit: failures and external effects must be represented as values or handled outside the pure finite kernel. Recurrence, immutable graph-version replacement, logical availability, placement, and fail-stop reconstruction are presented separately with their additional contracts rather than as consequences of the finite theorem.
 
-A C++20 executable witness and five bounded model checkers test the stated semantics against complete reevaluation and independent oracles. Reproduced benchmarks on the supplied environment show the intended cost shape rather than universal speedup: sparse updates avoid most graph work, a coarse ready frontier uses up to four externally granted participants, a specialized cached financial baseline remains substantially faster than generic DOC repair, and a fine-grained sorting network is a negative case in which runtime overhead dominates.
+A C++20 executable witness and five bounded model checkers test the stated semantics against complete reevaluation and independent oracles. The authoritative 100-sample bare-metal campaign shows the intended cost shape rather than universal speedup: sparse updates avoid most graph work, a coarse ready frontier uses up to four externally granted participants, a specialized cached financial baseline remains substantially faster than generic DOC repair, and a fine-grained sorting network is a negative case in which runtime overhead dominates.
 ])
 
 #block(width: 100%, inset: (x: 2pt, y: 4pt))[
@@ -1057,9 +1057,9 @@ These finite enumerations check initialization, repair admissibility, continued 
 
 The benchmark executable checks every DOC output against an independent correctness oracle and exits nonzero on disagreement. Reduction workloads compare against complete serial reevaluation; the financial workload additionally compares against a conventional serial cached segment tree; and the sorting-network workload checks both direct execution of the same Batcher network and `std::sort`. The benchmarked runtime uses signed 64-bit integer values with exact equality. Its concrete scheduling policy chooses the complete ready frontier $F=R(A)$ at each transition; `DOC_MAX_WORKERS` limits participant capacity externally and is not stored in the application graph.
 
-The reproduced campaign used GCC 14.2.0 in Release mode on Linux 6.18.44 (x86-64, glibc 2.41) with an AMD EPYC 9V74 80-Core Processor. Five CPUs were visible by affinity and to the operating system, while the cgroup CPU quota was four CPUs (`cpu.max = 400000 100000`). The recorded environment also used Python 3.13.5 and CMake 3.31.6. Every reported row used 20 fresh processes plus one unrecorded warmup. Scenario order alternated forward and reverse between samples. Raw measurements are retained in full; the supplementary statistics also apply a symmetric Tukey 1.5-IQR sensitivity filter and report $n$, mean, median, standard deviation, 95% confidence interval, minimum, maximum, and filter sensitivity. Participant limits were 1--4 because of the four-CPU quota.
+The authoritative campaign used GCC 15.3.0 in Release mode on Linux 6.18.53 (x86-64, glibc 2.42) with an AMD Ryzen AI 7 350 w/ Radeon 860M on bare metal. The host exposed 8 physical cores and 16 logical CPUs through process affinity, with no recorded cgroup CPU quota. The recorded environment also used Python 3.14.7 and CMake 4.4.2. Every reported row used 100 fresh processes plus three unrecorded warmups. Scenario order alternated forward and reverse between samples. Raw measurements are retained in full; the supplementary statistics also apply a symmetric Tukey 1.5-IQR sensitivity filter and report $n$, mean, median, standard deviation, 95% confidence interval, minimum, maximum, and filter sensitivity. The generated report uses a two-sided Student-$t$ interval through 31 observations and the normal approximation above that threshold, so the displayed $n=100$ confidence intervals follow the latter convention. The campaign deliberately capped participant limits at 1--4 so the scaling claim remains a bounded single-host result rather than a many-core extrapolation.
 
-The exact campaign command is `python3 runtime/scripts/run_all_benchmarks.py --samples 20 --warmups 1 --max-participants 4`. Its outputs are under `runtime/results/revision-2026-09-29/`: `raw.csv` contains every process measurement, `statistics.csv` the distributions, `summary.csv` the raw/filtered summaries, `machine.json` the host and binary hashes, and `commands.log` the executed commands. The reported numerical evidence is fixed at benchmark commit `d2e9edb4f962f132e96d7e342bd14f48ff8446cc`; the submission source package includes the exact machine record and stable links to these retained files. A separate 100-sample-per-row follow-up campaign on bare-metal AMD Ryzen hardware is retained under `runtime/results/independent-dedicated-100/` as independent validation; it is not used to replace or recompute any numerical result printed in this article.
+The exact campaign command is `python3 runtime/scripts/run_all_benchmarks.py --samples 100 --warmups 3 --max-participants 4 --results-dir results/independent-dedicated-100`. Its outputs are under `runtime/results/independent-dedicated-100/`: `raw.csv` contains all 2,000 recorded process observations, `statistics.csv` the distributions, `summary.csv` the raw/filtered summaries, `machine.json` the host and binary hashes, and `commands.log` the configure/build/test record. The benchmark data and complete implementation state used for this campaign are fixed at immutable repository revision `8d3d647ea913732a39ad4cb83d17b9f7f3e20d17`; the campaign itself tested its parent code revision `27a0139643237bfcaf05c71155fd137f297f6a53`, and the intervening commit adds only the generated campaign artifacts.
 
 === Workload structure and scheduler granularity
 
@@ -1078,15 +1078,15 @@ The dense cheap negative control uses 4,096 sources, 4,096 identity leaf definit
     table(
       columns: (1.68fr, 0.92fr, 0.92fr, 0.82fr),
       table.header([*Scenario*], [*Direct raw mean*], [*DOC raw mean*], [*Evaluations*]),
-      [Cold 2,048-leaf reduction], [194.648 ms], [195.767 ms], [4,095],
-      [1 changed source], [193.009 ms], [0.384 ms], [12],
-      [8 changed sources], [192.774 ms], [1.045 ms], [23],
-      [64 changed sources], [192.349 ms], [6.029 ms], [132],
-      [512 changed sources], [193.580 ms], [48.242 ms], [1,007],
-      [2,048 changed sources], [189.052 ms], [189.989 ms], [4,038],
-      [Dense cheap negative control], [0.223 ms], [33.887 ms], [245,730],
+      [Cold 2,048-leaf reduction], [351.143 ms], [349.868 ms], [4,095],
+      [1 changed source], [350.676 ms], [0.661 ms], [12],
+      [8 changed sources], [351.021 ms], [1.761 ms], [23],
+      [64 changed sources], [348.163 ms], [11.044 ms], [132],
+      [512 changed sources], [349.452 ms], [87.671 ms], [1,007],
+      [2,048 changed sources], [345.352 ms], [346.975 ms], [4,038],
+      [Dense cheap negative control], [0.309 ms], [57.658 ms], [245,730],
     ),
-    caption: [Finite-kernel reduction workload on the reproduced 2026-09-29 environment. Timings are raw means over 20 fresh processes; evaluation counts are deterministic.],
+    caption: [Finite-kernel reduction workload on the authoritative 2026-09-30 bare-metal environment. Timings are raw means over 100 fresh processes; evaluation counts are deterministic.],
   ) <tab:reduction-results>
 ]
 
@@ -1130,12 +1130,12 @@ The structural trend in @fig:repair-density is the main result of this workload:
     table(
       columns: (1.2fr, 1.7fr, 0.9fr),
       table.header([*Participants*], [*Raw mean (95% CI)*], [*Raw speedup*]),
-      [1], [150.221 ms (147.290--153.153)], [1.000$times$],
-      [2], [82.267 ms (75.266--89.267)], [1.826$times$],
-      [3], [60.325 ms (55.587--65.064)], [2.490$times$],
-      [4], [46.412 ms (42.761--50.062)], [3.237$times$],
+      [1], [270.151 ms (267.988--272.314)], [1.000$times$],
+      [2], [140.117 ms (139.015--141.219)], [1.928$times$],
+      [3], [97.909 ms (96.727--99.092)], [2.759$times$],
+      [4], [76.228 ms (75.499--76.957)], [3.544$times$],
     ),
-    caption: [Ready-frontier scaling under externally granted participant limits on one host with a four-CPU cgroup quota.],
+    caption: [Ready-frontier scaling under externally granted participant limits on one bare-metal host; the campaign is intentionally capped at four participants.],
   ) <tab:parallel-results>
 ]
 
@@ -1143,17 +1143,17 @@ The structural trend in @fig:repair-density is the main result of this workload:
   block(width: 100%, height: 126pt, inset: 4pt, fill: pale, stroke: 0.45pt + luma(215), radius: 4pt)[
     #dline(58pt, 96pt, 430pt, 96pt, stroke: 0.65pt + luma(130))
     #place(top + left, dx: 82pt, dy: 76pt)[#rect(width: 52pt, height: 20pt, fill: accent)]
-    #place(top + left, dx: 164pt, dy: 59pt)[#rect(width: 52pt, height: 37pt, fill: accent)]
-    #place(top + left, dx: 246pt, dy: 46pt)[#rect(width: 52pt, height: 50pt, fill: accent)]
-    #place(top + left, dx: 328pt, dy: 31pt)[#rect(width: 52pt, height: 65pt, fill: accent)]
+    #place(top + left, dx: 164pt, dy: 57pt)[#rect(width: 52pt, height: 39pt, fill: accent)]
+    #place(top + left, dx: 246pt, dy: 41pt)[#rect(width: 52pt, height: 55pt, fill: accent)]
+    #place(top + left, dx: 328pt, dy: 25pt)[#rect(width: 52pt, height: 71pt, fill: accent)]
     #dlabel(92pt, 101pt, [1], size: 7.7pt)
     #dlabel(174pt, 101pt, [2], size: 7.7pt)
     #dlabel(256pt, 101pt, [3], size: 7.7pt)
     #dlabel(338pt, 101pt, [4], size: 7.7pt)
     #dlabel(84pt, 64pt, [1.00$times$], size: 7.2pt)
-    #dlabel(165pt, 47pt, [1.83$times$], size: 7.2pt)
-    #dlabel(247pt, 34pt, [2.49$times$], size: 7.2pt)
-    #dlabel(329pt, 19pt, [3.24$times$], size: 7.2pt)
+    #dlabel(165pt, 45pt, [1.93$times$], size: 7.2pt)
+    #dlabel(247pt, 29pt, [2.76$times$], size: 7.2pt)
+    #dlabel(329pt, 13pt, [3.54$times$], size: 7.2pt)
     #dlabel(185pt, 114pt, [externally allowed participants], size: 7.5pt)
   ],
   caption: [Single-host ready-frontier speedup. The result demonstrates use of granted parallel capacity for a coarse frontier; it is not evidence of distributed scalability.],
@@ -1162,7 +1162,7 @@ The structural trend in @fig:repair-density is the main result of this workload:
   numbering: "1",
 ) <fig:parallel-speedup>
 
-The reproduced single-host result reaches a raw-mean speedup of $3.237 times$ at four participants. The first frontier contains 40 independent expensive leaf definitions, so there is enough coarse work to amortize runtime overhead. @fig:parallel-speedup must not be extrapolated to more cores or multiple hosts: the experiment contains no inter-host transport and the cgroup allows only four CPUs. It supports only the narrower claim that a dependency-minimal frontier can consume externally granted local capacity without a worker count in the program.
+The authoritative single-host result reaches a raw-mean speedup of $3.544 times$ at four participants, corresponding to about 88.6% parallel efficiency relative to ideal four-way scaling. The first frontier contains 40 independent expensive leaf definitions, so there is enough coarse work to amortize runtime overhead. @fig:parallel-speedup must not be extrapolated to more cores or multiple hosts: the experiment contains no inter-host transport and the campaign intentionally measures only one through four participants even though the host exposes more logical CPUs. It supports only the narrower claim that a dependency-minimal frontier can consume externally granted local capacity without a worker count in the program.
 
 === Realistic persistent financial projection
 
@@ -1175,19 +1175,19 @@ The financial workload models 4,096 business units. Each unit has four source ce
     table(
       columns: (1fr, 1fr, 1fr, 1fr, 0.82fr),
       table.header([*Changed units*], [*Full raw mean*], [*Cached raw mean*], [*DOC raw mean*], [*DOC evals*]),
-      [1], [4.823 ms], [0.00134 ms], [1.256 ms], [13],
-      [64], [4.991 ms], [0.0795 ms], [1.397 ms], [133],
-      [1,024], [4.965 ms], [1.296 ms], [2.682 ms], [2,049],
+      [1], [7.845 ms], [0.00240 ms], [2.226 ms], [13],
+      [64], [7.890 ms], [0.1284 ms], [2.405 ms], [133],
+      [1,024], [7.896 ms], [2.045 ms], [4.398 ms], [2,049],
     ),
     caption: [Financial projection workload. The cached baseline is workload-specific and all three implementations are checked for equal output.],
   ) <tab:financial-results>
 ]
 
-As @tab:financial-results shows, DOC is faster than complete reevaluation for all three displayed update sizes on this run, but the specialized cache is substantially faster than generic DOC repair. For one changed unit, DOC takes about 26% of full reevaluation time yet about 935 times the cached update time; at 64 units the cached baseline is about 17.6 times faster than DOC; at 1,024 units it remains about 2.1 times faster. The useful conclusion is therefore workload-specific: DOC's generic overhead is justified only when its reusable semantics, dynamic affected-region discovery, graph evolution, conformance properties, or common runtime mechanism are worth more than a hand-specialized incremental update path.
+As @tab:financial-results shows, DOC is faster than complete reevaluation for all three displayed update sizes on this run, but the specialized cache is substantially faster than generic DOC repair. For one changed unit, DOC takes about 28% of full reevaluation time yet about 929 times the cached update time; at 64 units the cached baseline is about 18.7 times faster than DOC; at 1,024 units it remains about 2.15 times faster. The useful conclusion is therefore workload-specific: DOC's generic overhead is justified only when its reusable semantics, dynamic affected-region discovery, graph evolution, conformance properties, or common runtime mechanism are worth more than a hand-specialized incremental update path.
 
 === Fine-grained graph negative case
 
-A 512-input Batcher sorting network contains 11,520 compare-exchanges represented by 23,040 derived definitions and 23,552 total states. Sparse updates avoid many definitions and expose equality cutoffs, but direct complete network execution is far faster: raw DOC update means range from 5.85 to 6.48 ms, while raw direct update means range from 0.0247 to 0.0413 ms. The DOC/direct ratio ranges from about $142 times$ to $263 times$ across the displayed update sizes. At full change, all 23,040 definitions execute and no cutoff remains. This negative case shows that exposing a dependency at every comparator can make the logical graph useful for reasoning while making the runtime granularity uneconomic; fusion, batching, or specialized operators would be required for a competitive implementation.
+A 512-input Batcher sorting network contains 11,520 compare-exchanges represented by 23,040 derived definitions and 23,552 total states. Sparse updates avoid many definitions and expose equality cutoffs, but direct complete network execution is far faster: raw DOC update means range from 10.26 to 11.11 ms, while raw direct update means range from 0.0524 to 0.0832 ms. The DOC/direct ratio ranges from about $128 times$ to $211 times$ across the displayed update sizes. At full change, all 23,040 definitions execute and no cutoff remains. This negative case shows that exposing a dependency at every comparator can make the logical graph useful for reasoning while making the runtime granularity uneconomic; fusion, batching, or specialized operators would be required for a competitive implementation.
 
 #boundary([Evaluation boundary], [These measurements support conformance and workload-specific cost-shape claims only. They do not establish universal speedup, production distributed scalability, accelerator efficiency, or a hardware-independent constant. Stronger scaling evidence requires new experiments on dedicated many-core and multi-host systems rather than extrapolation from @fig:parallel-speedup.])
 
@@ -1197,7 +1197,7 @@ A 512-input Batcher sorting network contains 11,520 compare-exchanges represente
 2. *Equality and function contracts.* Sound cutoff, total deterministic definitions, stable-name compatibility, and semantic keys are supplied by a compiler, builder, or application contract; the runtime cannot decide arbitrary function equivalence.
 3. *Policy-dependent physical behavior.* Placement, routing, replica authority, partition handling, retention, compaction, checkpoints, quotas, and irreversible-effect recovery are not determined by the logical kernel.
 4. *No universal memory or performance bound.* Logically rooted recurrence or audit history may grow without bound. Direct or specialized incremental execution may outperform the generic runtime, especially for dense or fine-grained work.
-5. *Evidence limits.* The finite metatheory is not proof-assistant mechanized. Exhaustive checking is bounded. The physical witness is a bounded single-coordinator implementation, and the present scaling measurements are limited to four quota-granted CPUs on one host.
+5. *Evidence limits.* The finite metatheory is not proof-assistant mechanized. Exhaustive checking is bounded. The physical witness is a bounded single-coordinator implementation, and the present scaling measurements are limited to participant counts 1--4 on one bare-metal host; they do not establish many-core or multi-host scaling.
 
 = Related work <sec:related-work>
 
@@ -1368,7 +1368,7 @@ The sequence is a meta-level conformance test, not stored history or logical con
 
 #strong[Competing interests.] The author declares no competing interests.
 
-#strong[Code and data availability.] The manuscript source and compilation instructions are included with this submission. The complete runtime implementation, tests, bounded model checkers, benchmark driver, retained benchmark data, independent follow-up validation data, and verification materials are fixed at immutable repository revision #link("https://github.com/imxade/DOC/tree/8d3d647ea913732a39ad4cb83d17b9f7f3e20d17")[`8d3d647ea913732a39ad4cb83d17b9f7f3e20d17`]. The retained campaign used for the reported numerical results is fixed independently at benchmark commit #link("https://github.com/imxade/DOC/tree/d2e9edb4f962f132e96d7e342bd14f48ff8446cc/runtime/results/revision-2026-09-29")[`d2e9edb4f962f132e96d7e342bd14f48ff8446cc`].
+#strong[Code and data availability.] The manuscript source and compilation instructions are included with this submission. The complete runtime implementation, tests, bounded model checkers, benchmark driver, authoritative 100-sample benchmark data, and verification materials are fixed at immutable repository revision #link("https://github.com/imxade/DOC/tree/8d3d647ea913732a39ad4cb83d17b9f7f3e20d17")[`8d3d647ea913732a39ad4cb83d17b9f7f3e20d17`]. The benchmark dataset used for the numerical results printed in this article is #link("https://github.com/imxade/DOC/tree/8d3d647ea913732a39ad4cb83d17b9f7f3e20d17/runtime/results/independent-dedicated-100")[`runtime/results/independent-dedicated-100/`].
 
 #strong[Generative-AI disclosure.] During the preparation of this work, the author used OpenAI ChatGPT to assist with language refinement, manuscript critique, implementation review, test design, and supporting development tasks. The author reviewed and edited all generated material, independently checked the formal claims, references, implementation, and reported results, and takes full responsibility for the content of the article.
 
