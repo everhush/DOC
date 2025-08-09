@@ -2,8 +2,9 @@
 
 The authoritative campaign used by the revised article is:
 
-- `revision-2026-09-29/` — 20 fresh processes per reported row, one warmup, at most four externally granted participants, with raw data, retained data, machine/configuration records, outlier sensitivity, aggregate statistics, and report.
-- `independent-dedicated-100/` — independent follow-up validation on a bare-metal AMD Ryzen host, with 100 fresh processes per row after three warmups. It is retained as corroborating evidence and does not replace any numerical value printed in the article.
+- `independent-dedicated-100/` — 100 fresh processes per reported row, three warmups, at most four externally granted participants, on a bare-metal AMD Ryzen host with no recorded cgroup CPU quota; the directory contains raw data, retained data, machine/configuration records, outlier sensitivity, aggregate statistics, and the generated report.
+
+The earlier `revision-2026-09-29/` 20-process EPYC campaign is retained as historical reviewer-revision evidence. It is no longer the source of numerical values printed in the article.
 
 Older `primary/` and `scaling/` snapshots were removed during the reviewer revision because they were produced under superseded environments and could contradict the article's revised numbers.
 
