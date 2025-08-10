@@ -1,6 +1,6 @@
 # Verification report
 
-Verification date: 2026-09-29.
+Verification date: 2026-09-30.
 
 ## Scope and revision boundary
 
@@ -49,7 +49,7 @@ One combined sanitizer wrapper was interrupted by the outer execution time limit
 
 ## Benchmark evidence and correctness
 
-The revised article uses the complete reproduced campaign in `runtime/results/revision-2026-09-29/`, generated from 20 fresh processes per row after one warmup. The recorded environment is Linux 6.18.44 x86-64 with glibc 2.41, GCC 14.2.0 in Release mode, Python 3.13.5, CMake 3.31.6, and an AMD EPYC 9V74 80-Core Processor; five CPUs were visible by affinity/OS and the cgroup quota was four CPUs (`cpu.max = 400000 100000`). Every benchmark process checks its output oracle and exits nonzero on disagreement.
+The final article uses the complete campaign in `runtime/results/independent-dedicated-100/`, generated from 100 fresh processes per row after three warmups. The recorded environment is Linux 6.18.53 x86-64 with glibc 2.42, GCC 15.3.0 in Release mode, Python 3.14.7, CMake 4.4.2, and an AMD Ryzen AI 7 350 w/ Radeon 860M on bare metal; eight physical cores / 16 logical CPUs were visible and no cgroup CPU quota was recorded. Participant limits were deliberately capped at four. Every benchmark process checks its output oracle and exits nonzero on disagreement.
 
 `verification/check_manuscript.py` mechanically checks every timing value, confidence interval, speedup, range, graph dimension, and evaluation count printed in the article against `statistics.csv`. This check passes. The article intentionally reports raw means for its displayed timing tables and explicitly distinguishes those from filtered sensitivity summaries in the retained benchmark report.
 
@@ -65,7 +65,7 @@ The final manuscript checker passes with:
 - **16 scholarly citation keys**, all resolved and no unused bibliography entry;
 - explicit notation for `S`, `P_d`, `users(x)`, premise tuples, initialization, and the finite-stabilization algorithm;
 - the graph-version semantic-key example and explicit statement that arbitrary function equivalence is not decided by the runtime;
-- all displayed benchmark statistics matching the reproduced campaign.
+- all displayed benchmark statistics matching the authoritative 100-sample campaign.
 
 ## Native Typst graphics and PDF checks
 
@@ -85,7 +85,7 @@ The paper's formal results remain human mathematical arguments rather than proof
 
 ## Final evidence-tree cleanup
 
-The final working tree retains one authoritative committed timing campaign: `runtime/results/revision-2026-09-29/`. Superseded pre-revision `primary` and `scaling` timing directories and transient local verification logs were removed from the publication tree to prevent readers from encountering incompatible datasets presented as equally current. Git history preserves those earlier artifacts. Fresh local runs are ignored under `runtime/results/runs/`; fresh GitHub-hosted campaigns are uploaded only as one-day Actions artifacts.
+The final working tree uses `runtime/results/independent-dedicated-100/` as the authoritative article timing campaign. The earlier `runtime/results/revision-2026-09-29/` campaign remains as historical reviewer-revision evidence, while superseded pre-revision `primary` and `scaling` timing directories and transient local verification logs remain removed. Fresh local runs are ignored under `runtime/results/runs/`; fresh GitHub-hosted campaigns are uploaded only as one-day Actions artifacts.
 
 ## Continuous publication gate
 
