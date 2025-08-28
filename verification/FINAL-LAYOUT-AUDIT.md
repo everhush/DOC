@@ -55,3 +55,5 @@ The hosted build at revision `d2e9edb4f962f132e96d7e342bd14f48ff8446cc` complete
 - Updated the benchmark host/method description, reduction table, parallel means/confidence intervals/speedups, parallel chart labels, financial table and derived ratios, sorting-network ranges, limitations, and code/data availability statement.
 - Recompiled and re-rendered the full manuscript after the numerical substitution; page count remains 33 and the level-3 spacing/layout treatment remains intact.
 - The manuscript checker now reads the 100-sample statistics file, so stale 20-sample article numbers fail validation.
+- Post-substitution PDF preflight reports 33 A4 pages, all detected fonts embedded, and zero raster/image XObjects.
+- Modified pages 1, 26, 27, 28, and 32 were inspected individually at rendered resolution; a second whole-document pass used six contact sheets covering all 33 pages. No clipping, overlap, chart-label collision, table overflow, malformed line wrap, or new pagination defect was found.
