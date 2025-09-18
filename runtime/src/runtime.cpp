@@ -305,37 +305,33 @@ void WorkerPool::parallel_for(
     start_cv_.notify_all();
 
     // Task zero is reserved for the epoch owner, so owner participation is
-    // guaranteed. The owner then helps drain the same queue.
+    // guaranteed. The owner then helps drain the same queue. Keep the queue
+    // lock across completion bookkeeping and the next claim so each
+    // additional owner task needs only one synchronization round-trip.
     execute_task(0U, false);
 
+    std::unique_lock lock(mutex_);
     while (true) {
-        std::size_t index = 0;
-        bool have_task = false;
-        {
-            std::unique_lock lock(mutex_);
-            if (!queue_.empty()) {
-                index = queue_.front();
-                queue_.pop_front();
-                have_task = true;
-            } else if (outstanding_ == 0U) {
-                completed_generation_ = generation_;
-                job_active_ = false;
-                function_ = {};
-                break;
-            } else {
-                done_cv_.wait(lock, [this] { return !queue_.empty() || outstanding_ == 0U; });
-                continue;
-            }
-        }
-        if (have_task) {
+        if (!queue_.empty()) {
+            const auto index = queue_.front();
+            queue_.pop_front();
+            lock.unlock();
             execute_task(index, false);
-            std::lock_guard lock(mutex_);
+            lock.lock();
             --outstanding_;
             if (outstanding_ == 0U) {
                 done_cv_.notify_all();
             }
+        } else if (outstanding_ == 0U) {
+            completed_generation_ = generation_;
+            job_active_ = false;
+            function_ = {};
+            break;
+        } else {
+            done_cv_.wait(lock, [this] { return !queue_.empty() || outstanding_ == 0U; });
         }
     }
+    lock.unlock();
 
     if (exception_) {
         std::rethrow_exception(exception_);
@@ -343,13 +339,11 @@ void WorkerPool::parallel_for(
 }
 
 void WorkerPool::execute_task(std::size_t index, bool worker_thread) {
-    std::function<void(std::size_t, bool)> function;
-    {
-        std::lock_guard lock(mutex_);
-        function = function_;
-    }
+    // function_ is installed before workers are released and is not replaced
+    // until outstanding_ reaches zero. A task therefore may invoke it
+    // directly without taking the queue mutex or copying std::function.
     try {
-        function(index, worker_thread);
+        function_(index, worker_thread);
     } catch (...) {
         std::lock_guard lock(mutex_);
         if (!exception_) {
@@ -359,22 +353,24 @@ void WorkerPool::execute_task(std::size_t index, bool worker_thread) {
 }
 
 void WorkerPool::worker_loop() {
+    std::unique_lock lock(mutex_);
     while (true) {
-        std::size_t index = 0;
-        {
-            std::unique_lock lock(mutex_);
-            start_cv_.wait(lock, [this] { return stopping_ || !queue_.empty(); });
-            if (stopping_) {
-                return;
-            }
-            index = queue_.front();
-            queue_.pop_front();
+        start_cv_.wait(lock, [this] { return stopping_ || !queue_.empty(); });
+        if (stopping_) {
+            return;
         }
 
-        execute_task(index, true);
+        // Once awake, finish-and-claim under one lock acquisition per task.
+        // This preserves the shared dynamic queue (and therefore load
+        // balancing) while removing the extra callable-copy lock and one
+        // lock/unlock pair from the hot path.
+        while (!queue_.empty()) {
+            const auto index = queue_.front();
+            queue_.pop_front();
+            lock.unlock();
+            execute_task(index, true);
+            lock.lock();
 
-        {
-            std::lock_guard lock(mutex_);
             --outstanding_;
             if (outstanding_ == 0U) {
                 done_cv_.notify_all();
