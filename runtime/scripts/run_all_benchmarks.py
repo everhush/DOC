@@ -708,14 +708,29 @@ def generate_report(
 
 
 def scenario_set(max_participants: int) -> tuple[Scenario, ...]:
-    if max_participants < 1 or max_participants > 5:
-        raise BenchmarkError("--max-participants must be between 1 and 5 for the publication matrix")
-    return tuple(
-        scenario
-        for scenario in BASE_SCENARIOS
-        if not scenario.name.startswith("parallel-")
-        or scenario.workers <= max_participants
-    )
+    if max_participants < 1 or max_participants > 16:
+        raise BenchmarkError("--max-participants must be between 1 and 16")
+
+    scenarios: list[Scenario] = []
+    for scenario in BASE_SCENARIOS:
+        if scenario.name.startswith("parallel-"):
+            if scenario.workers <= min(max_participants, 5):
+                scenarios.append(scenario)
+            if scenario.workers == 5 and max_participants > 5:
+                scenarios.extend(
+                    Scenario(
+                        f"parallel-{workers}",
+                        ("parallel",),
+                        workers,
+                        ("elapsed_ms",),
+                        "parallel",
+                        f"{workers} participants",
+                    )
+                    for workers in range(6, max_participants + 1)
+                )
+        else:
+            scenarios.append(scenario)
+    return tuple(scenarios)
 
 
 def verify_resume_config(out: Path, config: dict[str, Any]) -> dict[str, Any] | None:
