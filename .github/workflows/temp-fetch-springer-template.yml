@@ -1,0 +1,28 @@
+name: Fetch Springer submission template
+
+on:
+  push:
+    branches:
+      - submission-latex-2026-10-02
+
+permissions:
+  contents: read
+
+jobs:
+  fetch-template:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download official Springer Nature journal template
+        run: |
+          set -euxo pipefail
+          curl --fail --location --retry 3             'https://cms-resources.apps.public.k8s.springernature.io/springer-cms/rest/v1/content/18782940/data/v12'             --output springer-template.zip
+          mkdir template
+          unzip -q springer-template.zip -d template
+          find template -maxdepth 3 -type f -print | sort
+      - name: Upload template
+        uses: actions/upload-artifact@v7
+        with:
+          name: springer-template
+          path: template/
+          if-no-files-found: error
+          retention-days: 1
