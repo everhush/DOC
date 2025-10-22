@@ -1,0 +1,77 @@
+name: LaTeX validation
+
+on:
+  push:
+    branches:
+      - submission-2026-09-30
+    paths:
+      - "paper-latex/**"
+      - ".github/workflows/latex-validation.yml"
+  pull_request:
+    paths:
+      - "paper-latex/**"
+      - ".github/workflows/latex-validation.yml"
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install LaTeX and PDF tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y             texlive-latex-base             texlive-latex-extra             texlive-fonts-recommended             texlive-pictures             poppler-utils             qpdf
+
+      - name: Build manuscript
+        working-directory: paper-latex
+        run: |
+          set -euo pipefail
+          pdflatex -interaction=nonstopmode -halt-on-error -file-line-error dependency-oriented-computation.tex
+          bibtex dependency-oriented-computation
+          pdflatex -interaction=nonstopmode -halt-on-error -file-line-error dependency-oriented-computation.tex
+          pdflatex -interaction=nonstopmode -halt-on-error -file-line-error dependency-oriented-computation.tex
+
+      - name: Validate manuscript
+        working-directory: paper-latex
+        run: |
+          set -euo pipefail
+          test -s dependency-oriented-computation.pdf
+          qpdf --check dependency-oriented-computation.pdf
+
+          if grep -Eq 'LaTeX Warning:.*undefined|There were undefined references|Citation .* undefined|Reference .* undefined|multiply defined|Overfull \\hbox' dependency-oriented-computation.log; then
+            echo "LaTeX validation found unresolved references or layout overflow."
+            grep -E 'LaTeX Warning:.*undefined|There were undefined references|Citation .* undefined|Reference .* undefined|multiply defined|Overfull \\hbox' dependency-oriented-computation.log || true
+            exit 1
+          fi
+
+          pages="$(pdfinfo dependency-oriented-computation.pdf | awk '/^Pages:/ {print $2}')"
+          test "$pages" -le 25
+
+          pdftotext dependency-oriented-computation.pdf manuscript.txt
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+          text = Path("manuscript.txt").read_text(errors="replace")
+          words = re.findall(r"\b[\w’'-]+\b", text)
+          print(f"pages={pages}")
+          print(f"extracted_words={len(words)}")
+          if len(words) > 15000:
+              raise SystemExit("word-count ceiling exceeded")
+          if "??" in text or "[?]" in text:
+              raise SystemExit("unresolved reference marker in PDF")
+          PY
+
+          if pdffonts dependency-oriented-computation.pdf | tail -n +3 | awk 'NF && $(NF-4) != "yes" {bad=1} END {exit bad ? 0 : 1}'; then
+            echo "One or more fonts are not embedded."
+            exit 1
+          fi
+
+      - name: Upload manuscript PDF
+        uses: actions/upload-artifact@v4
+        with:
+          name: doc-latex-manuscript
+          path: paper-latex/dependency-oriented-computation.pdf
+          if-no-files-found: error
