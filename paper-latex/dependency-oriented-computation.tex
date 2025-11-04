@@ -187,7 +187,7 @@ States in $D$ are derived; states outside $D$ are sources. Single-producer autho
 
 A valuation is pointwise typed,
 \begin{equation}\nu(s)\in V_s\cup\{\botv\}\quad\text{for every }s\in S,\label{eq:valuation}\end{equation}
-where $\botv$ means no current materialization, not application-level null, deletion, failure, or unknown data. For $P_d=(s_1,\dots,s_k)$ write $\nu(P_d)=(\nu(s_1),\dots,\nu(s_k))$. If $\Delta(d)=(P_d,f_d)$, then $d$ is locally satisfied when all premises are materialized and
+where $\botv$ means no current materialization, not application-level null, deletion, failure, or unknown data. For $P_d=(s_1,\dots,s_k)$, let $\nu(P_d)$ denote componentwise lookup of those premises. If $\Delta(d)=(P_d,f_d)$, then $d$ is locally satisfied when all premises are materialized and
 \begin{equation}\nu(d)=f_d(\nu(P_d)).\label{eq:satisfaction}\end{equation}
 Local satisfaction uses equality in the value domain. The operational cutoff predicate is separate: it may fail to recognize equality but must never claim sameness for unequal values.
 
@@ -212,7 +212,7 @@ $\nu$ persists across epochs; $A$ is transient and records repair obligations. M
 \end{equation}
 A quiescent configuration has $A=\varnothing$; a repair-admissible quiescent configuration is exactly a stable valuation.
 
-Write $e\prec d$ when derived state $e$ is a transitive premise of $d$. The dependency-minimal ready frontier is
+Write $e\prec d$ when derived state $e$ is a transitive premise of $d$. The ready frontier is
 \begin{equation}R(A)=\{d\in A\mid \nexists e\in A:e\prec d\}.\label{eq:ready}\end{equation}
 Every ready definition has materialized premises; distinct frontier members cannot depend on one another and have distinct conclusions.
 
@@ -447,7 +447,7 @@ Dependency edges expose potential communication and ready-frontier independence.
 \subsection{Distribution, effects, and application structure}
 Ordinary DOC programs name logical states and definitions rather than machines, routes, topics, shard identifiers, or worker counts. The placed realization turns remote premise relations into transport obligations and may choose eager propagation, demand-driven stabilization, batching, co-location, or migration without changing the logical graph. When a broker is used only to notify already-known dependents that current state changed, the induced users relation already defines that routing relation. This is deliberately narrower than replacing durable event logs: ordered replay, consumer offsets, audit retention, ingestion buffering, historical queries, and exactly-once irreversible actions are different semantics.
 
-Nondeterministic observations enter as source updates; recoverable absence/failure may be typed option/result values. Irreversible interaction remains different. A practical boundary is: pure derivation of an intended effect and stable idempotency identity; explicit authorization/order policy; durable intent/attempt recording where required; external execution; and durable outcome recording plus application-specific retry, deduplication, or reconciliation. A crash after an external system accepted an action but before the committed outcome was recorded leaves uncertainty; dependency cannot infer authorization, rollback, or external atomicity.
+Nondeterministic observations enter as source updates, while recoverable absence or failure may be typed option/result values. Irreversible interaction remains different. A practical boundary separates pure derivation of an intended effect and stable idempotency identity; authorization and ordering policy; durable intent/attempt recording when required; external execution; and durable outcome recording with application-specific retry, deduplication, or reconciliation. A crash after an external system accepted an action but before the committed outcome was recorded leaves uncertainty. Dependency cannot infer authorization, rollback, or external atomicity.
 
 The same finite semantics admits several interpretations. In a compiler, source text $T$ and options $O$ feed parsed declarations $P$, exported interface $I$, diagnostics $D_g$, optimized unit $U$, and generated object $B$. An edit activates only direct users of $T$; if a rebuilt interface is proven equal, users that depend only on $I$ are not activated. In a build system, files/configuration/tool identities/artifacts/results are states and a changed file activates only dependent targets. In a maintained query, base records and parameters are sources and filtered sets, joins, aggregates, and views are derived states. In a long-lived information workflow, evidence, extracted facts, classifications, plans, and reports are logical states; human approval, audit retention, external publication, and nondeterministic tools remain explicit boundaries.
 
@@ -479,7 +479,7 @@ Placement/recovery & Generation-bound admission, join/drain, lost-derived recons
 Effect boundary & Explicit request, authorization, in-flight uncertainty, outcome recording, and rejection of impossible state transitions without claiming external exactly-once behavior.\\ \bottomrule
 \end{tabularx}
 \end{table}
-Application graphs never specify a worker count; experimental limits are supplied externally. Resource join/removal are realization operations over placement rather than application-level topology instructions.
+Application graphs never specify a worker count; experimental limits are supplied externally. Resource join and removal are realization operations over placement. They are not application-level topology instructions.
 
 \subsection{Verification scope}
 The native runtime suite contains 36 named conformance suites and a separate benchmark-generator equivalence test. Its randomized differential component checks 9,600 update epochs against complete reevaluation, including randomized legal frontier-subset schedules. Twenty repeated optimized runs of the two native test executables completed successfully.
@@ -546,7 +546,7 @@ DOC is faster than complete reevaluation for all three displayed update sizes, b
 \subsubsection{Fine-grained graph negative case}
 A 512-input Batcher sorting network contains 11,520 compare-exchanges represented by 23,040 derived definitions and 23,552 total states. Sparse updates avoid many definitions and expose equality cutoffs, but direct complete network execution is far faster: raw DOC update means range from 10.26 to 11.11 ms, while direct update means range from 0.0524 to 0.0832 ms. The DOC/direct ratio ranges from about 128$\times$ to 211$\times$. At full change, all 23,040 definitions execute and no cutoff remains. This negative case shows that exposing a dependency at every comparator can make the logical graph useful for reasoning while making runtime granularity uneconomic; fusion, batching, or specialized operators would be required for a competitive implementation.
 
-These measurements support conformance and workload-specific cost-shape claims only. They do not establish universal speedup, production distributed scalability, accelerator efficiency, or a hardware-independent constant. Stronger scaling evidence requires new experiments on dedicated many-core and multi-host systems rather than extrapolation from Table~\ref{tab:parallel}.
+These measurements support conformance and workload-specific cost-shape claims only. They do not establish universal speedup, production distributed scalability, accelerator efficiency, or a constant independent of hardware. Stronger scaling evidence requires new experiments on dedicated many-core and multi-host systems, not extrapolation from Table~\ref{tab:parallel}.
 
 \section{Limitations}\label{sec:limitations}
 \begin{enumerate}[label=\arabic*.]
@@ -587,67 +587,6 @@ The assessable technical claim is limited to the finite factorization proved in 
 The finite model makes dependency structure, retained values, and repair obligations explicit through $G=(S,\Delta)$ and $Q=(\nu,A)$. A stable valuation agrees with current sources and every required definition. A source change adds induced users to the repair obligations. One transition selects any subset of the dependency-minimal active frontier, evaluates it from a common settled pre-state, and publishes complete candidates together. Candidates not proven equal propagate; a sound equality proof stops the wave.
 
 The finite kernel deliberately contains only the persistent graph, retained valuation, repair obligations, and transition relation. Recurrence, graph replacement, and physical placement are separate layers with additional assumptions. Publication, reclamation, transport, authority, reconstruction, and effects remain explicit contracts rather than consequences silently attributed to the finite theorem. DOC does not claim universal speedup or distributed-systems guarantees. Its contribution is the specific finite repair semantics proved here, together with separately stated extension and realization contracts and an executable implementation that tests those boundaries.
-
-\appendix\normalsize
-\section{Compact formal summary}\label{app:formal}
-For reference, the finite kernel can be restated without the explanatory development. A program is $G=(S,\Delta)$, where $S$ is the finite typed state family and $\Delta$ is the partial definition map. A configuration is $Q=(\nu,A)$ with $A\subseteq\dom(\Delta)$. Physical residency is not represented in $Q$; $\bot$ denotes an unmaterialized logical value and may occur only at an active derived state in a repair-admissible configuration.
-
-For $\Delta(d)=(P_d,f_d)$, write $\mathrm{Sat}_\nu(d)$ when all premises are materialized and
-\[
-  \nu(d)=f_d(\nu(P_d)).
-\]
-Repair admissibility is
-\[
-\mathrm{Adm}(\nu,A)\equiv
-(\forall s\in S_{\src}:\nu(s)\neq\bot)\land
-(\forall d\in D\setminus A:\mathrm{Sat}_\nu(d)).
-\]
-The ready frontier is
-\[
-R(A)=\{d\in A\mid \nexists e\in A:e\prec d\}.
-\]
-For a validated source batch $U_b$, let
-\[
-X=\{s\in\dom(U_b)\mid \same_s(U_b(s),\nu(s))=\mathrm{false}\},
-\]
-then install $\nu_0=\nu[s\mapsto U_b(s)\mid s\in X]$ and
-$A_0=A\cup\bigcup_{s\in X}\users(s)$.
-
-Choose any nonempty $F\subseteq R(A)$ and evaluate every $v_d=f_d(\nu(P_d))$ privately from the same pre-state. Let
-\[
-C_F=\{d\in F\mid \nu(d)=\bot\}\cup
-\{d\in F\mid \nu(d)\neq\bot\land\same_d(v_d,\nu(d))=\mathrm{false}\}.
-\]
-The transition is
-\[
-\nu'=\nu[d\mapsto v_d\mid d\in C_F],\qquad
-A'=(A\setminus F)\cup\bigcup_{d\in C_F}\users(d),
-\qquad (\nu,A)\longrightarrow(\nu',A').
-\]
-A requested state is exposed only after stabilization; demand restriction applies the same rule to the requested state's ancestor-closed induced subprogram. Versioned recurrence uses a typed forward carry function from next-epoch sources to previous-epoch states, immutable graph replacement privately stabilizes a compatible candidate before atomic generation advance, and placed execution admits a derived publication only while its logical conclusion is active/ready and its role-generation token remains current.
-
-\section{Terminology}\label{app:terminology}
-\begin{table}[H]
-\centering\footnotesize
-\caption{Terminology used throughout the manuscript.}\label{tab:terminology}
-\begin{tabularx}{\textwidth}{@{}p{.22\textwidth}X@{}}
-\toprule Term & Meaning in this paper\\ \midrule
-State & Stable logical identity with a typed value domain.\\
-Source & State without a local definition; receives environmental assignments.\\
-Derived state & State in the domain of $\Delta$.\\
-Definition & Ordered premises and one local transformation whose conclusion is the map key.\\
-Valuation & Current optional value at every logical state.\\
-Active set & Transient set of definitions that may require reconsideration in one repair episode.\\
-Ready frontier & Dependency-minimal active definitions; independent next work.\\
-Repair-admissible & All sources are materialized and every inactive derived state is materialized and locally satisfied.\\
-Stabilization & A maximal sequence of valid frontier-subset transitions from a repair-admissible seed.\\
-Cutoff predicate & Sound decidable test that may prove values equal; always-false is valid and propagates conservatively.\\
-Expansion & Boundary-equivalent refinement of one definition into a finite DOC subgraph.\\
-Logical availability & Entitlement to observe/consume a value, preserved by residency or authoritative reconstruction.\\
-Physical residency & Presence of one materialized representation; a realization choice, not part of $Q$.\\
-Placement generation & Physical authority token changed by reassignment or drain; not a logical value revision.\\ \bottomrule
-\end{tabularx}
-\end{table}
 
 \section*{Statements and Declarations}
 \textbf{Funding.} No funds, grants, or other support was received.\par
