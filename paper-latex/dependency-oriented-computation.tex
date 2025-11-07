@@ -569,7 +569,7 @@ Incremental dataflow systems occupy a richer iteration/distribution point. Diffe
 \begin{table}[t]
 \centering\scriptsize
 \caption{Focused comparison with the closest incremental and dataflow models.}\label{tab:related}
-\begin{tabularx}{\textwidth}{@{}p{.17\textwidth}p{.25\textwidth}p{.24\textwidth}X@{}}
+\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{.17\textwidth}>{\raggedright\arraybackslash}p{.25\textwidth}>{\raggedright\arraybackslash}p{.24\textwidth}>{\raggedright\arraybackslash}X@{}}
 \toprule Approach & Primary representation & Repair/execution & DOC distinction used here\\ \midrule
 Self-adjusting computation \cite{acar2005} & Dynamic dependence graph of an execution & Change propagation adjusts computation and dependence structure & One declared logical-state graph is fixed within a graph version; repair obligations are the separate $A$\\
 Adapton \cite{hammer2014adapton} & Demanded computation graph & Demand-driven incremental recomputation and reuse & Demand is a restriction of the same finite state graph; no demand-node calculus is required by the proved kernel\\
@@ -588,9 +588,6 @@ The finite model makes dependency structure, retained values, and repair obligat
 
 The finite kernel deliberately contains only the persistent graph, retained valuation, repair obligations, and transition relation. Recurrence, graph replacement, and physical placement are separate layers with additional assumptions. Publication, reclamation, transport, authority, reconstruction, and effects remain explicit contracts rather than consequences silently attributed to the finite theorem. DOC does not claim universal speedup or distributed-systems guarantees. Its contribution is the specific finite repair semantics proved here, together with separately stated extension and realization contracts and an executable implementation that tests those boundaries.
 
-\section*{Statements and Declarations}
-\textbf{Funding.} No funds, grants, or other support was received.\par
-\textbf{Competing interests.} The author declares no competing interests.
 
 \bibliographystyle{spmpsci}
 \bibliography{references}
