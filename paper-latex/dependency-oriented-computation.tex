@@ -546,7 +546,7 @@ DOC is faster than complete reevaluation for all three displayed update sizes, b
 \subsubsection{Fine-grained graph negative case}
 A 512-input Batcher sorting network contains 11,520 compare-exchanges represented by 23,040 derived definitions and 23,552 total states. Sparse updates avoid many definitions and expose equality cutoffs, but direct complete network execution is far faster: raw DOC update means range from 10.26 to 11.11 ms, while direct update means range from 0.0524 to 0.0832 ms. The DOC/direct ratio ranges from about 128$\times$ to 211$\times$. At full change, all 23,040 definitions execute and no cutoff remains. This negative case shows that exposing a dependency at every comparator can make the logical graph useful for reasoning while making runtime granularity uneconomic; fusion, batching, or specialized operators would be required for a competitive implementation.
 
-These measurements support conformance and workload-specific cost-shape claims only. They do not establish universal speedup, production distributed scalability, accelerator efficiency, or a constant independent of hardware. Stronger scaling evidence requires new experiments on dedicated many-core and multi-host systems, not extrapolation from Table~\ref{tab:parallel}.
+These measurements support only conformance and workload-specific cost-shape claims. They do not establish universal speedup, distributed scalability, accelerator efficiency, or hardware-independent constants. Stronger scaling claims require dedicated many-core and multi-host experiments rather than extrapolation from Table~\ref{tab:parallel}.
 
 \section{Limitations}\label{sec:limitations}
 \begin{enumerate}[label=\arabic*.]
@@ -566,18 +566,6 @@ Build systems provide another close comparison because they preserve results acr
 
 Incremental dataflow systems occupy a richer iteration/distribution point. Differential dataflow associates state and updates with partially ordered logical versions and retains indexed differences for incremental iterative computation \cite{mcsherry2013}. Naiad's timely dataflow is a distributed cyclic dataflow model with logical timestamps and progress coordination \cite{murray2013}. DOC deliberately does not place those mechanisms in its finite acyclic kernel; recurrence is forward-linked finite epochs while placement and transport are realization contracts. This simplifies the finite theorem but gives up native cyclic/timestamp semantics.
 
-\begin{table}[t]
-\centering\scriptsize
-\caption{Focused comparison with the closest incremental and dataflow models.}\label{tab:related}
-\begin{tabularx}{\textwidth}{@{}>{\raggedright\arraybackslash}p{.17\textwidth}>{\raggedright\arraybackslash}p{.25\textwidth}>{\raggedright\arraybackslash}p{.24\textwidth}>{\raggedright\arraybackslash}X@{}}
-\toprule Approach & Primary representation & Repair/execution & DOC distinction used here\\ \midrule
-Self-adjusting computation \cite{acar2005} & Dynamic dependence graph of an execution & Change propagation adjusts computation and dependence structure & One declared logical-state graph is fixed within a graph version; repair obligations are the separate $A$\\
-Adapton \cite{hammer2014adapton} & Demanded computation graph & Demand-driven incremental recomputation and reuse & Demand is a restriction of the same finite state graph; no demand-node calculus is required by the proved kernel\\
-Build Systems \`a la Carte \cite{mokhov2018} & Keys/tasks plus parameterized scheduler/rebuilder & Build-specific scheduling/rebuilding & DOC fixes one state/definition semantics and repair relation; command effects/discovery remain outside\\
-Differential dataflow \cite{mcsherry2013} & Collections of differences indexed by partially ordered versions & Incremental operators reuse updates across versions/iteration & Finite DOC has one retained valuation plus active set; recurrence is forward-epoch construction\\
-Naiad/timely \cite{murray2013} & Distributed cyclic dataflow with timestamps/progress & Data-parallel cyclic execution & DOC's finite theorem is acyclic; transport/placement/recovery are conditional realization contracts\\ \bottomrule
-\end{tabularx}
-\end{table}
 
 Static differentiation derives change functions for higher-order programs \cite{cai2014}; materialized-view maintenance derives incremental updates for database views \cite{blakeley1986}; and spreadsheet systems provide a familiar dependency-maintained interface, with recent work on scalable incremental spreadsheet applications \cite{hadar2023}. Persistent incremental traces also create storage-management problems; Hammer and Acar study memory management specifically for self-adjusting computation \cite{hammer2008memory}. These comparisons reinforce the narrower positioning: DOC contributes neither a new general change calculus nor a domain-specific optimal incremental algorithm.
 
