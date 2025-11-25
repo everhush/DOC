@@ -23,7 +23,7 @@ jobs:
       - name: Install LaTeX and PDF tools
         run: |
           sudo apt-get update
-          sudo apt-get install -y             texlive-latex-base             texlive-latex-extra             texlive-fonts-recommended             texlive-pictures             poppler-utils             qpdf
+          sudo apt-get install -y             texlive-latex-base             texlive-latex-extra             texlive-fonts-recommended             lmodern             texlive-pictures             poppler-utils             qpdf
 
       - name: Build manuscript
         working-directory: paper-latex
