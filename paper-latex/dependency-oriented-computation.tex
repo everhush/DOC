@@ -120,19 +120,6 @@ Policy boundaries & Fixed points, conflict/replica policy, partitions, retention
 \end{tabularx}
 \end{table}
 
-\begin{table}[t]
-\centering\footnotesize
-\caption{Structural consequences of the persistent dependency representation.}\label{tab:structural}
-\begin{tabularx}{\textwidth}{@{}p{.20\textwidth}X@{}}
-\toprule Property & Structural basis\\ \midrule
-Reactivity & A source batch activates induced users; no separate watcher graph is required.\\
-Temporal reuse & Stable retained values remain justified until an affected definition proves otherwise.\\
-Parallelism & The ready frontier is dependency-minimal and its conclusions are distinct.\\
-Memory safety & Logical identities and immutable publication permit protected use and automatic reclamation without physical pointers in ordinary programs.\\
-Distribution & Remote premise occurrence becomes a transport obligation; placement and generation authority remain runtime concerns.\\
-Elasticity & Resources may join, drain, or fail while logical identities and application graph remain unchanged; reconstruction follows authoritative sources and pure dependencies.\\ \bottomrule
-\end{tabularx}
-\end{table}
 The status distinctions are exact: \emph{proved core} means a theorem about the finite relation; \emph{defined extension} means additional semantics stated separately; \emph{realization contract} means physical obligations required to preserve observation; \emph{executable evidence} means tested behavior of one implementation; and \emph{remaining boundary} means policy or physics that dependency cannot determine by itself.
 
 \section{Standing assumptions and scopes}\label{sec:assumptions}
@@ -328,17 +315,6 @@ After a small source batch, the runtime repairs the propagated descendant region
 
 Parallelism has the same structural cause. The active region identifies potentially necessary work; its dependency-minimal frontier identifies independent next work. No frontier member transitively depends on another frontier member, and distinct frontier members publish distinct conclusions. A realization may process a frontier sequentially, on several granted CPU cores, accelerators, or placed resources. Synchronization implements the semantic rule: candidates read one settled pre-state, private evaluation completes before the frontier publication barrier, and failed candidates must not leak partial publication.
 
-\begin{table}[t]
-\centering\footnotesize
-\caption{Different optimization boundaries: within one local transformation versus across persistent repair epochs.}\label{tab:optimization}
-\begin{tabularx}{\textwidth}{@{}p{.22\textwidth}XX@{}}
-\toprule Question & Local reduction optimization & DOC temporal reuse\\ \midrule
-Primary waste & Repeated work within one execution & Repeating maintained work after later partial change\\
-Boundary & Inside a local definition or term & Across persistent states and source-update epochs\\
-Best unit & Expression, kernel, algorithm & Affected dependency region and ready frontier\\
-Compatibility & May optimize any $f_d$ & May retain or expand that optimized $f_d$ as one node\\ \bottomrule
-\end{tabularx}
-\end{table}
 Persistent editors, compilers, servers, simulations, dashboards, and workflows repeatedly receive partial change. DOC therefore treats temporal reuse as foundational while leaving local kernels free to use reduction-optimal, vectorized, incrementalized, or hardware-specific techniques.
 
 \subsection{Types and provenance boundary}
