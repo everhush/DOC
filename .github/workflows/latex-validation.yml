@@ -81,3 +81,55 @@ jobs:
             paper-latex/README.md
             paper-latex/dependency-oriented-computation.pdf
           if-no-files-found: error
+
+
+      - name: Assemble source/reference archive
+        run: |
+          set -euo pipefail
+          root="submission-reference"
+          rm -rf "$root"
+          mkdir -p "$root/manuscript-latex" "$root/manuscript-typst" "$root/runtime/results"
+
+          cp paper-latex/dependency-oriented-computation.tex "$root/manuscript-latex/"
+          cp paper-latex/references.bib "$root/manuscript-latex/"
+          cp paper-latex/svjour3.cls paper-latex/svglov3.clo paper-latex/spmpsci.bst "$root/manuscript-latex/"
+          cp paper-latex/README.md "$root/manuscript-latex/"
+
+          cp paper/dependency-oriented-computation.typ paper/references.bib "$root/manuscript-typst/"
+
+          cp runtime/CMakeLists.txt runtime/README.md "$root/runtime/"
+          cp -a runtime/include runtime/src runtime/tests runtime/benchmarks runtime/examples runtime/formal runtime/scripts "$root/runtime/"
+          cp runtime/results/README.md "$root/runtime/results/"
+          cp -a runtime/results/independent-dedicated-100 "$root/runtime/results/"
+
+          cat > "$root/README.md" <<'EOF'
+          # DOC source and reference archive
+
+          This archive accompanies the manuscript submission. It contains:
+
+          - the journal-neutral LaTeX manuscript source and Springer class/style files;
+          - the original Typst manuscript source;
+          - the C++20 runtime, examples, benchmarks, and registered tests;
+          - five bounded model checkers and the benchmark driver;
+          - the authoritative 100-sample benchmark data under
+            runtime/results/independent-dedicated-100/.
+
+          The main manuscript PDF is submitted separately.
+
+          Build the LaTeX manuscript from manuscript-latex/ with:
+            pdflatex dependency-oriented-computation.tex
+            bibtex dependency-oriented-computation
+            pdflatex dependency-oriented-computation.tex
+            pdflatex dependency-oriented-computation.tex
+
+          Build/test the runtime from runtime/ with the CMake instructions in
+          runtime/README.md. The authoritative benchmark command and machine
+          record are retained with the benchmark results.
+          EOF
+
+      - name: Upload source/reference archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: doc-source-reference
+          path: submission-reference/
+          if-no-files-found: error
