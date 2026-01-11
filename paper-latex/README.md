@@ -19,6 +19,8 @@ The neutral manuscript restores reviewer-useful diagrams and performance charts 
 
 No geometry override or other space-saving modification is applied to the Computing wrapper.
 
+The large right and bottom whitespace in the Computing PDF is intentional and comes from Springer's `smallextended` class itself: the class sets an approximately 119 mm by 194 mm single-column text area on the A4 submission sheet. Do not recenter or expand that area with `geometry`; Computing evaluates the 25-page limit in the mandated template and explicitly forbids space-saving layout changes.
+
 ## Intended submission use
 
 **Computing is the first target.** Its current author instructions require the one-column `smallextended` LaTeX template and a maximum of 25 template-formatted pages. Submit the Computing PDF/source bundle for that journal.
