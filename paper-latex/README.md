@@ -4,7 +4,7 @@ This folder contains the single-column LaTeX form of **Dependency-Oriented Compu
 
 ## Source structure
 
-The scientific manuscript is kept in publisher-neutral files:
+The scientific manuscript is kept in publisher-neutral files. Publisher classes are thin adapters; the shared scientific body is the canonical source:
 
 - `manuscript-body.tex`: abstract, sections, proofs, figures, tables, limitations, conclusion;
 - `manuscript-preamble.tex`: standard packages, theorem environments, and notation;
@@ -23,7 +23,7 @@ No geometry override or other space-saving modification is applied to the Comput
 
 **Computing is the first target.** Its current author instructions require the one-column `smallextended` LaTeX template and a maximum of 25 template-formatted pages. Submit the Computing PDF/source bundle for that journal.
 
-The neutral A4 wrapper is retained for reviewer-readable initial submissions to journals that permit flexible initial formatting, including the planned Elsevier fallbacks. A venue-specific wrapper can later be added without modifying the scientific body.
+The neutral A4 `article` wrapper is retained for reviewer-readable initial submissions to journals that permit flexible initial formatting, including the planned Elsevier fallbacks. It uses 11 pt text and ordinary A4 margins; no publisher class is required. A venue-specific wrapper can later be added without modifying the scientific body.
 
 The source deliberately omits repository URLs, checksums, and submission-internal provenance. A source/reference archive is supplied separately with the submission.
 
@@ -52,3 +52,7 @@ Repository CI builds and validates both PDFs, including page count, word-count c
 ## Computing submission note
 
 Computing's current author instructions request a professional or institutional author email and state that submissions using a private email address will be sent back. The manuscript currently contains the author's existing Gmail address. Replace it with a professional/institutional address before submitting to Computing if one is available.
+
+## Computing declaration checklist
+
+Computing currently requires a Data Availability Statement and a competing-interest disclosure in the manuscript; the Computing wrapper includes both. Computing also requires funding information to be disclosed in the submission and summarized in the declarations section when applicable. The repository does not invent a funding statement: add the truthful funding/no-funding wording before submission if it is not already supplied through your final author metadata. The journal also states that submissions using a private email address will be returned, so replace the current Gmail address with a professional/institutional address if one is available.
