@@ -1,0 +1,6 @@
+source a: int = 2
+source b: int = 3
+source flag: bool = true
+derive sum: int (a,b) = add(a,b)
+derive doubled: int (sum) = mul(sum,2)
+derive chosen: int (flag,doubled) = if(flag,doubled,0)

@@ -1,0 +1,21 @@
+[package]
+name = "doc-runtime"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+
+[lib]
+name = "doc_runtime"
+path = "src/lib.rs"
+
+[[bin]]
+name = "doc"
+path = "src/main.rs"
+
+[[bin]]
+name = "doc-bench"
+path = "src/bench.rs"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
