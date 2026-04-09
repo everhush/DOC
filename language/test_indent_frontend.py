@@ -36,6 +36,16 @@ derive chosen: int (flag,doubled) = if(flag, doubled, 0)
     def test_comments(self):
         self.assertEqual(frontend.lower('source a: int = -2 # initial\nderive b(a): int: # note\n    add(a,1) # body\n'), 'source a: int = -2\nderive b: int (a) = add(a,1)\n')
 
+    def test_i64_source_boundaries(self):
+        for value in (-(1 << 63), (1 << 63) - 1):
+            with self.subTest(value=value):
+                self.assertEqual(frontend.lower(f'source a: int = {value}\\n'),
+                                 f'source a: int = {value}\\n')
+        for value in (-(1 << 63) - 1, 1 << 63, 10 ** 100):
+            with self.subTest(value=value):
+                with self.assertRaisesRegex(frontend.SyntaxErrorDOC, 'signed 64-bit range'):
+                    frontend.lower(f'source a: int = {value}\\n')
+
     def test_invalid(self):
         bad = [
             'derive x(): int:', ' source x: int = 1',
