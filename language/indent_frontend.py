@@ -50,8 +50,11 @@ def lower(source: str) -> str:
                 raise SyntaxErrorDOC(f"line {number}: source requires an int/bool literal")
             if (kind == 'bool') != (literal.strip() in ('true', 'false')):
                 raise SyntaxErrorDOC(f"line {number}: source type mismatch")
-            if kind == 'int' and not -(1 << 63) <= int(literal.strip()) < (1 << 63):
-                raise SyntaxErrorDOC(f"line {number}: source integer outside signed 64-bit range")
+            if kind == 'int':
+                digits = literal.strip().lstrip('-')
+                limit = '9223372036854775808' if literal.strip().startswith('-') else '9223372036854775807'
+                if len(digits) > len(limit) or (len(digits) == len(limit) and digits > limit):
+                    raise SyntaxErrorDOC(f"line {number}: source integer outside signed 64-bit range")
             names.add(name)
             output.append(f"source {name}: {kind} = {literal.strip()}")
             continue
