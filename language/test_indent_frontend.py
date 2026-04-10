@@ -46,6 +46,17 @@ derive chosen: int (flag,doubled) = if(flag, doubled, 0)
                 with self.assertRaisesRegex(frontend.SyntaxErrorDOC, 'signed 64-bit range'):
                     frontend.lower(f'source a: int = {value}\n')
 
+    def test_derived_i64_literal_boundaries(self):
+        for value in (-(1 << 63), (1 << 63) - 1):
+            with self.subTest(value=value):
+                self.assertIn(str(value), frontend.lower(f'derive x(): int:\n    {value}\n'))
+        for value in (-(1 << 63) - 1, 1 << 63):
+            with self.subTest(value=value):
+                with self.assertRaisesRegex(frontend.SyntaxErrorDOC, 'signed 64-bit range'):
+                    frontend.lower(f'derive x(): int:\n    {value}\n')
+        with self.assertRaisesRegex(frontend.SyntaxErrorDOC, 'signed 64-bit range'):
+            frontend.lower('derive x(): int:\n    ' + '9' * 10000 + '\n')
+
     def test_invalid(self):
         bad = [
             'derive x(): int:', ' source x: int = 1',
