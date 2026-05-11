@@ -57,6 +57,21 @@ derive chosen: int (flag,doubled) = if(flag, doubled, 0)
         with self.assertRaisesRegex(frontend.SyntaxErrorDOC, 'signed 64-bit range'):
             frontend.lower('derive x(): int:\n    ' + '9' * 10000 + '\n')
 
+    def test_derived_zero_padded_i64_literals(self):
+        # Rust accepts leading zeros in expression integer tokens.
+        for literal in ('000', '-000', '0' * 10000 + '1',
+                        '-' + '0' * 10000 + '1',
+                        '0' * 10000 + str((1 << 63) - 1),
+                        '-' + '0' * 10000 + str(1 << 63)):
+            with self.subTest(prefix=literal[:24], length=len(literal)):
+                self.assertIn(literal, frontend.lower(
+                    f'derive x(): int:\n    {literal}\n'))
+        for literal in ('0' * 10000 + str(1 << 63),
+                        '-' + '0' * 10000 + str((1 << 63) + 1)):
+            with self.subTest(prefix=literal[:24], length=len(literal)):
+                with self.assertRaisesRegex(frontend.SyntaxErrorDOC, 'signed 64-bit range'):
+                    frontend.lower(f'derive x(): int:\n    {literal}\n')
+
     def test_invalid(self):
         bad = [
             'derive x(): int:', ' source x: int = 1',
