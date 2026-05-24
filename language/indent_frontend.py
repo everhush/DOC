@@ -10,7 +10,7 @@ from pathlib import Path
 IDENT = r"[A-Za-z_][A-Za-z_0-9]*"
 SOURCE = re.compile(rf"source\s+({IDENT})\s*:\s*(int|bool)\s*=\s*(.+)\Z")
 DERIVE = re.compile(rf"derive\s+({IDENT})\s*\(\s*([^()]*)\s*\)\s*:\s*(int|bool)\s*:\s*\Z")
-LITERAL = re.compile(r"(?:-?(?:0|[1-9][0-9]*)|true|false)\Z")
+LITERAL = re.compile(r"(?:-?[0-9]+|true|false)\Z")
 EXPRESSION = re.compile(r"[A-Za-z_0-9(),\s-]+\Z")
 
 class SyntaxErrorDOC(ValueError):
