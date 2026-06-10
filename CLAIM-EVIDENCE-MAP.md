@@ -1,18 +1,25 @@
-# Claim-to-evidence map
+# DOC claim-to-evidence map — active Rust + Goose project
 
-Evidence classes are deliberately separated. A passing executable check is not a mathematical proof, a bounded checker is not an unbounded proof, and a timing campaign is not a universal performance theorem.
+**Evidence classes must never be merged:** a paper's theorem argument is not a machine-checked proof; an archived executable witness is not a current runtime; an unexecuted test file is not a passing test; an implementation plan is not evidence of a feature.
 
-| Major manuscript claim | Mathematical basis in manuscript | Bounded-exhaustive evidence | Runtime or randomized evidence | Empirical evidence | Status boundary |
-|---|---|---|---|---|---|
-| Finite repair terminates and every maximal repair stabilizes | Section 5, at-most-once selection and finite-progress argument | `formal/model_check.py`, `formal/repair_model_check.py` | Native finite-kernel tests | Not applicable | Mathematically argued for the stated finite acyclic assumptions; bounded checked and runtime tested |
-| Stable valuation is unique and schedule independent | Section 5 canonical stable valuation and central stabilization theorem | `formal/model_check.py`, `formal/repair_model_check.py`, duplicate-premise checker | Sequential, parallel, randomized, and bounded ready-frontier schedules in `tests/runtime_tests.cpp` | Not applicable | Mathematically argued; bounded checked; randomized/runtime tested |
-| Exact cutoff is sound; conservative cutoff remains correct | Section 5 theorem/corollaries | `formal/model_check.py`, `formal/repair_model_check.py` | Exact and always-propagate runtime profiles | Authoritative 100-sample cutoff and density rows | Proof depends on the declared one-way soundness premise |
-| Source repair is dependency-local | Section 5 source-update-locality corollary | Repair checker | Runtime activation/evaluation-count tests | Authoritative 100-sample sparse-to-dense rows | Proved for the logical active relation; timing is empirical |
-| Demand restriction agrees on demanded outputs | Section 6 demand-restriction agreement | `formal/demand_recurrence_model_check.py` | Demand tests in native suite | Not timed as a headline claim | Mathematically argued and bounded/runtime checked |
-| Every requested finite recurrence prefix has finite support | Section 6 finite support theorem | `formal/demand_recurrence_model_check.py` | Recurrence, carry-authority, retention, and stopping tests | Not applicable | Mathematically argued for finite templates and requested finite prefixes |
-| Immutable graph replacement preserves stable observations under compatibility | Section 6 conditional graph-version commit agreement | `formal/graph_version_model_check.py` | Stable-name, role/domain/semantic-key, stale-generation, and commit tests | Not applicable | Conditional theorem/contract; bounded and runtime checked |
-| Logical availability can survive eviction by reconstruction | Section 7 realization contract | Not an unbounded mathematical theorem | Typed-value eviction, pinning, reconstruction, and observation tests | Not applicable | Runtime-tested realization property, conditional on authoritative reconstruction information |
-| Placed publication rejects stale generations and preserves bounded fail-stop recovery | Section 7 placement/recovery contracts | Graph-version checker covers logical generation cases | TCP transport, join/drain, publication readiness, generation, and fail-stop tests | Not a production multi-host benchmark | Bounded single-coordinator witness; no consensus or partition-tolerance claim |
-| Coarse ready frontiers can consume externally granted processors | Section 5 ready-frontier commutation plus Section 7 placement boundary | Ready-frontier schedules in bounded checks | Parallel runtime correctness tests | Authoritative 100-sample raw-mean scaling series (100 fresh processes per participant limit, with 95% confidence intervals) | Empirical single-host result, not universal scaling |
-| Sparse changes can avoid work, while dense/fine-grained cases can lose | Active-set semantics and cutoff corollaries | Repair checker | Benchmark oracle/equivalence tests | Authoritative 100-sample density, financial, dense-cheap, and sorting-network rows | Cost-shape evidence only; exact ratios are host/workload-specific |
-| Universality of versioned recurrence | Section 6 direct finite-step counter-machine simulation | Bounded recurrence checker tests finite prefixes only | Recurrence witness | Not applicable | Human mathematical argument; not mechanized and not exhaustively verified for unbounded executions |
+The submitted DOC manuscript and its original experimental measurements remain unchanged. The earlier C++20 executable witness, its checker source and raw data are preserved **only** at [`snapshot-2026-11-17-pre-rust-runtime`](https://github.com/imxade/DOC/tree/snapshot-2026-11-17-pre-rust-runtime) and are **not** active code, an execution dependency, or a current baseline.
+
+| Manuscript claim or contract | Formal scope and manuscript support | Rust: current evidence | Goose: current evidence |
+| --- | --- | --- | --- |
+| Finite repair, admissibility and termination | Finite kernel, paper §§ Core semantics and Central metatheory | Preliminary source only; no successful native build established | Not implemented |
+| Unique stable valuation / schedule independence | Finite pure total typed acyclic theorem argument | Preliminary ready/frontier and oracle code; native tests not executed | Not implemented |
+| Typed atomic source updates and incremental dependency-local propagation | Finite kernel | Preliminary source | Not implemented |
+| Exact/conservative sound cutoff and temporal reuse | Finite kernel | Preliminary source | Not implemented |
+| Ready-frontier independent evaluation / logical barrier publication | Finite kernel; physical concurrency separate | Scoped-thread prototype, untested | Not implemented |
+| Computational expansion/fusion preserves boundary | Conditional boundary-equivalence obligation | Not verified | Not implemented |
+| Ancestor-closed demand | Demand-restriction theorem | Not implemented | Not implemented |
+| Typed forward recurrence, finite prefixes, retention, divergence | Separate recurrence extension | Not implemented | Not implemented |
+| Universality with unbounded values and recurrence | Paper's two-counter-machine simulation argument; **not** a property of one finite graph | No executed language-level demonstration | Not implemented |
+| Immutable compatible graph-version replacement | Conditional graph-version contract | Not implemented | Not implemented |
+| Safe physical realization: immutable complete values, pinning, reclamation, reconstruction, generations | Normative realization contract under progress assumptions; **not** core finite theorem | Not implemented | Not implemented |
+| Placement, transport, resource join/drain and bounded fail-stop recovery | Conditional placed-realization assumptions, no consensus/partition-tolerance claim | Not implemented | Not implemented |
+| Explicit effect and nondeterminism boundary | Paper's policy boundary | Not implemented | Not implemented |
+| Sparse/dense repair performance, capacity scaling, negative controls | Historical empirical claim on specific hardware, not universal | No matched measurements | No matched measurements |
+| General-purpose usable language and independent binary/runtime toolchains | New product acceptance goal, not a theorem of the original finite calculus | Not established | Not established |
+
+See [MODEL-REQUIREMENT-TRACE.md](MODEL-REQUIREMENT-TRACE.md) for a detailed **paper-ordered audit worklist**. Each future positive result must include tested revision, actual commands and raw evidence. Record comparative benchmarks in [issue #9](https://github.com/imxade/DOC/issues/9). Native test and release success have **not** been established for either runtime.
