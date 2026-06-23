@@ -19,3 +19,6 @@ path = "src/bench.rs"
 [profile.release]
 lto = "thin"
 codegen-units = 1
+
+[dev-dependencies]
+naga = { version = "24", features = ["wgsl-in"] }
