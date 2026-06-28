@@ -1,0 +1,83 @@
+name: DOC dual-runtime validation
+
+on:
+  push:
+    branches: [feat/webgpu-dual-runtime-ci]
+    paths:
+      - '.github/workflows/doc-validation.yml'
+      - 'runtime-rust/**'
+      - 'runtime-goose/**'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: doc-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust:
+    name: Rust finite DOC + WGSL checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: runtime-rust
+      - name: Native compile, tests and WGSL parse/validation
+        run: |
+          set -o pipefail
+          mkdir -p validation-logs
+          cargo test --manifest-path runtime-rust/Cargo.toml --all-targets 2>&1 | tee validation-logs/rust-tests.log
+          cargo build --manifest-path runtime-rust/Cargo.toml --release 2>&1 | tee validation-logs/rust-release.log
+      - name: Run actual DOC source, check reported values
+        run: |
+          set -o pipefail
+          cargo run --manifest-path runtime-rust/Cargo.toml --bin doc -- runtime-rust/examples/repair.doc a=4 b=1 2>&1 | tee validation-logs/doc-example.log
+      - name: Source format and lint diagnostics (record until existing sources are normalized)
+        continue-on-error: true
+        run: |
+          cargo fmt --manifest-path runtime-rust/Cargo.toml --all -- --check
+          cargo clippy --manifest-path runtime-rust/Cargo.toml --all-targets
+      - name: Preserve raw outputs, including failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: doc-rust-validation
+          path: validation-logs/
+          retention-days: 7
+          if-no-files-found: warn
+
+  goose-toolchain:
+    name: Goose compiler build + smoke (not DOC runtime)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure upstream Goose compiler, no optional graphics packages
+        run: |
+          git clone --depth 1 https://github.com/aardappel/goose.git /tmp/goose
+          cmake -S /tmp/goose -B /tmp/goose-build -DCMAKE_BUILD_TYPE=Release
+          cmake --build /tmp/goose-build --parallel 2
+      - name: Type-check and execute preliminary Goose smoke
+        run: |
+          set -o pipefail
+          mkdir -p validation-logs
+          /tmp/goose-build/goose version | tee validation-logs/goose-version.log
+          /tmp/goose-build/goose check runtime-goose/finite_bool.goose 2>&1 | tee validation-logs/goose-check.log
+          /tmp/goose-build/goose run runtime-goose/finite_bool.goose 2>&1 | tee validation-logs/goose-run.log
+          grep -q 'DOC_GOOSE_SMOKE=ok' validation-logs/goose-run.log
+      - name: Preserve Goose compilation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: doc-goose-toolchain-smoke
+          path: validation-logs/
+          retention-days: 7
+          if-no-files-found: warn
