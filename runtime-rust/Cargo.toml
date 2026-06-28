@@ -20,5 +20,17 @@ path = "src/bench.rs"
 lto = "thin"
 codegen-units = 1
 
+[features]
+webgpu = ["dep:wgpu", "dep:pollster"]
+
+[dependencies]
+wgpu = { version = "24.0.3", optional = true }
+pollster = { version = "0.4", optional = true }
+
+[[example]]
+name = "webgpu_bool"
+path = "examples/webgpu_bool.rs"
+required-features = ["webgpu"]
+
 [dev-dependencies]
 naga = { version = "24", features = ["wgsl-in"] }
