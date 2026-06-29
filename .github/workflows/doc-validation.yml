@@ -54,6 +54,41 @@ jobs:
           retention-days: 7
           if-no-files-found: warn
 
+  webgpu-compute:
+    name: DOC-derived WebGPU compute on Mesa lavapipe (software adapter)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: runtime-rust
+      - name: Install Vulkan software adapter for real WebGPU dispatch
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends mesa-vulkan-drivers libvulkan1 vulkan-tools
+          mkdir -p validation-logs /tmp/doc-xdg
+          chmod 700 /tmp/doc-xdg
+          vulkaninfo --summary 2>&1 | tee validation-logs/vulkan-adapter.log
+      - name: Compile, dispatch and compare DOC GPU vs CPU outputs
+        env:
+          XDG_RUNTIME_DIR: /tmp/doc-xdg
+          WGPU_BACKEND: vulkan
+          VK_ICD_FILENAMES: /usr/share/vulkan/icd.d/lvp_icd.x86_64.json
+        run: |
+          set -o pipefail
+          cargo run --release --manifest-path runtime-rust/Cargo.toml --features webgpu --example webgpu_bool 2>&1 | tee validation-logs/doc-webgpu-compute.log
+          grep -q DOC_WEBGPU_COMPUTE_PASS validation-logs/doc-webgpu-compute.log
+      - name: Preserve WebGPU adapter and correctness evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: doc-webgpu-lavapipe
+          path: validation-logs/
+          retention-days: 7
+          if-no-files-found: warn
+
   goose-toolchain:
     name: Goose compiler build + smoke (not DOC runtime)
     runs-on: ubuntu-latest
