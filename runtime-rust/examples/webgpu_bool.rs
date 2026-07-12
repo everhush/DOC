@@ -36,11 +36,19 @@ async fn run() -> Result<(), Box<dyn Error>> {
     }
 
     let instance = wgpu::Instance::default();
+    let listed = instance.enumerate_adapters(wgpu::Backends::VULKAN);
+    println!("WebGPU Vulkan adapters enumerated: {}", listed.len());
+    for item in &listed {
+        println!("Candidate: {:?}", item.get_info());
+    }
     let adapter = instance
-        .enumerate_adapters(wgpu::Backends::VULKAN)
-        .into_iter()
-        .next()
-        .ok_or("No Vulkan WebGPU adapter available: GPU execution is BLOCKED")?;
+        .request_adapter(&wgpu::RequestAdapterOptions {
+            power_preference: wgpu::PowerPreference::LowPower,
+            compatible_surface: None,
+            force_fallback_adapter: true,
+        })
+        .await
+        .ok_or("No conforming WebGPU adapter available, including software fallback")?;
     let info = adapter.get_info();
     println!("WebGPU adapter: {} ({:?}, {:?})", info.name, info.device_type, info.backend);
     let (device, queue) = adapter
