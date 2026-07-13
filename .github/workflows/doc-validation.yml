@@ -77,12 +77,13 @@ jobs:
           sudo apt-get install -y --no-install-recommends mesa-vulkan-drivers libvulkan1 vulkan-tools
           mkdir -p validation-logs /tmp/doc-xdg
           chmod 700 /tmp/doc-xdg
+          ls -al /usr/share/vulkan/icd.d | tee validation-logs/vulkan-icds.log
           vulkaninfo --summary 2>&1 | tee validation-logs/vulkan-adapter.log
       - name: Compile, dispatch and compare DOC GPU vs CPU outputs
         env:
           XDG_RUNTIME_DIR: /tmp/doc-xdg
           WGPU_BACKEND: vulkan
-          VK_ICD_FILENAMES: /usr/share/vulkan/icd.d/lvp_icd.x86_64.json
+          RUST_LOG: wgpu_core=debug,wgpu_hal=debug
         run: |
           set -o pipefail
           cargo run --release --manifest-path runtime-rust/Cargo.toml --features webgpu --example webgpu_bool 2>&1 | tee validation-logs/doc-webgpu-compute.log
