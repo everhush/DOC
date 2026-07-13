@@ -39,7 +39,14 @@ jobs:
       - name: Run actual DOC source, check reported values
         run: |
           set -o pipefail
-          cargo run --manifest-path runtime-rust/Cargo.toml --bin doc -- runtime-rust/examples/repair.doc a=4 b=1 2>&1 | tee validation-logs/doc-example.log
+          DOC_WORKERS=1 cargo run --quiet --manifest-path runtime-rust/Cargo.toml --bin doc -- runtime-rust/examples/repair.doc a=4 b=1 > validation-logs/doc-worker1.txt
+          DOC_WORKERS=4 cargo run --quiet --manifest-path runtime-rust/Cargo.toml --bin doc -- runtime-rust/examples/repair.doc a=4 b=1 > validation-logs/doc-worker4.txt
+          diff -u validation-logs/doc-worker1.txt validation-logs/doc-worker4.txt
+          grep -Fx 'a: 4' validation-logs/doc-worker1.txt
+          grep -Fx 'b: 1' validation-logs/doc-worker1.txt
+          grep -Fx 'sum: 5' validation-logs/doc-worker1.txt
+          grep -Fx 'doubled: 10' validation-logs/doc-worker1.txt
+          grep -Fx 'chosen: 10' validation-logs/doc-worker1.txt
       - name: Source format and lint diagnostics (record until existing sources are normalized)
         continue-on-error: true
         run: |
