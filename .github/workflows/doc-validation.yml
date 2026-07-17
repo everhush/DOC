@@ -74,7 +74,7 @@ jobs:
       - name: Install Vulkan software adapter for real WebGPU dispatch
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends mesa-vulkan-drivers libvulkan1 vulkan-tools
+          sudo apt-get install -y --no-install-recommends mesa-vulkan-drivers libvulkan1 vulkan-tools libegl1 libgl1-mesa-dri
           mkdir -p validation-logs /tmp/doc-xdg
           chmod 700 /tmp/doc-xdg
           ls -al /usr/share/vulkan/icd.d | tee validation-logs/vulkan-icds.log
@@ -82,7 +82,9 @@ jobs:
       - name: Compile, dispatch and compare DOC GPU vs CPU outputs
         env:
           XDG_RUNTIME_DIR: /tmp/doc-xdg
-          WGPU_BACKEND: vulkan
+          EGL_PLATFORM: surfaceless
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          MESA_LOADER_DRIVER_OVERRIDE: llvmpipe
           RUST_LOG: wgpu_core=debug,wgpu_hal=debug
         run: |
           set -o pipefail
