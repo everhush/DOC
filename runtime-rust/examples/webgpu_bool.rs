@@ -21,10 +21,11 @@ async fn run() -> Result<(), Box<dyn Error>> {
     let target = graph.id("equal").ok_or("missing derived target")?;
     let shader_source = wgsl::lower_bool_derived(&graph, target)?;
 
-    // Four logically independent DOC evaluations. The GPU lanes contain
-    // canonical 0/1 words, and the CPU oracle is a separate DOC evaluation.
-    let a = [1u32, 0, 1, 1, 0, 0, 1, 0];
-    let b = [1u32, 1, 0, 1, 0, 1, 1, 0];
+    // Exercise multiple workgroups and the out-of-range tail guard.
+    // Inputs are deterministic canonical Boolean words, not a hardcoded result.
+    const LANES: usize = 130;
+    let a: Vec<u32> = (0..LANES).map(|i| u32::from(i % 3 == 0)).collect();
+    let b: Vec<u32> = (0..LANES).map(|i| u32::from(i % 5 < 2)).collect();
     let mut expected = Vec::new();
     for (&lhs, &rhs) in a.iter().zip(b.iter()) {
         let mut rt = Runtime::new(graph.clone(), 1, Cutoff::Exact);
@@ -115,7 +116,8 @@ async fn run() -> Result<(), Box<dyn Error>> {
         });
         pass.set_pipeline(&pipeline);
         pass.set_bind_group(0, &bind_group, &[]);
-        pass.dispatch_workgroups(1, 1, 1);
+        // The shader declares 64 invocations per workgroup and checks idx.
+        pass.dispatch_workgroups((LANES as u32).div_ceil(64), 1, 1);
     }
     encoder.copy_buffer_to_buffer(&output, 0, &readback, 0, nbytes);
     queue.submit(Some(encoder.finish()));
