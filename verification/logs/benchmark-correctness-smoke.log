@@ -1,0 +1,20 @@
++ DOC_MAX_WORKERS=1 build/release/doc_benchmark cold
+scenario=cold direct_ms=190.127822 doc_ms=224.141776 evaluations=4095 participants=1
++ DOC_MAX_WORKERS=1 build/release/doc_benchmark density 1
+scenario=density changed=1 direct_ms=196.319409 doc_ms=0.444410 evaluations=12 cutoffs=0 value=222052
++ DOC_MAX_WORKERS=1 build/release/doc_benchmark density 2048
+scenario=density changed=2048 direct_ms=196.023027 doc_ms=227.099584 evaluations=4038 cutoffs=93 value=209944
++ DOC_MAX_WORKERS=1 build/release/doc_benchmark cutoff
+scenario=cutoff elapsed_ms=0.002204 evaluations=1 cutoffs=1
++ DOC_MAX_WORKERS=4 build/release/doc_benchmark parallel
+scenario=parallel elapsed_ms=36.260003 participants=4 evaluations=79 owner_jobs=49 worker_jobs=30
++ DOC_MAX_WORKERS=1 build/release/doc_benchmark dense-cheap
+scenario=dense-cheap direct_ms=0.210864 doc_ms=30.872663 evaluations=245730
++ DOC_MAX_WORKERS=1 build/release/doc_benchmark financial 1
+scenario=financial changed=1 units=4096 periods=360 direct_ms=4.475404 cached_ms=0.001242 doc_ms=1.124602 evaluations=13 cutoffs=0 value=2638904283
++ DOC_MAX_WORKERS=1 build/release/doc_benchmark financial 1024
+scenario=financial changed=1024 units=4096 periods=360 direct_ms=4.546440 cached_ms=1.315781 doc_ms=2.434750 evaluations=2049 cutoffs=0 value=2649926332
++ DOC_MAX_WORKERS=1 build/release/doc_benchmark bitonic 1
+scenario=bitonic changed=1 states=23552 comparators=11520 direct_cold_ms=0.260067 doc_cold_ms=5.899762 direct_update_ms=0.054100 doc_update_ms=5.581369 update_evaluations=1986 cutoffs=691
++ DOC_MAX_WORKERS=1 build/release/doc_benchmark bitonic 512
+scenario=bitonic changed=512 states=23552 comparators=11520 direct_cold_ms=0.267518 doc_cold_ms=6.103616 direct_update_ms=0.024416 doc_update_ms=5.978690 update_evaluations=23040 cutoffs=0

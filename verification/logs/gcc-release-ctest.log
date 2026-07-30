@@ -1,0 +1,21 @@
+$ ctest --test-dir build/release --output-on-failure
+Internal ctest changing into directory: build/release
+Test project build/release
+    Start 1: doc_tests
+1/7 Test #1: doc_tests ...........................   Passed    0.28 sec
+    Start 2: doc_benchmark_generator
+2/7 Test #2: doc_benchmark_generator .............   Passed    0.34 sec
+    Start 3: doc_bounded_model_check
+3/7 Test #3: doc_bounded_model_check .............   Passed    3.49 sec
+    Start 4: doc_repair_model_check
+4/7 Test #4: doc_repair_model_check ..............   Passed    9.20 sec
+    Start 5: doc_graph_version_model_check
+5/7 Test #5: doc_graph_version_model_check .......   Passed    0.65 sec
+    Start 6: doc_duplicate_premise_model_check
+6/7 Test #6: doc_duplicate_premise_model_check ...   Passed    0.61 sec
+    Start 7: doc_demand_recurrence_model_check
+7/7 Test #7: doc_demand_recurrence_model_check ...   Passed    0.73 sec
+
+100% tests passed, 0 tests failed out of 7
+
+Total Test time (real) =  15.30 sec

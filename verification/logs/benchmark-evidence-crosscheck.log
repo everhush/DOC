@@ -1,0 +1,12 @@
+Section 9.2 local-machine scaling series check
+
+Supplied master manuscript values:
+  participants=1: median time=142.589 ms, median paired speedup=1.000x
+  participants=2: median time=72.274 ms, median paired speedup=1.959x
+  participants=3: median time=49.605 ms, median paired speedup=2.853x
+  participants=4: median time=37.527 ms, median paired speedup=3.847x
+
+Final manuscript Section 9.2: exact textual match to supplied master manuscript
+Preserved raw scaling evidence: runtime/results/scaling/raw.csv
+Raw scaling evidence SHA-256: fba8b8f506b8ed73aa81de41233c2d6aa77adb847934d1aa0c41729ec5aa3639
+Runtime source and benchmark implementation: unchanged

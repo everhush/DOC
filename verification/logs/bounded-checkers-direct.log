@@ -1,0 +1,10 @@
+$ python3 runtime/formal/model_check.py
+bounded model check passed: 2520 graphs, 40320 source epochs, all legal frontier subsets, exact and conservative cutoff profiles
+$ python3 runtime/formal/repair_model_check.py
+repair model check passed: 512 graphs, 59904 admissible seeds, 521584 base-seed explored configurations, 239616 continued source updates, 119808 unique start/profile checks, 521584 unique explored configurations, max selections 3
+$ python3 runtime/formal/graph_version_model_check.py
+graph-version model check passed: 64 graphs, 15360 commits including source/derived authority transitions
+$ python3 runtime/formal/duplicate_premise_model_check.py
+duplicate-premise check passed: 84 graphs, 2592 admissible configurations
+$ python3 runtime/formal/demand_recurrence_model_check.py
+demand/recurrence model check passed: 364 demand graphs, 1456 source valuations, 21840 demanded subsets; 364 recurrence templates, 17472 finite prefixes, 2912 stopping cases, 364 duplicate-carry rejection cases
