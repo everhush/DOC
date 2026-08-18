@@ -76,8 +76,11 @@ pub fn lower_bool_derived(graph: &Graph, state_id: StateId) -> Result<String> {
         "@compute @workgroup_size(64)\nfn main(@builtin(global_invocation_id) gid: vec3<u32>) {\n  let idx: u32 = gid.x;\n  if (idx >= arrayLength(&result.data)) { return; }\n",
     );
     for index in 0..types.len() {
+        // A malformed host binding must not cause an out-of-bounds premise read.
+        // The host must still reject length mismatches rather than publish a
+        // partially written candidate buffer.
         wgsl.push_str(&format!(
-            "  let a{index}: bool = input_{index}.data[idx] != 0u;\n"
+            "  if (idx >= arrayLength(&input_{index}.data)) {{ return; }}\n  let a{index}: bool = input_{index}.data[idx] != 0u;\n"
         ));
     }
     wgsl.push_str(&format!(
@@ -103,6 +106,8 @@ mod tests {
         validator.validate(&module).unwrap();
         assert!(wgsl.contains("select("));
         assert!(wgsl.contains("arrayLength(&result.data)"));
+        assert!(wgsl.contains("arrayLength(&input_0.data)"));
+        assert!(wgsl.contains("arrayLength(&input_1.data)"));
     }
 
     #[test]
