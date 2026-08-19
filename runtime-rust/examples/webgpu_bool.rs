@@ -37,17 +37,24 @@ async fn run() -> Result<(), Box<dyn Error>> {
         expected.push(u32::from(rt.value(target) == Some(Value::Bool(true))));
     }
 
+    // A headless runner may expose Mesa GLES rather than Vulkan. Neither
+    // backend implies physical GPU acceleration; report the selected adapter.
     let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
-        backends: wgpu::Backends::VULKAN,
+        backends: wgpu::Backends::VULKAN | wgpu::Backends::GL,
         ..Default::default()
     });
-    let adapter = instance
-        .request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::LowPower,
-            ..Default::default()
-        })
-        .await
-        .ok_or("No conforming Vulkan WebGPU adapter available")?;
+    let mut adapter = None;
+    for fallback in [true, false] {
+        adapter = instance
+            .request_adapter(&wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::LowPower,
+                force_fallback_adapter: fallback,
+                ..Default::default()
+            })
+            .await;
+        if adapter.is_some() { break; }
+    }
+    let adapter = adapter.ok_or("No conforming Vulkan/GLES WebGPU adapter available")?;
     let info = adapter.get_info();
     println!("WebGPU adapter: {} ({:?}, {:?})", info.name, info.device_type, info.backend);
     let (device, queue) = adapter
