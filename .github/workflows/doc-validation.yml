@@ -87,6 +87,8 @@ jobs:
           fi
           printf 'VK_DRIVER_FILES=%s\n' "$lavapipe_icd" | tee validation-logs/vulkan-icd.log >> "$GITHUB_ENV"
           VK_DRIVER_FILES="$lavapipe_icd" vulkaninfo --summary 2>&1 | tee validation-logs/vulkan-adapter.log
+      - name: Test WebGPU batch validation
+        run: cargo test --release --manifest-path runtime-rust/Cargo.toml --features webgpu --example webgpu_bool
       - name: Compile, dispatch and compare DOC GPU vs CPU outputs
         env:
           RUST_LOG: wgpu_core=debug,wgpu_hal=debug
