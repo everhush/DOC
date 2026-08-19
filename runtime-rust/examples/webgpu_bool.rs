@@ -10,6 +10,18 @@ fn bytes(data: &[u32]) -> Vec<u8> {
     data.iter().flat_map(|word| word.to_le_bytes()).collect()
 }
 
+fn validate_boolean_batch(inputs: &[&[u32]]) -> Result<usize, Box<dyn Error>> {
+    let len = inputs.first().ok_or("DOC GPU batch requires inputs")?.len();
+    if len == 0 { return Err("DOC GPU batch must not be empty".into()); }
+    if inputs.iter().any(|input| input.len() != len) {
+        return Err("DOC GPU premise buffers must have identical lengths".into());
+    }
+    if inputs.iter().flat_map(|input| input.iter()).any(|word| *word > 1) {
+        return Err("DOC GPU boolean words must be canonical (0 or 1)".into());
+    }
+    Ok(len)
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
     pollster::block_on(run())
 }
@@ -26,6 +38,7 @@ async fn run() -> Result<(), Box<dyn Error>> {
     const LANES: usize = 130;
     let a: Vec<u32> = (0..LANES).map(|i| u32::from(i % 3 == 0)).collect();
     let b: Vec<u32> = (0..LANES).map(|i| u32::from(i % 5 < 2)).collect();
+    let lane_count = validate_boolean_batch(&[&a, &b])?;
     let mut expected = Vec::new();
     for (&lhs, &rhs) in a.iter().zip(b.iter()) {
         let mut rt = Runtime::new(graph.clone(), 1, Cutoff::Exact);
@@ -60,7 +73,15 @@ async fn run() -> Result<(), Box<dyn Error>> {
     let (device, queue) = adapter
         .request_device(&wgpu::DeviceDescriptor::default(), None)
         .await?;
-    let nbytes = (a.len() * std::mem::size_of::<u32>()) as u64;
+    let nbytes = u64::try_from(lane_count)?.checked_mul(4).ok_or("DOC GPU buffer size overflow")?;
+    let limits = device.limits();
+    if nbytes > u64::from(limits.max_storage_buffer_binding_size) {
+        return Err("DOC GPU batch exceeds storage buffer binding limit".into());
+    }
+    let workgroups = u32::try_from(lane_count.div_ceil(64))?;
+    if workgroups > limits.max_compute_workgroups_per_dimension {
+        return Err("DOC GPU batch exceeds workgroup dispatch limit".into());
+    }
     let buffer_a = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
         label: Some("DOC premises a"),
         contents: &bytes(&a),
@@ -116,7 +137,7 @@ async fn run() -> Result<(), Box<dyn Error>> {
         pass.set_pipeline(&pipeline);
         pass.set_bind_group(0, &bind_group, &[]);
         // The shader declares 64 invocations per workgroup and checks idx.
-        pass.dispatch_workgroups((LANES as u32).div_ceil(64), 1, 1);
+        pass.dispatch_workgroups(workgroups, 1, 1);
     }
     encoder.copy_buffer_to_buffer(&output, 0, &readback, 0, nbytes);
     queue.submit(Some(encoder.finish()));
@@ -142,3 +163,4 @@ async fn run() -> Result<(), Box<dyn Error>> {
     println!("DOC_WEBGPU_COMPUTE_PASS: {got:?}");
     Ok(())
 }
+\n#[cfg(test)]\nmod tests {\n    use super::validate_boolean_batch;\n\n    #[test]\n    fn validates_batch_shape_and_canonical_words() {\n        assert_eq!(validate_boolean_batch(&[&[0, 1], &[1, 0]]).unwrap(), 2);\n        assert!(validate_boolean_batch(&[&[0, 1], &[1]]).is_err());\n        assert!(validate_boolean_batch(&[&[0, 2], &[1, 0]]).is_err());\n        assert!(validate_boolean_batch(&[&[], &[]]).is_err());\n        assert!(validate_boolean_batch(&[]).is_err());\n    }\n}\n
