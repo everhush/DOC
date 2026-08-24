@@ -111,6 +111,33 @@ mod tests {
     }
 
     #[test]
+    fn boolean_conditional_cpu_truth_table_and_wgsl_validation() {
+        use crate::{Cutoff, Runtime, Value};
+        let source = "source a: bool = true\\nsource b: bool = false\\nderive chosen: bool (a,b) = if(eq(a,b),true,eq(a,false))\\n";
+        let graph = Graph::parse(source).unwrap();
+        let target = graph.id("chosen").unwrap();
+        let shader = lower_bool_derived(&graph, target).unwrap();
+        let module = naga::front::wgsl::parse_str(&shader).unwrap();
+        naga::valid::Validator::new(
+            naga::valid::ValidationFlags::all(),
+            naga::valid::Capabilities::all(),
+        ).validate(&module).unwrap();
+        for a in [false, true] {
+            for b in [false, true] {
+                let mut runtime = Runtime::new(graph.clone(), 1, Cutoff::Exact);
+                runtime.update(&[
+                    (graph.id("a").unwrap(), Value::Bool(a)),
+                    (graph.id("b").unwrap(), Value::Bool(b)),
+                ]).unwrap();
+                runtime.stabilize().unwrap();
+                // Independently simplify: if a == b then true, otherwise !a.
+                let oracle = a == b || !a;
+                assert_eq!(runtime.value(target), Some(Value::Bool(oracle)));
+            }
+        }
+    }
+
+    #[test]
     fn rejects_unsupported_integer_and_effectively_partial_computations() {
         let source = "source a: int = 1\nsource b: int = 2\nderive equal: bool (a,b) = eq(a,b)\n";
         let graph = Graph::parse(source).unwrap();
