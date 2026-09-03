@@ -84,7 +84,7 @@ fn main() {
             count_b++;
         } else if starts_with(body, "derive chosen: bool (a,b) = ") {
             if count_derive != 0 { fail(); }
-            let expression = trim(body[27..]);
+            let expression = trim(body[28..]);
             let result, end, ok = expr(expression, 0, a, b);
             if !ok || skip(expression, end) != expression.len { fail(); }
             answer = result;
