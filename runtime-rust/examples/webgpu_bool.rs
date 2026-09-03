@@ -28,7 +28,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 
 async fn run() -> Result<(), Box<dyn Error>> {
     let _ = env_logger::try_init();
-    let source = "source a: bool = true\nsource b: bool = false\nderive chosen: bool (a,b) = if(eq(a,b),true,eq(a,false))\n";
+    let source = include_str!("boolean_conditional.doc");
     let graph = Graph::parse(source)?;
     let target = graph.id("chosen").ok_or("missing derived target")?;
     let shader_source = wgsl::lower_bool_derived(&graph, target)?;
