@@ -140,6 +140,25 @@ jobs:
             echo 'Goose DOC accepted invalid boolean input' >&2
             exit 1
           fi
+      - name: Reject malformed DOC sources in independent Goose evaluator
+        run: |
+          set -euo pipefail
+          fixture=runtime-rust/examples/boolean_conditional.doc
+          mkdir -p validation-logs
+          for kind in duplicate-source missing-source malformed-expression unknown-identifier trailing-expression; do
+            negative="validation-logs/goose-negative-${kind}.doc"
+            case "$kind" in
+              duplicate-source) cat "$fixture" > "$negative"; printf 'source a: bool = true\\n' >> "$negative" ;;
+              missing-source) grep -v '^source b:' "$fixture" > "$negative" ;;
+              malformed-expression) sed 's/eq(a,b)/eq(a,)/' "$fixture" > "$negative" ;;
+              unknown-identifier) sed 's/eq(a,b)/eq(a,c)/' "$fixture" > "$negative" ;;
+              trailing-expression) sed 's/eq(a,b)/eq(a,b)garbage/' "$fixture" > "$negative" ;;
+            esac
+            if /tmp/goose-build/goose run runtime-goose/doc_bool.goose -- "$negative" true false > "validation-logs/goose-negative-${kind}.log" 2>&1; then
+              echo "Goose DOC accepted invalid ${kind} source" >&2
+              exit 1
+            fi
+          done
       - name: Preserve Goose compilation evidence
         if: always()
         uses: actions/upload-artifact@v4
