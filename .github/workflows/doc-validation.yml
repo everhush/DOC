@@ -148,7 +148,7 @@ jobs:
           for kind in duplicate-source missing-source malformed-expression unknown-identifier trailing-expression; do
             negative="validation-logs/goose-negative-${kind}.doc"
             case "$kind" in
-              duplicate-source) cat "$fixture" > "$negative"; printf 'source a: bool = true\\n' >> "$negative" ;;
+              duplicate-source) cat "$fixture" > "$negative"; printf 'source a: bool = true\n' >> "$negative" ;;
               missing-source) grep -v '^source b:' "$fixture" > "$negative" ;;
               malformed-expression) sed 's/eq(a,b)/eq(a,)/' "$fixture" > "$negative" ;;
               unknown-identifier) sed 's/eq(a,b)/eq(a,c)/' "$fixture" > "$negative" ;;
