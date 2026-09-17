@@ -4,7 +4,7 @@
 import std;
 import os;
 
-fn space(c: u8) -> bool { c == ' ' || c == '\t' || c == '\r'; }
+fn space(c: u8) -> bool { return c == ' ' || c == '\t' || c == '\r'; }
 fn skip(s: u8[:], p: i64) -> i64 {
     var i = p;
     while i < s.len && space(s[i]) { i++; }
@@ -17,7 +17,8 @@ fn expect(s: u8[:], p: i64, ch: u8) -> i64, bool {
 }
 // Evaluates DOC's pure total boolean expression syntax, not Goose expressions.
 // Returns (value, next byte, syntax success); no unchecked indexing.
-fn expr(s: u8[:], p: i64, a: bool, b: bool) -> bool, i64, bool {
+recursive fn expr(s: u8[:], p: i64, a: bool, b: bool, depth: i64) -> bool, i64, bool {
+    if depth == 0 { return false, p, false; }
     let i = skip(s, p);
     var end = i;
     while end < s.len && ((s[end] >= 'a' && s[end] <= 'z') || s[end] == '_') {
@@ -33,11 +34,11 @@ fn expr(s: u8[:], p: i64, a: bool, b: bool) -> bool, i64, bool {
     if word != "eq" && word != "if" { return false, after, false; }
     let open, ok = expect(s, after, '(');
     if !ok { return false, open, false; }
-    let x, xend, xok = expr(s, open, a, b);
+    let x, xend, xok = expr(s, open, a, b, depth - 1);
     if !xok { return false, xend, false; }
     let comma, cok = expect(s, xend, ',');
     if !cok { return false, comma, false; }
-    let y, yend, yok = expr(s, comma, a, b);
+    let y, yend, yok = expr(s, comma, a, b, depth - 1);
     if !yok { return false, yend, false; }
     if word == "eq" {
         let close, done = expect(s, yend, ')');
@@ -45,7 +46,7 @@ fn expr(s: u8[:], p: i64, a: bool, b: bool) -> bool, i64, bool {
     }
     let comma2, cok2 = expect(s, yend, ',');
     if !cok2 { return false, comma2, false; }
-    let z, zend, zok = expr(s, comma2, a, b);
+    let z, zend, zok = expr(s, comma2, a, b, depth - 1);
     if !zok { return false, zend, false; }
     let close, done = expect(s, zend, ')');
     return if x { y } else { z }, close, done;
@@ -83,9 +84,9 @@ fn main() {
             if initial != "true" && initial != "false" { fail(); }
             count_b++;
         } else if starts_with(body, "derive chosen: bool (a,b) = ") {
-            if count_derive != 0 { fail(); }
+            if count_derive != 0 || count_a != 1 || count_b != 1 { fail(); }
             let expression = trim(body[28..]);
-            let result, end, ok = expr(expression, 0, a, b);
+            let result, end, ok = expr(expression, 0, a, b, 128);
             if !ok || skip(expression, end) != expression.len { fail(); }
             answer = result;
             count_derive++;
