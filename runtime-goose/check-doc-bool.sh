@@ -20,6 +20,17 @@ for a in false true; do
     test "$actual" = "DOC_GOOSE_RESULT=$expected"
   done
 done
+interlock=runtime-rust/examples/boolean_interlock.doc
+: > "$logs/goose-doc-interlock.log"
+for a in false true; do
+  for b in false true; do
+    actual=$("$native" "$interlock" "$a" "$b")
+    expected=false
+    if [[ "$a" == true && "$b" == true ]]; then expected=true; fi
+    printf '%s,%s expected=%s actual=%s\n' "$a" "$b" "$expected" "$actual" | tee -a "$logs/goose-doc-interlock.log"
+    test "$actual" = "DOC_GOOSE_RESULT=$expected"
+  done
+done
 if "$native" "$fixture" invalid true > "$logs"/goose-doc-negative.log 2>&1; then
   echo 'Goose DOC accepted invalid boolean input' >&2
   exit 1
