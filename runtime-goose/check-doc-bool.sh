@@ -62,3 +62,9 @@ for kind in duplicate-source missing-source malformed-expression unknown-identif
   fi
   grep -Fx 'DOC_GOOSE_ERROR' "$logs/goose-negative-${kind}.log"
 done
+
+# Compare the identical authored DOC fixtures against the Rust runtime and an
+# independent Boolean truth-table oracle when a Rust binary is supplied.
+if [[ $# -ge 3 ]]; then
+  bash runtime-goose/check-doc-differential.sh "$3" "$native" "$logs"
+fi
