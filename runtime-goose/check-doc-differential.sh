@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Independent mathematical oracle plus cross-runtime DOC source-to-result comparison.
+# Independent Boolean oracle, identical DOC source, and Rust worker-count differential.
 set -euo pipefail
 rust=${1:?Rust DOC executable required}
 goose=${2:?Goose DOC executable required}
@@ -19,15 +19,20 @@ for case_name in conditional interlock; do
       elif [[ "$a" == true && "$b" == true ]]; then
         expected=true
       fi
-      rust_out=$("$rust" "$fixture" "a=$a" "b=$b" 2> "$logs/rust-${case_name}-${a}-${b}.stderr")
-      goose_out=$("$goose" "$fixture" "$a" "$b")
-      rust_value=$(printf '%s\n' "$rust_out" | sed -n 's/^chosen: \(true\|false\)$/\1/p')
-      goose_value=$(printf '%s\n' "$goose_out" | sed -n 's/^DOC_GOOSE_RESULT=\(true\|false\)$/\1/p')
-      if [[ "$rust_value" != "$expected" || "$goose_value" != "$expected" ]]; then
-        printf 'FAIL %s a=%s b=%s expected=%s rust=%s goose=%s\n' "$case_name" "$a" "$b" "$expected" "$rust_value" "$goose_value" | tee -a "$logs/doc-rust-goose-differential.log" >&2
+      goose_out=$("$goose" "$fixture" "$a" "$b" 2> "$logs/goose-${case_name}-${a}-${b}.stderr")
+      if [[ "$goose_out" != "DOC_GOOSE_RESULT=$expected" ]]; then
+        printf 'FAIL goose %s a=%s b=%s expected=%s output=%s\n' "$case_name" "$a" "$b" "$expected" "$goose_out" | tee -a "$logs/doc-rust-goose-differential.log" >&2
         exit 1
       fi
-      printf 'PASS %s a=%s b=%s expected=%s rust=%s goose=%s\n' "$case_name" "$a" "$b" "$expected" "$rust_value" "$goose_value" | tee -a "$logs/doc-rust-goose-differential.log"
+      for workers in 1 4; do
+        rust_out=$(DOC_WORKERS="$workers" "$rust" "$fixture" "a=$a" "b=$b" 2> "$logs/rust-${case_name}-${a}-${b}-w${workers}.stderr")
+        rust_value=$(printf '%s\n' "$rust_out" | sed -n 's/^chosen: \(true\|false\)$/\1/p')
+        if [[ "$rust_value" != "$expected" || $(printf '%s\n' "$rust_out" | grep -c '^chosen: ') -ne 1 ]]; then
+          printf 'FAIL rust %s a=%s b=%s workers=%s expected=%s output=%s\n' "$case_name" "$a" "$b" "$workers" "$expected" "$rust_out" | tee -a "$logs/doc-rust-goose-differential.log" >&2
+          exit 1
+        fi
+        printf 'PASS %s a=%s b=%s workers=%s expected=%s rust=%s goose=%s\n' "$case_name" "$a" "$b" "$workers" "$expected" "$rust_value" "$expected" | tee -a "$logs/doc-rust-goose-differential.log"
+      done
     done
   done
 done
