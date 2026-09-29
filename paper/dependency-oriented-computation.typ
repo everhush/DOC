@@ -3,7 +3,7 @@
 // Uses only Typst standard-library features.
 
 #set document(
-  title: "Dependency-Oriented Computation",
+  title: "Dependency-Oriented Computation: Persistent-Graph Semantics for Incremental Repair",
   author: "Rituraj Basak",
   keywords: ("dependency-oriented computation", "incremental computation", "persistent dependency graphs", "reactive computation", "parallel evaluation", "dataflow", "recurrence", "runtime semantics"),
 )
@@ -21,6 +21,8 @@
 #set text(size: 10.2pt, lang: "en")
 #set par(justify: true, leading: 0.68em, first-line-indent: 0em)
 #set heading(numbering: "1.")
+#set figure(gap: 4pt)
+#set math.equation(numbering: "(1)")
 #set enum(numbering: "1.")
 #set list(indent: 1.15em, body-indent: 0.55em)
 #set table(inset: 5.5pt, stroke: 0.45pt + luma(205))
@@ -86,19 +88,16 @@
     ]
   ]
 }
-#let figcounter = counter("doc-figure")
-#let diagram(h, body, caption) = context {
-  let n = figcounter.get().first() + 1
-  figcounter.step()
-  block(width: 100%, breakable: false, above: 0.55em, below: 0.65em)[
-    #block(width: 100%, height: h, breakable: false, inset: 4pt,
-      fill: pale, radius: 4pt, stroke: 0.45pt + luma(215))[
-      #body
-    ]
-    #v(3pt)
-    #align(center)[#text(size: 8pt)[*Figure #n.* #caption]]
-  ]
-}
+#let diagram(h, body, caption) = figure(
+  block(width: 100%, height: h, breakable: false, inset: 4pt,
+    fill: pale, radius: 4pt, stroke: 0.45pt + luma(215))[
+    #body
+  ],
+  caption: caption,
+  kind: "diagram",
+  supplement: [Figure],
+  numbering: "1",
+)
 #let statement(kind, title, body, tone: "neutral", breakable: true) = {
   let color = if tone == "theorem" { ink }
     else if tone == "definition" { green }
@@ -119,10 +118,30 @@
     #body
   ]
 }
-#let definition(title, body) = statement("Definition", title, body, tone: "definition")
-#let theorem(title, body) = statement("Theorem", title, body, tone: "theorem")
-#let lemma(title, body) = statement("Lemma", title, body, tone: "theorem")
-#let corollary(title, body) = statement("Corollary", title, body, tone: "theorem")
+#let formal-statement(kind, title, body, tone: "theorem", breakable: true) = figure(
+  block(
+    width: 100%, inset: (x: 9pt, y: 7pt), radius: 3pt,
+    fill: if tone == "definition" { greenfill } else { bluefill },
+    stroke: 0.7pt + if tone == "definition" { green } else { ink },
+    breakable: breakable, above: 0.55em, below: 0.55em,
+  )[
+    #context {
+      let n = counter(figure.where(kind: lower(kind))).get().first()
+      strong[#kind #n.]
+      h(0.35em)
+      emph[#title]
+    }
+    #linebreak()
+    #body
+  ],
+  kind: lower(kind),
+  supplement: kind,
+  numbering: "1",
+)
+#let definition(title, body) = formal-statement("Definition", title, body, tone: "definition")
+#let theorem(title, body) = formal-statement("Theorem", title, body)
+#let lemma(title, body) = formal-statement("Lemma", title, body)
+#let corollary(title, body) = formal-statement("Corollary", title, body)
 #let proof(body) = block(
   width: 100%, inset: (left: 10pt, right: 4pt, top: 3pt, bottom: 5pt),
   stroke: (left: 1.1pt + luma(185)), breakable: true,
@@ -139,9 +158,9 @@
 
 #align(center)[
   #v(10mm)
-  #text(size: 23pt, weight: "bold", fill: ink)[Dependency-Oriented Computation]
-  #v(6pt)
-  #text(size: 13.4pt, weight: "semibold")[A Computational Model Based on Dependency and Consistency]
+  #text(size: 21.5pt, weight: "bold", fill: ink)[Dependency-Oriented Computation:]
+  #linebreak()
+  #text(size: 18pt, weight: "bold", fill: ink)[Persistent-Graph Semantics for Incremental Repair]
   #v(18pt)
   #text(size: 11.5pt, weight: "semibold")[Rituraj Basak]
   #linebreak()
@@ -151,29 +170,16 @@
   #linebreak()
   #text(size: 9.2pt)[ORCID: #link("https://orcid.org/0009-0002-7347-7064")[0009-0002-7347-7064]]
 ]
-#v(18pt)
-#align(center)[
-  #block(width: 88%, inset: (x: 12pt, y: 10pt), fill: bluefill,
-    stroke: 0.85pt + ink, radius: 4pt)[
-    #align(center)[#text(size: 11.2pt, weight: "semibold", style: "italic")[Computation is the restoration of consistency in a persistent dependency graph.]]
-  ]
-]
-#v(12pt)
+#v(20pt)
 
 #abstract-box([
-This paper introduces *Dependency-Oriented Computation* (DOC), a computational model in which a program is a persistent graph of typed logical states and local definitions. Premise occurrence supplies the program's global organization rather than metadata for a separately ordered procedure. Sources receive environmental facts; each derived state has one pure deterministic local transformation; a valuation is stable when every required conclusion agrees with its current premises.
+Long-lived programs such as compilers, build systems, maintained queries, and simulations repeatedly recompute after small changes. This paper defines *Dependency-Oriented Computation* (DOC), a semantics in which the persistent program state is an explicit finite graph of typed logical states and local definitions. For the finite kernel, a program is $G=(S,Delta)$ and a repair configuration is $Q=(nu,A)$: $nu$ is the retained valuation and $A$ is the transient set of derived states that may require reconsideration after a source update.
 
-The finite operational kernel is
+A derived state $d$ has an ordered premise sequence $P_d$ and a pure, total, deterministic transformation $f_d$. A repair transition selects any nonempty subset of the dependency-minimal active frontier, evaluates every selected definition from one settled pre-valuation, and atomically publishes the changed conclusions. A sound equality predicate may stop propagation when a recomputed value equals the retained value; an always-false predicate remains correct and simply performs more work.
 
-$ G=(S, Delta), #h(2em) Q=(nu,A). $
+For finite acyclic programs, the paper proves termination of every legal repair schedule, uniqueness of the stable valuation, agreement with complete topological reevaluation, schedule independence, a per-episode at-most-once evaluation bound, and dependency-local repair. The assumptions are explicit: failures and external effects must be represented as values or handled outside the pure finite kernel. Recurrence, immutable graph-version replacement, logical availability, placement, and fail-stop reconstruction are presented separately with their additional contracts rather than as consequences of the finite theorem.
 
-$S$ is the typed state family, $Delta$ maps derived states to ordered premises and transformations, $nu$ is the persistent valuation, and $A$ is the transient repair-obligation set for one source epoch. One transition evaluates any nonempty subset of the dependency-minimal active frontier from one settled pre-state and publishes the complete subset together. Conclusions not proven equal activate their users; proven-equal conclusions stop propagation. The always-propagate profile remains correct, so stabilization does not depend on decidable semantic equality.
-
-One theorem gives termination, unique stable values, complete-reevaluation agreement, schedule independence, and sound cutoff for finite acyclic programs; a source-update corollary gives dependency-local repair. Initial materialization and later repair use the same relation. Retained stable values are therefore semantic caches, and each frontier exposes parallel work without source-level threads or worker counts.
-
-The unchanged finite kernel is also the building block of full DOC. Versioned recurrence forms the unbounded computational extension by connecting finite acyclic epochs strictly forward in logical time. Immutable graph versions permit structural succession through private validation, stabilization, compatibility-controlled reuse, and atomic generation commit. Safe and placed realizations may vary storage, scheduling, reconstruction, transport, and placement while remaining conformant when they preserve the same stable observations over every finite admissible interaction sequence.
-
-An executable witness checks the finite semantics, recurrence, immutable graph replacement, observation atomicity, logical availability across eviction and reconstruction, and bounded fail-stop recovery. Measurements illustrate the predicted trade-off: sparse change can avoid most work, coarse ready frontiers can use granted processors, and dense or very fine-grained graphs can lose to direct evaluation.
+A C++20 executable witness and five bounded model checkers test the stated semantics against complete reevaluation and independent oracles. Reproduced benchmarks on the supplied environment show the intended cost shape rather than universal speedup: sparse updates avoid most graph work, a coarse ready frontier uses up to four externally granted participants, a specialized cached financial baseline remains substantially faster than generic DOC repair, and a fine-grained sorting network is a negative case in which runtime overhead dominates.
 ])
 
 #block(width: 100%, inset: (x: 2pt, y: 4pt))[
@@ -181,40 +187,25 @@ An executable witness checks the finite semantics, recurrence, immutable graph r
 ]
 
 #pagebreak()
-#set text(size: 9.05pt)
-#set par(justify: true, leading: 0.48em, first-line-indent: 0em)
-#outline(title: [Contents], depth: 2)
-#set text(size: 10.2pt)
-#set par(justify: true, leading: 0.68em, first-line-indent: 0em)
-#pagebreak()
 
 = Introduction
 
-Large programs are often introduced as sequences of instructions, messages, callbacks, services, or tasks. That description is useful when a machine performs one instruction after another. It becomes incomplete when a system remains alive while its environment changes.
+Many long-lived programs repeatedly compute almost the same result. A compiler receives another edit, a build receives another file change, and a maintained query receives another transaction. The central execution question is therefore not only how to evaluate a program once, but how to preserve justified results and repair only the part whose premises may have changed.
 
-A compiler receives another edit. A build sees a changed file. A maintained query receives another transaction. A simulation advances. A long-lived information workflow receives new evidence. In each case, one question repeatedly becomes more important than the original textual order:
+This paper studies that problem through an explicit persistent dependency graph. A *state* is a stable logical identity with a typed value. A *source* receives an environmental fact. A *derived state* is produced by one local definition from an ordered sequence of premise states. A *persistent conclusion* in this paper means the currently retained value of a derived state together with its logical identity; it remains reusable only while the dependency semantics continues to justify it.
 
-#quote(block: true)[
-#strong[What depends on what?]
-]
+== Running example and repair problem
 
-That question determines several things together: which retained conclusions may no longer be justified, which prior conclusions remain useful, what work must precede other work, and what work is independent. Conventional systems often encode these relationships repeatedly through ordered procedures, cache keys, invalidation rules, subscriptions, tasks, queues, or service routes. DOC asks whether one persistent dependency structure can instead be the primary global organization.
+Consider four logical states:
 
-DOC does not require every local calculation to be decomposed into one universal term language. A local definition may be arithmetic, pattern matching, a query operator, a vector kernel, a verified routine, or an efficient opaque host function. DOC specifies how such definitions remain related across initial evaluation, later change, reuse, parallel execution, lifetime, and placement.
+```text
+source a = 2
+source b = 3
+sum     = add(a, b)
+doubled = multiply(sum, 2)
+```
 
-#principle([Starting point], [Do not begin by asking what executes next. Begin by asking what depends on what.])
-
-== Why persistent computation?
-
-A one-shot evaluator may discard every intermediate after producing an answer. Long-lived software instead receives repeated partial change. Editors, servers, simulations, dashboards, build systems, compilers, and workflows carry a large stable context from one event to the next. Reconstructing that context from nothing after each event discards information already justified by unchanged premises.
-
-A persistent dependency graph retains logical identities and current values. Change then becomes a repair problem: restore consistency only where current justification may have changed. A one-shot program remains a special case: install one initial environment, stabilize once, observe, and discard the graph. The persistent interpretation is more general because first evaluation and later repair use the same semantics.
-
-== Why call this a computational model?
-
-The graph gives global organization, not local arithmetic. Each definition still supplies a transformation. The model determines when a definition has sufficient premises, what conclusion it may derive, what may need repair, why a retained conclusion remains usable, which repair obligations are independent, and what it means for an observation to be complete. It leaves local expression syntax and optimized kernels parameterized.
-
-The graph is therefore not a scheduling hint attached to an otherwise complete instruction sequence. Physical queues, worker counts, processors, networks, and container boundaries may vary while stable logical observations remain the same.
+The premise occurrences induce the graph in @fig:running-graph. Initial evaluation materializes `sum = 5` and then `doubled = 10`. Suppose one atomic source batch later installs `a := 4` and `b := 1`. Only `sum` is directly invalidated. Recomputing `sum` again yields $5$. If the runtime can prove that the new value equals the retained value, propagation stops and `doubled = 10` remains justified without reevaluation. If equality cannot be proved cheaply, the runtime may conservatively reevaluate `doubled`; the final value is unchanged.
 
 #diagram(84pt, [
   #dnode(18pt, 8pt, [$a$ source], w: 90pt, fill: greenfill, stroke: green)
@@ -224,27 +215,34 @@ The graph is therefore not a scheduling hint attached to an otherwise complete i
   #darrow(108pt, 22pt, 190pt, 40pt)
   #darrow(108pt, 62pt, 190pt, 44pt)
   #darrow(282pt, 42pt, 360pt, 42pt)
-], [Premise occurrence in local definitions induces the program graph. No second invalidation, subscription, or scheduling graph is part of the program.])
+], [The running program. Premise occurrence in the two local definitions induces the dependency graph used both for evaluation order and later repair.]) <fig:running-graph>
 
-== The change in viewpoint
+This small example contains the paper's finite mechanism. The program graph persists. The valuation persists. A source batch creates a temporary set of repair obligations. The next eligible work is determined from dependency order rather than from a separately maintained invalidation or scheduling graph. Equality cutoff is an optimization of propagation, not a correctness requirement.
 
-Instruction-oriented descriptions ask what should happen next. DOC asks what relationships must hold when an observation is made. The programmer or compiler supplies those relationships. Execution is a restoration process derived from them rather than a second hand-written coordination program.
+== Problem statement
 
-This change matters because later updates are not exceptional events attached to a one-shot meaning. Retained results, invalidation, repair, equality cutoff, and observation are ordinary consequences of the same persistent program.
+The finite problem addressed here is: given a persistent finite acyclic graph, retained values from a previous stable point, and a validated source update, define a repair relation that (i) never observes an inconsistent intermediate result, (ii) permits any dependency-respecting sequential or parallel schedule, (iii) terminates, and (iv) reaches the same result as complete reevaluation. The formal kernel in @sec:core gives that relation; @sec:metatheory proves its properties.
 
-== The chosen semantic boundary
+The model intentionally does not treat every practical concern as part of this theorem. Real compilers and build systems invoke fallible tools, interact with files and processes, and perform effects. Within the finite kernel, such behavior must either be made explicit in the value domain (for example, a typed success/error result) while the local transformation remains total and deterministic, or remain outside the kernel behind an explicit effect or recovery boundary. @sec:assumptions states these assumptions before the semantics is used.
 
-DOC is a global computational model. It defines how persistent conclusions are organized, repaired, reused, observed, and placed. It does not require one universal local instruction calculus inside every definition.
+== Scope and technical contribution
 
-#principle([Two-level semantics], [A complete DOC program consists of the dependency graph together with the typed local transformations attached to derived states. Local transformations determine values. Dependency, valuation, activation, and stabilization determine global execution across time and resources. Parameterizing the local language is a deliberate compositional boundary, not missing semantics.])
+DOC does not claim that dependency graphs, incremental repair, demand, caching, or parallel evaluation are individually new. The contribution evaluated in this paper is the particular finite factorization around a declared persistent logical-state graph $G=(S,Delta)$, a retained valuation $nu$, an explicit repair-obligation set $A$, and one frontier-subset transition. The same rule covers first materialization and later repair; the dependency-minimal frontier supplies legal independent work; and sound one-way equality cutoff can reduce propagation without becoming part of the semantic equality relation.
 
-Where the internal structure of an opaque transformation matters for reuse, parallelism, placement, or repair, it may be replaced by a boundary-equivalent DOC expansion. The model can therefore expose more structure without requiring every useful local language or optimized kernel to be rebuilt as one closed low-level calculus.
+The closest prior models often make different representational choices. Self-adjusting computation records and updates dynamic dependence structures produced by execution; Adapton adds demand to an incremental computation graph; build-system models separate scheduling and rebuilding components; differential/timely dataflow use richer version or timestamp structures for iterative distributed dataflow. @sec:related-work compares these choices directly rather than claiming historical priority for dependency tracking itself.
+
+== Semantic boundary
+
+A DOC local definition may be arithmetic, pattern matching, a query operator, a vector kernel, a verified routine, or another deterministic host function. DOC specifies the global relation among persistent states: which conclusions are justified, which states become repair obligations, what work is ready, when a repair episode is stable, and what stable value may be observed. It does not prescribe one universal syntax for the internals of every local function.
+
+When internal structure matters for reuse or parallelism, a coarse local definition can be replaced by a finite boundary-equivalent DOC expansion. Conversely, an implementation may physically fuse several logical definitions when that preserves the same observations. This keeps the formal boundary small while making the granularity trade-off explicit.
 
 = Model intuition and contributions
 
-DOC separates logical meaning from physical mechanisms that may vary without changing it.
+DOC separates logical meaning from physical mechanisms that may vary without changing it. @tab:claim-map states what is proved, what is conditional on additional contracts, and what is supported only by the current implementation or measurements.
 
-#table(
+#figure(
+  table(
   columns: (1.08fr, 2.35fr, 1.55fr),
   table.header([*Layer*], [*Contains*], [*Status*]),
   [Finite core], [$G=(S,Delta)$, valuation, active set, source batch, frontier-subset transition, observation], [Proved; implemented; differentially and exhaustively checked in bounded domains],
@@ -253,28 +251,38 @@ DOC separates logical meaning from physical mechanisms that may vary without cha
   [Safe realization], [Private evaluation, complete immutable publication, protected reads, roots, reclamation], [Normative contract; typed object-store witness],
   [Placed realization], [Resources, logical roles, TCP transport, generations, join, drain, and bounded fail-stop reconstruction], [Conditional theorem; executable loopback witness],
   [Policy-bearing boundaries], [Fixed points, conflict and replica policy, partitions, retention, irreversible external semantics], [Must be explicit; not inferred from dependency],
-)
+),
+  caption: [Claim and evidence map. The finite theorem, extensions, physical contracts, and implementation evidence are intentionally separated.],
+) <tab:claim-map>
 
-A property is *naturally implicit* when it follows from program structure together with unavoidable realization obligations, while ordinary programs do not separately prescribe its mechanism. Conforming runtimes may choose different schedulers, collectors, transports, placements, or topology-version builders without changing defined logical observations.
+The consequences in @tab:structural-properties are not additional theorem claims. They identify implementation opportunities exposed by the declared dependency structure. The table states only the structural reason each opportunity exists; scheduling, collection, transport, placement, and topology-version construction remain implementation choices constrained by the observation contracts stated later.
 
-#table(
+#figure(
+  table(
   columns: (1.3fr, 3fr),
-  table.header([*Property*], [*Why it is naturally implicit*]),
+  table.header([*Property*], [*Structural basis*]),
   [Reactivity], [A source batch activates induced users; no separate watcher graph is required.],
   [Temporal reuse], [Stable retained values remain justified until an affected definition proves otherwise.],
   [Parallelism], [The ready frontier is dependency-minimal and its conclusions are distinct.],
   [Memory safety], [Logical identities and immutable publication permit protected use and automatic reclamation without physical pointers in ordinary programs.],
   [Distribution], [Remote premise occurrence becomes a transport obligation; placement and generation authority remain runtime concerns rather than application topology.],
   [Elasticity], [Resources may join, drain, or fail while logical identities and application graph remain unchanged; reconstruction follows authoritative sources and pure dependencies.],
-)
+),
+  caption: [Structural consequences and their source in the persistent dependency representation.],
+) <tab:structural-properties>
 
 The status distinctions used throughout the paper are exact: *proved core* means a theorem about the finite relation; *defined extension* means additional semantics stated separately; *realization contract* means physical obligations required to preserve observation; *executable evidence* means tested behavior of one implementation; and *remaining boundary* means policy or physics that dependency cannot determine by itself.
 
 = Standing assumptions and scopes <sec:assumptions>
 
-The assumptions are collected here so later definitions and results need not restate them.
+The assumptions are collected here so later definitions and results need not restate them. @tab:assumptions is also the applicability checklist for compilers, build systems, and other motivating applications: fallible external tools must be represented as explicit values or placed outside the pure finite kernel.
 
-#table(
+The abstract finite transition rule itself needs no scheduler-fairness premise: every transition selects a nonempty ready subset, and the acyclic work argument bounds the number of selections. Fairness appears only in physical progress claims that allow work or reclamation to be postponed by a runtime.
+
+For a compiler or build system, the purity and totality conditions in @tab:assumptions are a modeling obligation rather than a claim that external tools never fail. File contents, command-line arguments, tool versions, configuration, and other relevant environmental facts can be explicit source values. A fallible deterministic tool result can be represented as a typed value such as `Result<Artifact, Error>` if the invocation is fully determined by those premises. Nondeterministic process execution, network calls, authorization, and irreversible external actions instead occur outside the finite local transformation; their committed outcome becomes a later source fact. This distinction is what allows the finite theorem to remain precise without denying effects in the surrounding application.
+
+#figure(
+  table(
   columns: (1.05fr, 3fr),
   table.header([*Scope*], [*Assumptions*]),
   [Finite kernel], [The state family and every premise sequence are finite; the induced dependency graph is acyclic; each local transformation is pointwise typed, pure, deterministic, total, and terminating for every typed premise tuple; accepted source batches are pointwise typed; and every cutoff predicate is sound, although it may conservatively return false. A finite program satisfying these conditions is *well formed*. Stabilization begins from a repair-admissible configuration as defined in the finite semantics; stable boundaries are its quiescent special case.],
@@ -282,16 +290,19 @@ The assumptions are collected here so later definitions and results need not res
   [Versioned recurrence], [Each epoch instance satisfies the finite-kernel assumptions. Carry is a typed single-authority partial function from next-epoch sources to previous-epoch states and points strictly forward in logical time. Every uncarried source receives an explicit epoch-local fact or declared fixed default. A completed observation requests only a finite epoch prefix; an indefinitely extended demand may diverge.],
   [Graph versions], [A candidate graph is well formed, validated and stabilized privately from a repair-admissible seed. Direct reuse requires stable identity, the same source/derived authority role, the same declared value domain and semantic equality, and an explicit observational-compatibility contract before atomic generation commit. A domain change marks the state affected and is expressed by an explicit candidate transformation.],
   [Physical realization], [Logical observations are returned only at committed stable boundaries. Values captured by active evaluation, publication, observation, or transport remain protected. Claims about eventual reclamation, transport, join, drain, or recovery apply only under their stated eventual-progress and quiescence conditions.],
-)
+),
+  caption: [Standing assumptions by semantic scope. Only the finite-kernel row is assumed by the central stabilization theorem.],
+) <tab:assumptions>
 
-The abstract finite transition rule itself needs no scheduler-fairness premise: every transition selects a nonempty ready subset, and the acyclic work argument bounds the number of selections. Fairness appears only in physical progress claims that allow work or reclamation to be postponed by a runtime.
+= Core semantics <sec:core>
 
-= Core semantics
+This section defines the finite logical kernel used by the metatheory in @sec:metatheory. It proceeds from the program objects and satisfaction relation to initialization, source updates, the ready frontier, and the single repair transition. @tab:semantic-guide summarizes which later claims use this kernel directly and which require additional contracts.
 
 #block[
   #set text(size: 8.75pt)
   #set table(inset: 3.6pt)
-  #table(
+  #figure(
+    table(
     columns: (1.22fr, 1.65fr, 1.25fr),
     table.header([*Layer*], [*Claim made here*], [*Evidence status*]),
     [Finite logical kernel], [Acyclic stabilization, unique stable values, complete-reevaluation agreement, schedule independence, sound cutoff, and source-local repair.], [Human-readable proof, bounded exhaustive checking, and executable differential tests.],
@@ -299,20 +310,28 @@ The abstract finite transition rule itself needs no scheduler-fairness premise: 
     [Graph evolution], [A compatible immutable replacement agrees with from-scratch evaluation of the candidate graph.], [Conditional proposition under the declared compatibility contract; bounded and runtime checks.],
     [Physical realization], [Publication, storage, reconstruction, placement, transport, recovery, and effects preserve logical observations.], [Conformance contracts and targeted runtime tests, not unconditional theorems of the finite kernel.],
     [Performance], [Sparse change can avoid work and coarse frontiers can use granted processors; overhead can dominate dense or fine-grained work.], [Environment-specific empirical measurements with correctness oracles and negative controls.],
-  )
+  ),
+    caption: [Guide to the finite semantics and later evidence. Rows distinguish proved finite semantics from conditional extensions and empirical observations.],
+  ) <tab:semantic-guide>
 ]
 
 The table separates mathematical consequences of the kernel from extensions, realization obligations, and empirical evidence. None of the latter is stored in $G$ or $Q$.
 
 == Basic objects and satisfaction
 
+A finite DOC program is
+
+$ G=(S,Delta), $ <eq:program>
+
+where $S$ is a finite family of stable logical state identities and $Delta$ is a partial map whose domain contains exactly the derived states. Every $s in S$ has a declared value domain $V_s$. Equation @eq:program fixes the notation used throughout the finite semantics; physical addresses, workers, and storage locations are not elements of $S$.
+
 === Typed state
 
-#definition([State], [A state is a stable logical identity $s$ with a value domain $V_s$. Its identity is independent of a memory address, thread, process, machine, or storage location.])
+#definition([State], [A state is a stable logical identity $s in S$ with a value domain $V_s$. Its identity is independent of a memory address, thread, process, machine, or storage location.]) <def:state>
 
 A state may currently be unmaterialized. Each domain $V_s$ has its ordinary semantic equality. A realization may additionally provide a total decidable cutoff predicate
 
-$ upright("same")_s: V_s times V_s arrow.r upright("Bool"), #h(1em) upright("same")_s #h(0.08em) (x,y)=upright("true") #h(0.3em) arrow.r.double #h(0.3em) x=y. $
+$ upright("same")_s: V_s times V_s arrow.r upright("Bool"), #h(1em) upright("same")_s #h(0.08em) (x,y)=upright("true") #h(0.3em) arrow.r.double #h(0.3em) x=y. $ <eq:cutoff-soundness>
 
 The implication is the only soundness requirement: the predicate may conservatively return false even for equal values. The always-false predicate is therefore valid and yields complete propagation without cutoff. The C++20 witness uses exact signed-integer equality by default and also tests this conservative mode. Hash-only or tolerance tests are not valid unless returning true proves equality in the declared value domain.
 
@@ -320,17 +339,19 @@ The executable witness uses one scalar domain, but the model permits distinct do
 
 === Local definition
 
-#definition([Local definition], [A definition for state $d$ is
-$ Delta(d)=((s_1,dots.h,s_k), f_d), $
-where the first component is an ordered premise sequence and
+#definition([Local definition], [For each derived state $d$, let its ordered premise sequence be
+$ P_d=(s_1,dots.h,s_k). $
+The partial definition map stores
+$ Delta(d)=(P_d,f_d), $
+where
 $ f_d: V_(s_1) times dots.h.c times V_(s_k) arrow.r V_d $
-is a local transformation satisfying the standing finite-kernel assumptions in @sec:assumptions.])
+is a local transformation satisfying the standing finite-kernel assumptions in @sec:assumptions.]) <def:local-definition>
 
-The conclusion is the map key $d$ itself. No separate computation identity, output map, source flag, or producer map is required. Zero-premise definitions represent constant derived states.
+The conclusion is the map key $d$ itself. No separate computation identity, output map, source flag, or producer map is required. Zero-premise definitions represent constant derived states. Thus $P_d$ is notation for the premise sequence stored in $Delta(d)$; it is not an additional program component.
 
 Let
 
-$ D = upright("dom")(Delta), #h(1.5em) S_(upright("src")) = S-D. $
+$ D = upright("dom")(Delta), #h(1.5em) S_(upright("src")) = S-D. $ <eq:state-partition>
 
 States in $D$ are derived. States outside $D$ are sources. Single-producer authority follows from the partial-map representation.
 
@@ -338,17 +359,23 @@ States in $D$ are derived. States outside $D$ are sources. Single-producer autho
 
 A state $x$ is a direct premise of $d$ when $x$ occurs in the premise sequence of $Delta(d)$. Its transitive closure is dependency order. Users are induced rather than separately declared:
 
-$ upright("users")(x) = {d in D | x in P_d}. $
+$ upright("users")(x) = {d in D | x upright(" occurs in ") P_d}. $ <eq:users>
 
 === Valuation and satisfaction
 
 A valuation is pointwise typed:
 
-$ nu(s) in V_s union {bot} #h(0.5em) upright("for every") #h(0.5em) s in S, $
+$ nu(s) in V_s union {bot} #h(0.5em) upright("for every") #h(0.5em) s in S, $ <eq:valuation>
 
-where $bot$ means no current materialization. It is not application-level null, deletion, failure, or unknown data; those meanings must be represented explicitly inside the relevant value domain. If $Delta(d)=((s_1,dots.h,s_k),f_d)$, then $d$ is locally satisfied when all premise values exist and
+where $bot$ means no current materialization. It is not application-level null, deletion, failure, or unknown data; those meanings must be represented explicitly inside the relevant value domain. For $P_d=(s_1,dots.h,s_k)$, define the tuple shorthand
 
-$ nu(d)=f_d(nu(s_1),dots.h,nu(s_k)). $
+$ nu(P_d) := (nu(s_1),dots.h,nu(s_k)). $ <eq:premise-valuation>
+
+If $Delta(d)=(P_d,f_d)$, then $d$ is locally satisfied when every component of $nu(P_d)$ is materialized and
+
+$ nu(d)=f_d(nu(P_d)). $ <eq:satisfaction>
+
+Thus expressions such as $f_d(nu(P_d))$ always mean application of $f_d$ to the ordered tuple in @eq:premise-valuation; no separate function $d(cases())$ is implied.
 
 Local satisfaction uses equality in the declared value domain. The operational cutoff predicate is separate: it may decline to recognize an equality, but it may never claim sameness for unequal values. A quotient or approximate domain must therefore define its value domain and equality first; a heuristic hash or tolerance cannot silently change the semantics.
 
@@ -360,21 +387,30 @@ An observation requests the stable value of a logical state. Observation is an o
 
 A local definition may be too coarse to expose useful reuse, parallelism, placement, or repair. Expansion refines granularity without changing boundary meaning.
 
-#definition([Expansion], [If $Delta(d)=(P,f_d)$, an expansion replaces it by a finite pure acyclic DOC subgraph that reads the same boundary premises $P$, publishes to the same boundary state $d$, uses fresh internal identities, and yields $f_d$ for every typed boundary tuple.])
+#definition([Expansion], [If $Delta(d)=(P,f_d)$, an expansion replaces it by a finite pure acyclic DOC subgraph that reads the same boundary premises $P$, publishes to the same boundary state $d$, uses fresh internal identities, and yields $f_d$ for every typed boundary tuple.]) <def:expansion>
 
-#diagram(96pt, [
-  #dnode(15pt, 34pt, [opaque $f_d$], w: 96pt, h: 30pt, fill: warmfill, stroke: warm)
-  #dpanel(162pt, 8pt, 294pt, 76pt, [expanded DOC subgraph])
-  #dnode(177pt, 36pt, [$g_1$], w: 68pt)
-  #dnode(275pt, 36pt, [$g_2$], w: 68pt)
-  #dnode(373pt, 36pt, [$g_3$], w: 68pt)
-  #darrow(111pt, 49pt, 177pt, 49pt)
-  #darrow(245pt, 49pt, 275pt, 49pt)
-  #darrow(343pt, 49pt, 373pt, 49pt)
-  #dlabel(237pt, 70pt, [fresh internal states; same boundary result $d$], size: 7.7pt)
-], [Expansion changes internal visibility and cost, not stable observations at the original boundary.])
+#diagram(126pt, [
+  #dlabel(10pt, 2pt, [coarse definition], size: 7.8pt)
+  #dnode(24pt, 16pt, [$P$], w: 56pt, fill: greenfill, stroke: green)
+  #dnode(126pt, 16pt, [opaque $f_d$], w: 88pt, fill: warmfill, stroke: warm)
+  #dnode(260pt, 16pt, [$d$], w: 56pt, fill: bluefill)
+  #darrow(80pt, 30pt, 126pt, 30pt)
+  #darrow(214pt, 30pt, 260pt, 30pt)
 
-An implementation may fuse or batch an expanded region physically while retaining its logical boundaries. Expansion is therefore a semantic granularity choice, not an obligation to schedule every primitive separately.
+  #dlabel(10pt, 60pt, [boundary-equivalent expansion], size: 7.8pt)
+  #dnode(24pt, 74pt, [$P$], w: 56pt, fill: greenfill, stroke: green)
+  #dnode(116pt, 74pt, [$g_1$], w: 54pt)
+  #dnode(196pt, 74pt, [$g_2$], w: 54pt)
+  #dnode(276pt, 74pt, [$g_3$], w: 54pt)
+  #dnode(368pt, 74pt, [$d$], w: 56pt, fill: bluefill)
+  #darrow(80pt, 88pt, 116pt, 88pt)
+  #darrow(170pt, 88pt, 196pt, 88pt)
+  #darrow(250pt, 88pt, 276pt, 88pt)
+  #darrow(330pt, 88pt, 368pt, 88pt)
+  #dlabel(120pt, 108pt, [same boundary premises $P$ and conclusion $d$; equal for every typed boundary tuple], size: 7.3pt, fill: ink)
+], [Expansion replaces one coarse definition by a finite DOC subgraph with the same premises and boundary result; the two rows are alternatives, not connected computation stages.]) <fig:expansion>
+
+@fig:expansion illustrates this refinement. An implementation may fuse or batch an expanded region physically while retaining its logical boundaries. Expansion is therefore a semantic granularity choice, not an obligation to schedule every primitive separately.
 
 == Initial and later stabilization
 
@@ -416,22 +452,22 @@ b := 1
   #darrow(134pt, 90pt, 184pt, 90pt)
   #darrow(292pt, 90pt, 342pt, 90pt)
   #dlabel(338pt, 108pt, [cutoff: `doubled` is not activated], size: 7.6pt, fill: ink)
-], [Initial materialization and later repair use the same stabilization relation. Retained equality stops the later wave.])
+], [Initial materialization and later repair use the same stabilization relation. Retained equality stops the later wave.]) <fig:repair-example>
 
-The difference between initial and later stabilization is only what is already retained: initial evaluation begins with $bot$ at every derived state; a later epoch begins with stable values that may remain useful.
+@fig:repair-example shows the equality-cutoff case. The difference between initial and later stabilization is only what is already retained: initial evaluation begins with $bot$ at every derived state; a later epoch begins with stable values that may remain useful.
 
 == Finite active-set transition system
 
-The finite program and operational configuration are
+With the program $G$ fixed by @eq:program, the operational configuration is
 
-$ G=(S,Delta), #h(2em) Q=(nu,A), #h(2em) A subset.eq D. $
+$ Q=(nu,A), #h(2em) A subset.eq D. $ <eq:configuration>
 
 $nu$ persists across epochs. $A$ is transient and records *repair obligations*: derived states whose definitions may need reconsideration. Membership in $A$ does not assert that the retained value is already known to be unequal; an active state may reevaluate to the same value and stop propagation.
 
 A configuration $Q=(nu,A)$ is *repair-admissible* when every source is materialized and every inactive derived state is materialized and locally satisfied:
 
 $ (forall s in S_(upright("src")): nu(s) != bot) #h(1em) upright("and") #h(1em)
-  (forall d in D-A: nu(d) != bot #h(0.35em) upright("and") #h(0.35em) d upright(" is locally satisfied")). $
+  (forall d in D-A: nu(d) != bot #h(0.35em) upright("and") #h(0.35em) d upright(" is locally satisfied")). $ <eq:admissible>
 
 An active derived state may retain an old materialization or may be $bot$. A configuration is *quiescent* when $A=emptyset$; a repair-admissible quiescent configuration is exactly a stable valuation. Initialization, accepted source repair, compatible graph-version seeds, and reconstruction all enter the same transition relation through this invariant.
 
@@ -439,7 +475,7 @@ An active derived state may retain an old materialization or may be $bot$. A con
 
 Write $e prec d$ when derived state $e$ is a transitive premise of $d$. For an active set $A$, define the dependency-minimal frontier
 
-$ R(A)={d in A | exists.not e in A: e prec d}. $
+$ R(A)={d in A | exists.not e in A: e prec d}. $ <eq:ready-frontier>
 
 Every member of $R(A)$ has no active strict ancestor. In a repair-admissible configuration, this implies that all of its premises are materialized: a source is materialized by definition; an inactive derived premise is materialized and satisfied; and an active derived premise, or one below an active ancestor, would prevent readiness. Distinct frontier members cannot depend on one another and have distinct conclusions.
 
@@ -447,9 +483,9 @@ Every member of $R(A)$ has no active strict ancestor. In a repair-admissible con
 
 Let $I$ be a total pointwise-typed initial environment over $S_(upright("src"))$. Initialization constructs
 
-$ nu_0(s)=cases(I(s) & s in S_(upright("src")), bot & s in D), #h(1.2em) A_0=D. $
+$ nu_0(s)=cases(I(s) & s in S_(upright("src")), bot & s in D), #h(1.2em) A_0=D. $ <eq:initial-seed>
 
-Stabilization then performs ordinary first evaluation. The initialization configuration is repair-admissible because every derived state is active. More generally, $bot$ may occur only at an active derived state in any repair-admissible configuration.
+Here $nu_0$ names the seed valuation at the start of this stabilization episode; the subscript does not denote a different kind of valuation. Stabilization then performs ordinary first evaluation. The initialization configuration is repair-admissible because every derived state is active. More generally, $bot$ may occur only at an active derived state in any repair-admissible configuration.
 
 === Source update
 
@@ -457,48 +493,82 @@ Let $U_b$ be a finite pointwise-typed partial function whose domain is contained
 
 Given a repair-admissible configuration $(nu,A)$, define the assignments not proven equal by the source cutoff predicates:
 
-$ X={s in upright("dom")(U_b) | upright("same")_s #h(0.08em) (U_b(s),nu(s)) = upright("false")}. $
+$ X={s in upright("dom")(U_b) | upright("same")_s #h(0.08em) (U_b(s),nu(s)) = upright("false")}. $ <eq:changed-sources>
 
 The accepted source boundary step is
 
-$ nu_0=nu[s arrow.r.bar U_b(s) #h(0.25em) upright("for") #h(0.25em) s in X], $
+$ nu_0=nu[s arrow.r.bar U_b(s) #h(0.25em) upright("for") #h(0.25em) s in X], $ <eq:update-valuation>
 
-$ A_0=A union union_(s in X) upright("users")(s). $
+$ A_0=A union union_(s in X) upright("users")(s). $ <eq:update-active>
 
-The assignments in $X$ are installed atomically, and the direct users of those sources are added to any obligations already present. The step preserves repair-admissibility: an inactive direct user of a changed source becomes active, while every other inactive state remains locally satisfied until a changed active premise publishes. An empty batch, or a batch whose assignments are all proven equal, yields $X=emptyset$ and leaves $A$ unchanged. With a conservative always-false predicate, an exactly equal assignment may still start harmless repair. Stable-boundary epochs are the common case $A=emptyset$; after an exceptional frontier failure, a later serialized source batch may instead supersede the still-active obligations without discarding them.
+Equations @eq:update-valuation and @eq:update-active define the post-boundary seed $(nu_0,A_0)$ for the next stabilization episode. The subscript $0$ means "after the boundary event and before the first repair transition." The assignments in $X$ are installed atomically, and the direct users of those sources are added to any obligations already present. The step preserves repair-admissibility: an inactive direct user of a changed source becomes active, while every other inactive state remains locally satisfied until a changed active premise publishes. An empty batch, or a batch whose assignments are all proven equal, yields $X=emptyset$ and leaves $A$ unchanged. With a conservative always-false predicate, an exactly equal assignment may still start harmless repair. Stable-boundary epochs are the common case $A=emptyset$; after an exceptional frontier failure, a later serialized source batch may instead supersede the still-active obligations without discarding them.
 
 === One frontier-subset transition
 
 Choose any nonempty finite frontier selection
 
-$ emptyset != F subset.eq R(A). $
+$ emptyset != F subset.eq R(A). $ <eq:frontier-selection>
 
 For each $d in F$ with $Delta(d)=(P_d,f_d)$, evaluate privately from the same pre-transition valuation:
 
-$ v_d=f_d(nu(P_d)). $
+$ v_d=f_d(nu(P_d)). $ <eq:candidate>
 
 Let the propagating-conclusion set be
 
 $ C_F={d in F | nu(d)=bot} union
-  {d in F | nu(d) != bot #h(0.3em) upright("and") #h(0.3em) upright("same")_d #h(0.08em) (v_d,nu(d)) = upright("false")}. $
+  {d in F | nu(d) != bot #h(0.3em) upright("and") #h(0.3em) upright("same")_d #h(0.08em) (v_d,nu(d)) = upright("false")}. $ <eq:propagating-set>
 
 Publish every candidate in $C_F$ as one logical commit and define
 
-$ nu' = nu[d arrow.r.bar v_d #h(0.3em) upright("for") #h(0.3em) d in C_F], $
+$ nu' = nu[d arrow.r.bar v_d #h(0.3em) upright("for") #h(0.3em) d in C_F], $ <eq:publish>
 
-$ A' = (A-F) union union_(d in C_F) upright("users")(d). $
+$ A' = (A-F) union union_(d in C_F) upright("users")(d). $ <eq:next-active>
 
 Then
 
-$ (nu,A) arrow.r (nu',A'). $
+$ (nu,A) arrow.r (nu',A'). $ <eq:transition>
 
 This is the sole finite repair rule. A singleton $F$ gives sequential execution. A larger $F$ gives parallel evaluation. All candidates read the same settled pre-state; the complete selected frontier joins before the logical commit. A candidate proven equal to its retained value is removed from $A$ but publishes no replacement and activates no user. If the cutoff predicate conservatively returns false, republishing and downstream activation remain correct but may do more work. The C++20 witness uses the deterministic policy $F=R(A)$ at every step; choosing a smaller eligible subset is allowed by the model but is not required of that witness.
 
+=== Operational algorithm
+
+@alg:finite-stabilization gives a stepwise reading of the equations from @eq:changed-sources through @eq:transition. It is not a second semantics: each loop iteration is exactly one valid transition of @eq:transition, while initialization and a later source batch differ only in how they construct the repair-admissible seed.
+
+#figure(
+  block(width: 100%, inset: 8pt, fill: luma(247), stroke: 0.45pt + luma(205), radius: 3pt)[
+```text
+Input: fixed finite program G=(S, Delta) and a repair-admissible seed Q=(nu, A)
+
+1. Boundary step
+   - Initial run: install all source facts, set every derived state to absent,
+     and set A := D.
+   - Later run: validate the whole source batch, atomically install the
+     assignments not proven equal, and add their direct users to A.
+
+2. While A is nonempty
+   a. Compute R(A), the active states with no active strict ancestor.
+   b. Choose any nonempty F subset of R(A).
+   c. Evaluate every d in F privately from the same committed pre-valuation:
+        v_d := f_d(nu(P_d)).
+   d. After all selected evaluations complete, form C_F from candidates that
+      are absent or not proven equal to their retained conclusions.
+   e. Atomically publish the candidates in C_F.
+   f. Remove F from A and add users(d) for every d in C_F.
+
+3. When A is empty, expose the requested stable observation.
+```
+  ],
+  caption: [Finite DOC stabilization. The scheduler may choose any nonempty subset of the ready frontier; the executable witness chooses the complete frontier.],
+  kind: "algorithm",
+  supplement: [Algorithm],
+  numbering: "1",
+) <alg:finite-stabilization>
+
 #boundary([Failure before publication], [Typed `Result`, option, or error values are ordinary values when the local function remains total. A thrown host callback violates the finite theorem's totality premise. Defensively, if any candidate in $F$ throws before the barrier, the witness publishes none of that frontier and keeps every state in $F$ active. Accepted source facts remain committed. A realization may treat cancellation before publication the same way, but the witness exposes no cancellation API. Retry, rollback, and irreversible-action policy belong to the effect or recovery boundary rather than to pure stabilization.])
 
-= Central metatheory
+= Central metatheory <sec:metatheory>
 
-#lemma([Frontier materialization and preservation], [In a repair-admissible configuration, every ready definition has materialized premises. An accepted source boundary step and every valid frontier-subset transition preserve repair-admissibility.])
+#lemma([Frontier materialization and preservation], [In a repair-admissible configuration, every ready definition has materialized premises. An accepted source boundary step and every valid frontier-subset transition preserve repair-admissibility.]) <lem:preservation>
 
 #proof([
 Let $Q=(nu,A)$ be repair-admissible. If $d in R(A)$ and a premise $p$ is a source, $p$ is materialized by admissibility. If $p$ is derived and active, then $p prec d$, contradicting readiness; if it is inactive, admissibility makes it materialized and locally satisfied. Thus every candidate in a valid selection is defined.
@@ -508,7 +578,7 @@ For a source batch, consider any derived state left inactive after the batch. It
 For a frontier transition, let $x$ be inactive in $A'$. If $x in F$, all of its premises are outside $F$ and are unchanged by the commit. The candidate $v_x$ therefore satisfies its definition; if $x in.not C_F$, cutoff soundness gives $v_x=nu(x)$, so the retained value is the same satisfying value. If $x in.not F$, then $x$ was already inactive. Any selected premise that changed would place $x$ in the propagated user union, contrary to $x in.not A'$. Hence its conclusion and premises are unchanged and its prior satisfaction is preserved. Materialization follows in the same cases: selected unmaterialized conclusions are published, selected retained conclusions were already materialized, and previously inactive conclusions remain materialized.
 ])
 
-#lemma([At-most-once selection and finite progress], [Fix one repair episode, meaning a repair-admissible seed followed only by frontier-subset transitions and no intervening accepted source batch. Every derived definition is selected at most once. Consequently every valid transition sequence in that episode is finite, and every maximal sequence ends quiescent.])
+#lemma([At-most-once selection and finite progress], [Fix one repair episode, meaning a repair-admissible seed followed only by frontier-subset transitions and no intervening accepted source batch. Every derived definition is selected at most once. Consequently every valid transition sequence in that episode is finite, and every maximal sequence ends quiescent.]) <lem:finite-progress>
 
 #proof([
 When $d$ is selected, it has no active strict ancestor. Suppose some strict ancestor of $d$ later became active, and choose the first such activation. Activation can arise only from publication by one of that ancestor's direct premises. That publishing premise is itself a strict ancestor of $d$ and must have been active and selected earlier, contradicting the choice of the first later ancestor activation. Sources do not change inside the fixed episode. Thus no strict ancestor of $d$ can publish after $d$ is selected, its premises cannot later change, and $d$ cannot be reactivated.
@@ -516,34 +586,34 @@ When $d$ is selected, it has no active strict ancestor. Suppose some strict ance
 At most $|D|$ definitions are therefore selected, while each transition selects a nonempty set, so no valid sequence is infinite. If a finite maximal sequence ended with $A != emptyset$, acyclicity of the finite dependency order would give a minimal member of $A$, hence a nonempty ready frontier and another valid transition. Therefore a maximal sequence ends with $A=emptyset$.
 ])
 
-#lemma([Canonical stable valuation], [For fixed current source values, there is exactly one stable valuation, namely complete topological reevaluation of every derived definition.])
+#lemma([Canonical stable valuation], [For fixed current source values, there is exactly one stable valuation, namely complete topological reevaluation of every derived definition.]) <lem:canonical>
 
 #proof([
 Choose a topological order of $D$. Keep each current source value and define $mu(d)=f_d(mu(P_d))$ in that order. Totality and typing make $mu$ exist. Any stable valuation has the same source values. Inductively, when all premises of $d$ agree with $mu$, local satisfaction and determinism force its conclusion to equal $mu(d)$. Thus every stable valuation equals $mu$, and $mu$ is exactly complete reevaluation.
 ])
 
-#theorem([Finite stabilization], [For every well-formed finite acyclic DOC program, begin from any repair-admissible configuration and hold sources fixed during the repair episode. Every valid frontier-subset transition sequence is finite. Every maximal sequence ends in the unique stable valuation produced by complete topological reevaluation. The result is independent of the eligible selections and their valid order, and sound exact cutoff does not change that result.])
+#theorem([Finite stabilization], [For every well-formed finite acyclic DOC program, begin from any repair-admissible configuration and hold sources fixed during the repair episode. Every valid frontier-subset transition sequence is finite. Every maximal sequence ends in the unique stable valuation produced by complete topological reevaluation. The result is independent of the eligible selections and their valid order, and sound exact cutoff does not change that result.]) <thm:finite-stabilization>
 
 #proof([
-The preservation lemma keeps every reached configuration repair-admissible. The finite-progress lemma makes every valid sequence finite and every maximal sequence quiescent. Quiescence together with repair-admissibility makes every derived state materialized and locally satisfied, so the terminal valuation is stable. The canonical-valuation lemma identifies that terminal valuation uniquely with complete reevaluation. Hence every valid maximal schedule has the same result.
+@lem:preservation keeps every reached configuration repair-admissible. @lem:finite-progress makes every valid sequence finite and every maximal sequence quiescent. Quiescence together with repair-admissibility makes every derived state materialized and locally satisfied, so the terminal valuation is stable by @eq:admissible. @lem:canonical then identifies that terminal valuation uniquely with complete reevaluation. Hence every valid maximal schedule has the same result.
 
-For exact cutoff, if $upright("same")_d(v_d,nu(d))$ is true, soundness gives $v_d=nu(d)$. Retaining the old materialization is therefore observationally identical to publishing the candidate. An inactive direct user was satisfied before the transition and sees no changed premise, so it remains satisfied; an already active user remains active. Omitting activation through that equal conclusion therefore loses no repair obligation. Conservative false negatives may activate additional users, but preservation and uniqueness still force the same terminal valuation.
+For exact cutoff, if $upright("same")_d(v_d,nu(d))$ is true, @eq:cutoff-soundness gives $v_d=nu(d)$. Retaining the old materialization is therefore observationally identical to publishing the candidate. An inactive direct user was satisfied before the transition and sees no changed premise, so it remains satisfied; an already active user remains active. Omitting activation through that equal conclusion therefore loses no repair obligation. Conservative false negatives may activate additional users, but preservation and uniqueness still force the same terminal valuation.
 ])
 
-#corollary([Initial/later unity], [First materialization and later reactive repair are the same stabilization relation with different retained valuations.])
+#corollary([Initial/later unity], [First materialization and later reactive repair are the same stabilization relation with different retained valuations.]) <cor:initial-later>
 
-#corollary([Semantic caching and work bound], [At a stable boundary, every retained derived value is the unique correct value for its current premises. During one fixed repair episode each definition evaluates at most once. An accepted later source batch starts a new episode and unions its direct users with obligations retained after any exceptional failure.])
+#corollary([Semantic caching and work bound], [At a stable boundary, every retained derived value is the unique correct value for its current premises. During one fixed repair episode each definition evaluates at most once. An accepted later source batch starts a new episode and unions its direct users with obligations retained after any exceptional failure.]) <cor:work-bound>
 
-#corollary([Independent ready selections commute], [Let $F_1$ and $F_2$ be disjoint subsets of the same ready frontier. No selected conclusion is a premise of another selected conclusion, all candidates read the same settled values, writes target distinct states, and propagated users combine by set union. Evaluating and committing $F_1$ then $F_2$, $F_2$ then $F_1$, or $F_1 union F_2$ therefore yields the same valuation and active set.])
+#corollary([Independent ready selections commute], [Let $F_1$ and $F_2$ be disjoint subsets of the same ready frontier. No selected conclusion is a premise of another selected conclusion, all candidates read the same settled values, writes target distinct states, and propagated users combine by set union. Evaluating and committing $F_1$ then $F_2$, $F_2$ then $F_1$, or $F_1 union F_2$ therefore yields the same valuation and active set.]) <cor:commute>
 
-#corollary([Source-update locality], [For a source batch applied at a stable boundary, let $upright("Reach")^*(X)$ be the reflexive-transitive user closure containing the changed sources and every state reachable from them. Initial activation enters only direct users of $X$, and every later activation follows one user edge. No state outside that closure is selected or modified, so it retains its value.])
+#corollary([Source-update locality], [For a source batch applied at a stable boundary, let $upright("Reach")^*(X)$ be the reflexive-transitive user closure containing the changed sources and every state reachable from them. Initial activation enters only direct users of $X$, and every later activation follows one user edge. No state outside that closure is selected or modified, so it retains its value.]) <cor:locality>
 
-#corollary([Conservative cutoff], [Any cutoff predicate satisfying only the stated one-way soundness condition is correct. Returning false for equal values can add work inside the reachable region but cannot change the unique stable valuation.])
+#corollary([Conservative cutoff], [Any cutoff predicate satisfying only the stated one-way soundness condition is correct. Returning false for equal values can add work inside the reachable region but cannot change the unique stable valuation.]) <cor:cutoff>
 
-#theorem([Expansion preservation], [Replacing one definition by a finite acyclic boundary-equivalent expansion preserves every stable observation over the original states.])
+#theorem([Expansion preservation], [Replacing one definition by a finite acyclic boundary-equivalent expansion preserves every stable observation over the original states.]) <thm:expansion>
 
 #proof([
-Fix the source values and compare complete reevaluation of the original and expanded graphs. Every original state upstream of the replaced definition is unchanged. The fresh internal expansion has a unique stable valuation by finite stabilization, and boundary equivalence makes its published value at $d$ equal to $f_d$ on the same boundary premises. A topological induction over the remaining original descendants then gives the same value at every original state. Schedule independence extends the argument from complete reevaluation to every valid stabilization schedule.
+Fix the source values and compare complete reevaluation of the original and expanded graphs. Every original state upstream of the replaced definition is unchanged. The fresh internal expansion has a unique stable valuation by @thm:finite-stabilization, and boundary equivalence makes its published value at $d$ equal to $f_d$ on the same boundary premises. A topological induction over the remaining original descendants then gives the same value at every original state. Schedule independence from @thm:finite-stabilization extends the argument from complete reevaluation to every valid stabilization schedule.
 ])
 
 == Reactivity, reuse, and parallelism
@@ -577,6 +647,7 @@ The benefit depends on the workload. Dense change may activate nearly the whole 
 Parallelism has the same cause as reactivity. The active region identifies work that may be necessary; its dependency-minimal frontier identifies independent next work.
 
 #diagram(126pt, [
+  #dlabel(164pt, 48pt, [same ready frontier $F subset.eq R(A)$], size: 7.9pt, fill: ink)
   #dnode(28pt, 8pt, [source $a$], w: 108pt, fill: greenfill, stroke: green)
   #dnode(28pt, 50pt, [left branch], w: 108pt, fill: warmfill, stroke: warm)
   #dnode(28pt, 92pt, [result $u$], w: 108pt, fill: bluefill)
@@ -587,11 +658,9 @@ Parallelism has the same cause as reactivity. The active region identifies work 
   #darrow(82pt, 78pt, 82pt, 92pt)
   #darrow(384pt, 36pt, 384pt, 50pt)
   #darrow(384pt, 78pt, 384pt, 92pt)
-  #dline(136pt, 64pt, 330pt, 64pt, stroke: 0.7pt + accent)
-  #dnode(174pt, 50pt, [same ready frontier], w: 118pt, h: 28pt, fill: white, stroke: accent, size: 8pt)
-], [Independent active branches form one ready frontier. The program contains no thread count or concurrency syntax.])
+], [Independent active branches can belong to one ready frontier. No horizontal dependency edge connects the branches, and the program contains no thread count or concurrency syntax.]) <fig:frontier-parallelism>
 
-No frontier member transitively depends on another frontier member: if it did, one member would require an active unsettled conclusion as a premise and would not be ready. Distinct frontier members also publish distinct logical conclusions because $Delta$ is a partial map keyed by conclusion state.
+@fig:frontier-parallelism shows two active branches in one ready frontier. No frontier member transitively depends on another frontier member: if it did, one member would require an active unsettled conclusion as a premise and would not be ready. Distinct frontier members also publish distinct logical conclusions because $Delta$ is a partial map keyed by conclusion state.
 
 A DOC program therefore does not need to spell out `spawn`, `wait`, locks, queues, or a worker count merely to reveal independence. A realization may process a frontier sequentially, on several granted CPU cores, on accelerators, or across placed resources. The realization still needs synchronization: all selected candidates read one settled pre-state, private evaluation completes before the frontier publication barrier, and failed candidates must not leak partial publication. These mechanisms implement the semantic rule; they are not additional concurrency instructions in application code.
 
@@ -599,16 +668,19 @@ A DOC program therefore does not need to spell out `spawn`, `wait`, locks, queue
 
 == Reduction optimality and temporal reuse
 
-Avoiding redundant work inside one isolated calculation and reusing results across later change are different objectives. They are compatible rather than mutually exclusive.
+Avoiding redundant work inside one isolated calculation and reusing results across later change are different objectives. They are compatible rather than mutually exclusive; @tab:optimization-boundaries makes the two optimization boundaries explicit.
 
-#table(
+#figure(
+  table(
   columns: (1.22fr, 1.72fr, 1.72fr),
   table.header([*Question*], [*Local reduction optimization*], [*DOC temporal reuse*]),
   [Primary waste], [Repeated work within one execution], [Repeating maintained work after later partial change],
   [Boundary], [Inside a local definition or term], [Across persistent states and source-update epochs],
   [Best unit], [Expression, kernel, algorithm], [Affected dependency region and ready frontier],
   [Compatibility], [May optimize any $f_d$], [May retain or expand that optimized $f_d$ as one node],
-)
+),
+  caption: [Different optimization boundaries: within one local transformation versus across persistent repair epochs.],
+) <tab:optimization-boundaries>
 
 Persistent editors, compilers, servers, simulations, dashboards, and workflows repeatedly receive partial change. DOC therefore treats temporal reuse as foundational while leaving local kernels free to use reduction-optimal, vectorized, incrementalized, or hardware-specific techniques.
 
@@ -636,15 +708,15 @@ $ q_(t+1)=T(q_t). $
 
 The dependency points from an earlier epoch to a later epoch, never from a state back to itself inside the same epoch. Every materialized finite prefix therefore remains acyclic.
 
-#definition([Versioned recurrence], [A recurrent DOC program is a finite acyclic graph template indexed by logical epochs, together with an initial epoch, a demand rule, and a typed partial carry function $K:S_(upright("src"))^E arrow.r S^E$. The meaning $K(s)=x$ is that source $s$ of epoch $t+1$ receives the value of state $x$ from epoch $t$. Thus each next-epoch source has at most one carry authority; its carried value must belong to the source domain. Every uncarried source receives an explicit epoch-local fact or declared fixed default. Demanding epoch $n$ instantiates and stabilizes only the finite prefix through $n$. An observation that continues demanding later epochs without reaching its stopping condition diverges.])
+#definition([Versioned recurrence], [A recurrent DOC program is a finite acyclic graph template indexed by logical epochs, together with an initial epoch, a demand rule, and a typed partial carry function $K:S_(upright("src"))^E arrow.r S^E$. The meaning $K(s)=x$ is that source $s$ of epoch $t+1$ receives the value of state $x$ from epoch $t$. Thus each next-epoch source has at most one carry authority; its carried value must belong to the source domain. Every uncarried source receives an explicit epoch-local fact or declared fixed default. Demanding epoch $n$ instantiates and stabilizes only the finite prefix through $n$. An observation that continues demanding later epochs without reaching its stopping condition diverges.]) <def:recurrence>
 
-#theorem([Demand-restriction agreement], [Let $T subset.eq S$ be a finite requested set and let $H_T$ be the ancestor-closed induced subprogram containing $T$, with every incoming boundary source materialized to the same fact as in the full program. Stabilizing $H_T$ yields exactly the restriction to $H_T$ of the unique stable valuation obtained by stabilizing the full program from those source facts.])
+#theorem([Demand-restriction agreement], [Let $T subset.eq S$ be a finite requested set and let $H_T$ be the ancestor-closed induced subprogram containing $T$, with every incoming boundary source materialized to the same fact as in the full program. Stabilizing $H_T$ yields exactly the restriction to $H_T$ of the unique stable valuation obtained by stabilizing the full program from those source facts.]) <thm:demand>
 
 #proof([
 Let $mu$ be the unique full-program stable valuation and let $mu_T$ be the unique stable valuation of $H_T$. Ancestor closure ensures that every premise of each retained derived definition is either retained in $H_T$ or supplied as a boundary source with the same value as in $mu$. Order the retained derived states topologically. The source and boundary cases agree by construction. If every premise of a retained derived state agrees with $mu$, determinism forces its conclusion to agree as well. Induction gives $mu_T=mu|_(H_T)$, including every requested state. Finite stabilization supplies existence and schedule independence on both graphs; demand restriction changes only the induced subprogram, not the transition rule.
 ])
 
-#theorem([Finite support of requested recurrence prefixes], [For a finite epoch template, total local definitions, a single typed carry authority for each carried next-epoch source, and explicit facts or fixed defaults for every uncarried source, every requested finite prefix $0, dots, n$ requires only finitely many template instances and finitely many finite-kernel transitions. If an absorbing halt state is reached, requesting later epochs may reuse that same terminal meaning without additional machine progress; alternatively demand may stop at halt.])
+#theorem([Finite support of requested recurrence prefixes], [For a finite epoch template, total local definitions, a single typed carry authority for each carried next-epoch source, and explicit facts or fixed defaults for every uncarried source, every requested finite prefix $0, dots, n$ requires only finitely many template instances and finitely many finite-kernel transitions. If an absorbing halt state is reached, requesting later epochs may reuse that same terminal meaning without additional machine progress; alternatively demand may stop at halt.]) <thm:recurrence-prefix>
 
 #proof([
 Induct on the requested epoch. Epoch zero has a finite source environment and finite acyclic graph, so finite stabilization terminates. Once epoch $t$ is stable, each carried source of epoch $t+1$ receives exactly one typed value and every other source receives its declared fact or default; the next finite instance is therefore repair-admissible after initialization and terminates. A finite prefix is a finite sum of finite episodes. Duplicate carry authority or an unprovided uncarried source fails construction rather than introducing nondeterminism.
@@ -670,23 +742,25 @@ The finite core's single derived producer is an authority normal form, not a cla
 
 === Universality of the recurrence extension
 
-A deterministic two-counter machine has a finite instruction table, a program counter, and two unbounded natural-number registers. Encode a configuration as
+A deterministic two-counter machine has a finite instruction table, a program counter, and two unbounded natural-number registers; this classical universality basis is due to Minsky @minsky1967. Encode a configuration as
 
 $ q_t=(upright("pc")_t,r_(1,t),r_(2,t)). $
 
-One finite local `Step` definition performs the instruction selected by the program counter and yields $q_(t+1)$. Increment, zero test, conditional decrement, and program-counter update simulate one machine transition.
+One finite local `Step` definition performs the instruction selected by the program counter and yields $q_(t+1)$. The forward-only construction is shown in @fig:recurrence. Increment, zero test, conditional decrement, and program-counter update simulate one machine transition.
 
 #diagram(66pt, [
-  #dnode(18pt, 18pt, [$q_t$], w: 86pt, fill: greenfill, stroke: green)
-  #dnode(132pt, 18pt, [`Step`], w: 86pt, fill: warmfill, stroke: warm)
-  #dnode(246pt, 18pt, [$q_(t+1)$], w: 92pt, fill: bluefill)
-  #dnode(366pt, 18pt, [$q_(t+2)$], w: 92pt, fill: bluefill)
-  #darrow(104pt, 32pt, 132pt, 32pt)
-  #darrow(218pt, 32pt, 246pt, 32pt)
-  #darrow(338pt, 32pt, 366pt, 32pt)
-], [Versioned recurrence carries state forward through acyclic epochs rather than introducing a same-epoch dependency cycle.])
+  #dnode(10pt, 18pt, [$q_t$], w: 60pt, fill: greenfill, stroke: green)
+  #dnode(90pt, 18pt, [`Step` $t$], w: 70pt, fill: warmfill, stroke: warm, size: 7.9pt)
+  #dnode(180pt, 18pt, [$q_(t+1)$], w: 70pt, fill: bluefill)
+  #dnode(270pt, 18pt, [`Step` $t+1$], w: 70pt, fill: warmfill, stroke: warm, size: 7.6pt)
+  #dnode(360pt, 18pt, [$q_(t+2)$], w: 70pt, fill: bluefill)
+  #darrow(70pt, 32pt, 90pt, 32pt)
+  #darrow(160pt, 32pt, 180pt, 32pt)
+  #darrow(250pt, 32pt, 270pt, 32pt)
+  #darrow(340pt, 32pt, 360pt, 32pt)
+], [Versioned recurrence applies the finite `Step` transformation separately at each forward epoch, preserving acyclicity within every epoch.]) <fig:recurrence>
 
-#theorem([Universality of versioned recurrence], [DOC with demand-driven unbounded epoch instantiation, unbounded natural values, finite case analysis, increment, zero test, and conditional decrement can simulate every deterministic two-counter machine step for step.])
+#theorem([Universality of versioned recurrence], [DOC with demand-driven unbounded epoch instantiation, unbounded natural values, finite case analysis, increment, zero test, and conditional decrement can simulate every deterministic two-counter machine step for step.]) <thm:universality>
 
 Map each machine configuration to one epoch state and the finite instruction table to finite case analysis inside `Step`. Define the halt configuration as absorbing, or stop demand before requesting its successor. Induction on $t$ then shows that epoch $t$ denotes the machine configuration after $t$ steps. A halting machine yields a finite observed prefix; a non-halting machine demands an unbounded sequence and diverges.
 
@@ -700,16 +774,22 @@ $ G_0 arrow.r G_1 arrow.r G_2 arrow.r dots $
 
 be an ordered sequence of immutable, individually well-formed graph versions.
 
-#definition([Graph-version commit], [A commit from $G_k$ to candidate $G_(k+1)$ first stabilizes the current version and validates the candidate before reading any candidate-derived index. A current source fact crosses by stable logical name only when the candidate state remains a source with the same declared value domain and semantic equality. A retained derived value requires the same stable name, the same derived authority role, the same declared value domain and semantic equality, an explicit equivalence-bearing semantic key, identical ordered premise identities, and every ordered premise to be carried or retained compatibly and remain unaffected. If a state domain changes, that state is affected; migration is represented by an explicit candidate transformation rather than implicit value reuse. New states and every source/derived authority-role change are structurally affected. The private candidate seed must be repair-admissible; its affected region is then stabilized by the ordinary finite rule. Numeric runtime state identifiers are local to one immutable version, so cross-version update and observation APIs resolve stable names. The complete candidate graph and valuation replace the prior version atomically, advancing a runtime-scoped graph-generation token.])
+#definition([Graph-version commit], [A commit from $G_k$ to candidate $G_(k+1)$ first stabilizes the current version and validates the candidate before reading any candidate-derived index. A current source fact crosses by stable logical name only when the candidate state remains a source with the same declared value domain and semantic equality. A retained derived value requires the same stable name, the same derived authority role, the same declared value domain and semantic equality, an explicit equivalence-bearing semantic key, identical ordered premise identities, and every ordered premise to be carried or retained compatibly and remain unaffected. If a state domain changes, that state is affected; migration is represented by an explicit candidate transformation rather than implicit value reuse. New states and every source/derived authority-role change are structurally affected. The private candidate seed must be repair-admissible; its affected region is then stabilized by the ordinary finite rule. Numeric runtime state identifiers are local to one immutable version, so cross-version update and observation APIs resolve stable names. The complete candidate graph and valuation replace the prior version atomically, advancing a runtime-scoped graph-generation token.]) <def:graph-commit>
 
 An in-flight result captured under graph generation $k$ may publish only while that generation remains current. Retirement removes the old graph's logical roots after active observations release them; ordinary reachability then governs physical reclamation. A newly introduced source uses its declared initial fact and marks its user region affected. A stable name that changes between source and derived authority is likewise affected rather than reused. A newly introduced or structurally changed derived state begins as a repair obligation.
 
-#theorem([Conditional graph-version commit agreement], [Under the stated compatibility contract, every successful commit to $G_(k+1)$ has the same stable values as constructing $G_(k+1)$ from the carried current source facts and evaluating it completely from scratch. Retained compatible values change cost, not meaning.])
+=== Operational semantic-key example
+
+Consider a derived state with stable name `tax`, one premise `income`, and declared integer value domain. In graph version $G_k$, the builder installs a definition equivalent to `round(income * 20 / 100)` and assigns semantic key `tax-rule-v3`. A later graph version may replace its source code with a refactored implementation while retaining `tax-rule-v3` *only if the builder's compatibility process certifies the same mapping over the declared domain and the ordered premise identities remain unchanged*. In that case the retained `tax` value may seed the candidate graph.
+
+If the policy changes to 22%, the builder assigns a different key such as `tax-rule-v4`; `tax` is then affected and its dependent region is repaired before commit. If the builder cannot establish compatibility—for example because a host function changed and no trusted equivalence certificate is available—the safe action is the same: treat the definition as changed and do not reuse its derived value. DOC therefore does not solve arbitrary function equivalence. The semantic key is an externally justified certificate identifier whose practical burden belongs to the compiler, build description, or application that creates graph versions.
+
+#theorem([Conditional graph-version commit agreement], [Under the stated compatibility contract, every successful commit to $G_(k+1)$ has the same stable values as constructing $G_(k+1)$ from the carried current source facts and evaluating it completely from scratch. Retained compatible values change cost, not meaning.]) <thm:graph-commit>
 
 #proof([
 Let $mu^*$ be complete from-scratch evaluation of $G_(k+1)$ from the carried candidate source facts. Same-role compatible sources have exactly those values in the private candidate seed. Consider an inactive retained derived state in candidate topological order. The compatibility contract permits it to remain inactive only when its authority role, declared domain and equality, equivalence-bearing semantic key, ordered premise identities, and every premise are compatible and unaffected. Its source premises therefore equal $mu^*$, and its earlier retained derived premises equal $mu^*$ by induction. Boundary equivalence of the retained definition then makes its retained conclusion equal $mu^*$ as well. Hence every inactive candidate state is already materialized and locally satisfied; every state not justified by this induction is active. The private seed is repair-admissible.
 
-Finite stabilization on the candidate graph now terminates at its unique stable valuation, which the canonical-valuation lemma identifies with $mu^*$. Atomic generation commit exposes only that stable candidate, and generation rejection prevents an older in-flight result from changing it. Retained compatible values therefore reduce repair work without changing from-scratch meaning.
+@thm:finite-stabilization on the candidate graph now terminates at its unique stable valuation, which @lem:canonical identifies with $mu^*$. Atomic generation commit exposes only that stable candidate, and generation rejection prevents an older in-flight result from changing it. Retained compatible values therefore reduce repair work without changing from-scratch meaning.
 ])
 
 #boundary([Topology identity boundary], [The runtime does not guess whether two arbitrary functions are semantically equivalent. Stable names and semantic keys are explicit compiler or builder contracts. Atomic graph replacement is implemented; distributed agreement on which graph version is authoritative remains a replica and partition policy.])
@@ -728,9 +808,9 @@ A conforming realization evaluates candidates privately and publishes complete i
 
 === Logical availability and physical residency
 
-#definition([Logical availability], [A logical value is available while the program's current state, a permitted observation, retained recurrence policy, active work, or an admitted external root still entitles it to be observed or consumed. A realization preserves that availability by retaining either a usable complete materialization or sufficient authoritative information to reconstruct an observationally equivalent complete value before use.])
+#definition([Logical availability], [A logical value is available while the program's current state, a permitted observation, retained recurrence policy, active work, or an admitted external root still entitles it to be observed or consumed. A realization preserves that availability by retaining either a usable complete materialization or sufficient authoritative information to reconstruct an observationally equivalent complete value before use.]) <def:availability>
 
-A logically available value need not remain resident in its current physical form. A realization may evict, spill, compress, deduplicate, fuse, or discard a reconstructible derived materialization. It may retain current sources, a checkpoint, or another authoritative representation from which the same value can be recovered. Once a value has been pinned by an active observation, evaluation, publication, or transport, that complete physical object remains protected until the use finishes even if its state slot is concurrently evicted or replaced.
+@fig:logical-availability distinguishes residency, reconstruction, and reclamation. A logically available value need not remain resident in its current physical form. A realization may evict, spill, compress, deduplicate, fuse, or discard a reconstructible derived materialization. It may retain current sources, a checkpoint, or another authoritative representation from which the same value can be recovered. Once a value has been pinned by an active observation, evaluation, publication, or transport, that complete physical object remains protected until the use finishes even if its state slot is concurrently evicted or replaced.
 
 #diagram(132pt, [
   #dnode(12pt, 8pt, [logical value available], w: 124pt, fill: greenfill, stroke: green, size: 7.8pt)
@@ -748,7 +828,7 @@ A logically available value need not remain resident in its current physical for
   #dnode(338pt, 94pt, [automatic reclaim], w: 116pt, fill: greenfill, stroke: green)
   #darrow(136pt, 108pt, 176pt, 108pt)
   #darrow(296pt, 108pt, 338pt, 108pt)
-], [The model determines logical availability. The realization chooses residency, reconstruction, and reclamation while protected uses keep complete physical objects alive.])
+], [The model determines logical availability. The realization chooses residency, reconstruction, and reclamation while protected uses keep complete physical objects alive.]) <fig:logical-availability>
 
 === Safe-realization contract
 
@@ -771,7 +851,7 @@ Dependency supplies useful reachability and reconstruction structure, but it is 
 
 == Placement over arbitrary resources
 
-The logical program does not contain today's machines. For placement, define role-tagged physical entities
+@fig:placement shows the separation between stable logical roles and movable physical resources. The logical program does not contain today's machines. For placement, define role-tagged physical entities
 
 $ L_G={upright("value")(s) | s in S} union {upright("eval")(d) | d in D}. $
 
@@ -802,7 +882,7 @@ A role may be temporarily unassigned during join, reassignment, drain, or fail-s
   #darrow(332pt, 138pt, 348pt, 138pt)
   #dlabel(201pt, 62pt, [$pi_t$], size: 8.4pt, fill: ink)
   #darrow(196pt, 78pt, 222pt, 78pt)
-], [Joining, reassignment, graceful drain, and bounded fail-stop recovery change physical placement, not logical identities or dependency meaning.])
+], [Joining, reassignment, graceful drain, and bounded fail-stop recovery change physical placement, not logical identities or dependency meaning.]) <fig:placement>
 
 === Dependency transport and message admission
 
@@ -826,19 +906,19 @@ Publication is accepted only while the token remains admissible. Reassignment, d
 
 === Bounded elastic transparency
 
-#definition([Placed-epoch conformance], [A physical execution of one finite logical epoch is conforming when: (1) transport copies immutable materializations tagged with source epoch, role, and placement generation but does not alter their logical values; (2) every non-discarded derived publication has a conclusion $d$ that is currently active and belongs to $R(A)$, equals $f_d$ applied to the committed logical pre-valuation of that source epoch, and carries a currently admissible role token; (3) join, reassignment, and graceful drain change only $pi_t$, $gamma_t$, and physical copies, never $G$, source facts, or logical definition authority; and (4) after finitely many placement changes, every required transport and active logical role eventually completes.])
+#definition([Placed-epoch conformance], [A physical execution of one finite logical epoch is conforming when: (1) transport copies immutable materializations tagged with source epoch, role, and placement generation but does not alter their logical values; (2) every non-discarded derived publication has a conclusion $d$ that is currently active and belongs to $R(A)$, equals $f_d$ applied to the committed logical pre-valuation of that source epoch, and carries a currently admissible role token; (3) join, reassignment, and graceful drain change only $pi_t$, $gamma_t$, and physical copies, never $G$, source facts, or logical definition authority; and (4) after finitely many placement changes, every required transport and active logical role eventually completes.]) <def:placed-conformance>
 
-#theorem([Failure-free join/drain transparency], [Every conforming placed execution projects, after duplicate and stale physical events are discarded, to a valid sequence of finite frontier-subset transitions. Consequently, after source and placement quiescence, its observable values equal local stabilization.])
+#theorem([Failure-free join/drain transparency], [Every conforming placed execution projects, after duplicate and stale physical events are discarded, to a valid sequence of finite frontier-subset transitions. Consequently, after source and placement quiescence, its observable values equal local stabilization.]) <thm:join-drain>
 
 A currently admitted publication is either one legal singleton frontier transition or part of a commuting frontier batch: its conclusion is active and ready, it was evaluated from the committed logical pre-valuation of that source epoch, it publishes one distinct logical conclusion, and it cannot be admitted from obsolete authority. Join and drain change where later work occurs, not the logical transition being represented.
 
 === Bounded fail-stop reconstruction
 
-#definition([Recoverable placed profile], [Source facts acknowledged as recoverable are durably committed by one declared authority. Pure derived materializations are reconstructible caches. After a finite fail-stop loss, the realization invalidates every lost role generation, assigns the roles to surviving or newly joined resources, restores authoritative source facts, marks every lost derived state and its transitive user region as repair obligations, and stabilizes again.])
+#definition([Recoverable placed profile], [Source facts acknowledged as recoverable are durably committed by one declared authority. Pure derived materializations are reconstructible caches. After a finite fail-stop loss, the realization invalidates every lost role generation, assigns the roles to surviving or newly joined resources, restores authoritative source facts, marks every lost derived state and its transitive user region as repair obligations, and stabilizes again.]) <def:recoverable-placement>
 
-#theorem([Finite fail-stop reconstruction], [For a finite acyclic pure DOC graph, if authoritative source facts survive and remain fixed during the final recovery interval, at least one valid execution resource eventually remains or joins, generation invalidation rejects late failed work, transport eventually succeeds, and no further failure occurs during that interval, reconstruction reaches the same observable stable valuation as local evaluation from those source facts.])
+#theorem([Finite fail-stop reconstruction], [For a finite acyclic pure DOC graph, if authoritative source facts survive and remain fixed during the final recovery interval, at least one valid execution resource eventually remains or joins, generation invalidation rejects late failed work, transport eventually succeeds, and no further failure occurs during that interval, reconstruction reaches the same observable stable valuation as local evaluation from those source facts.]) <thm:fail-stop>
 
-The replacement execution begins from the same sources as complete reevaluation. Every lost derived state and its transitive user region is active, so the recovery seed is repair-admissible even when a lost premise was previously used by a retained descendant. The finite stabilization theorem gives termination and unique values; placement generations prevent obsolete candidates from replacing them. Checkpoints of expensive derived state may reduce work but are not required for correctness.
+The replacement execution begins from the same sources as complete reevaluation. Every lost derived state and its transitive user region is active, so the recovery seed is repair-admissible even when a lost premise was previously used by a retained descendant. @thm:finite-stabilization gives termination and unique values; placement generations prevent obsolete candidates from replacing them. Checkpoints of expensive derived state may reduce work but are not required for correctness.
 
 The executable profiles check both complete loss of volatile derived materialization followed by reconstruction from authoritative sources and failed-resource removal followed by role invalidation, reassignment, and affected-region repair.
 
@@ -912,9 +992,11 @@ Base records and parameters are source states; filtered sets, joins, aggregates,
 
 Evidence items, extracted facts, classifications, plans, and reports become logical states. New evidence repairs only conclusions that depend on it. Expensive independent analyses form ready frontiers and may be placed over available resources. Human approval, audit retention, external publication, and nondeterministic tool access are explicit observation, retention, or effect boundaries rather than hidden consequences of dependency.
 
-#principle([Unifying question], [The domains differ, but each asks the same structural question: what conclusion is justified by what current premises, and what must be repaired when those premises change?])
+Across these examples, the common operation is explicit: retain conclusions together with their declared premises, then repair only the affected dependency region after a committed source change.
 
-= Runtime conformance
+= Experimental validation and reproducibility <sec:validation>
+
+== Runtime conformance
 
 The executable witness is subordinate to the model. Its normative direction is
 
@@ -928,15 +1010,18 @@ not the reverse.
 
 $ upright("Obs")_P(eta)=upright("Obs")_(upright("DOC"))(G_0,Q_0,eta). $
 
-$eta$ is a mathematical test sequence, not retained application history and not a component of $G$ or $Q$. Internal schedules, materializations, cache states, reconstruction steps, placements, and reclamation events may differ.])
+$eta$ is a mathematical test sequence, not retained application history and not a component of $G$ or $Q$. Internal schedules, materializations, cache states, reconstruction steps, placements, and reclamation events may differ.]) <def:trace-conformance>
 
 This definition unifies repeated source updates, observations, and graph replacement without adding a history calculus to DOC. Recurrent observations are ordinary observations of epoch-indexed logical states within a finite demanded prefix.
 
-== Executed representation
+=== Executed representation
+
+@tab:witness-mapping links each semantic obligation to the concrete C++20 behavior used in the conformance tests.
 
 #block[
   #set text(size: 8.8pt)
-  #table(
+  #figure(
+    table(
     columns: (1.12fr, 2.8fr),
     table.header([*Model obligation*], [*Witness behavior*]),
     [Finite kernel], [Stores one optional scalar value and one transient active marker per logical state; computes the dependency-minimal ready frontier; evaluates a complete selected frontier privately; and publishes changed candidates together.],
@@ -947,12 +1032,14 @@ This definition unifies repeated source updates, observations, and graph replace
     [Logical availability], [Uses immutable publications and active-use pins, permits a state slot to evict a reconstructible value, reconstructs an equal complete value from authoritative information before observation, and reclaims obsolete unpinned objects.],
     [Placement and recovery], [Checks generation-bound admission, join, graceful drain, lost-derived-state reconstruction, and bounded fail-stop recovery from surviving authoritative source facts.],
     [Effect boundary], [Checks explicit request, authorization, in-flight uncertainty, outcome recording, and rejection of impossible state transitions without claiming external exactly-once behavior.],
-  )
+  ),
+    caption: [Mapping from semantic obligations to the executable witness.],
+  ) <tab:witness-mapping>
 ]
 
 Application graphs never specify a worker count. Experimental limits are imposed outside the graph through the execution environment. Resource join and removal are likewise realization operations over placement rather than application-level topology instructions.
 
-== Verification scope
+=== Verification scope
 
 The native runtime suite contains 36 named conformance suites and a separate benchmark-generator equivalence test. Its randomized differential component checks 9,600 update epochs against complete reevaluation, including randomized legal frontier-subset schedules. Twenty repeated optimized runs of the two native test executables completed successfully.
 
@@ -962,72 +1049,137 @@ These finite enumerations check initialization, repair admissibility, continued 
 
 #boundary([Current executable coverage], [The high-performance active-set evaluator remains specialized to scalar values; typed immutable objects, eviction, and reconstruction are checked in a separate safe-realization profile rather than a fully integrated generic evaluator. The placed runtime uses real transport but remains a bounded single-coordinator witness rather than a production multi-host platform. The finite metatheory is mathematically argued and bounded-exhaustively checked, not yet mechanized in a proof assistant. These limits concern evidence and engineering maturity, not hidden additions to the logical core.])
 
-= Evaluation
+== Performance evaluation
 
-The benchmark executable checks every DOC result against a complete serial reevaluation oracle. The financial workload also checks a conventional serial dependency-cached repair, and the sorting-network workload checks `std::sort`. The main evaluation rows use twenty fresh processes with alternating scenario order. A later externally limited parallel-capacity follow-up uses paired runs at each participant count, again alternating order. Its table reports median elapsed time and median paired speedup for each externally allowed participant count.
+The benchmark executable checks every DOC output against an independent correctness oracle and exits nonzero on disagreement. Reduction workloads compare against complete serial reevaluation; the financial workload additionally compares against a conventional serial cached segment tree; and the sorting-network workload checks both direct execution of the same Batcher network and `std::sort`. The benchmarked runtime uses signed 64-bit integer values with exact equality. Its concrete scheduling policy chooses the complete ready frontier $F=R(A)$ at each transition; `DOC_MAX_WORKERS` limits participant capacity externally and is not stored in the application graph.
 
-Measurements used an optimized GCC 14.2 build on Linux 6.12.13 with an Intel Xeon Platinum 8573C. Process affinity exposed five CPUs, while the container quota was four CPUs. Participant limits were imposed externally with `DOC_MAX_WORKERS`; application graphs contain no worker count. The complete raw data, medians, standard deviations, confidence intervals, minima, maxima, filter bounds, and executed-command record are provided in the supplementary material.
+The reproduced campaign used GCC 14.2 in Release mode on Linux 6.18.44 with an AMD EPYC 9V74 environment. Five CPUs were visible by affinity and the cgroup CPU quota was four CPUs. Every reported row used 20 fresh processes plus one unrecorded warmup. Scenario order alternated forward and reverse between samples. Raw measurements are retained in full; the supplementary statistics also apply a symmetric Tukey 1.5-IQR sensitivity filter and report $n$, mean, median, standard deviation, 95% confidence interval, minimum, maximum, and filter sensitivity. Participant limits were 1--4 because of the four-CPU quota.
 
-== Sparse repair, saturation, and negative control
+The exact campaign command is `python3 runtime/scripts/run_all_benchmarks.py --samples 20 --warmups 1 --max-participants 4`. Its outputs are under `runtime/results/revision-2026-09-29/`: `raw.csv` contains every process measurement, `statistics.csv` the distributions, `summary.csv` the raw/filtered summaries, `machine.json` the host and binary hashes, and `commands.log` the executed commands. These paths are part of the supplementary artifact and are also listed in its root `README.md`.
+
+=== Workload structure and scheduler granularity
+
+The 2,048-leaf reduction graph contains 2,048 source states, 2,048 expensive leaf definitions, and 2,047 reduction definitions: 6,143 states in total and 4,095 derived definitions. Each expensive leaf counts primes in a deterministic interval. The parallel-capacity workload uses 40 source states, 40 expensive leaf definitions, and 39 reduction definitions. Its first ready frontier therefore contains 40 independent expensive definitions, each scanning a 25,000-integer interval; later logarithmic reduction frontiers are much cheaper. This is the independent-work amount behind the single-host scaling result.
+
+The dense cheap negative control uses 4,096 sources, 4,096 identity leaf definitions, and 4,095 sum definitions over 30 full-change epochs. The financial graph has 4,096 units, four source states per unit, one 360-period deterministic fixed-point forecast per unit, and 4,095 consolidation definitions: 24,575 states and 8,191 derived definitions. The sorting workload has 512 sources and a complete Batcher network with 11,520 compare-exchanges represented by 23,040 derived definitions, for 23,552 states. These graph sizes and the concrete scheduler policy make the timing granularity explicit rather than treating all workloads as interchangeable.
+
+=== Sparse repair, saturation, and negative control
+
+@tab:reduction-results reports raw process means from the reproduced campaign. Evaluation counts are deterministic for the specified update batches.
 
 #block[
   #set text(size: 8.5pt)
   #set table(inset: 2.8pt)
-  #table(
-    columns: (1.68fr, 0.92fr, 0.92fr, 0.82fr),
-    table.header([*Scenario*], [*Direct raw mean*], [*DOC raw mean*], [*Evaluations*]),
-    [Cold 2,048-leaf reduction], [296.292 ms], [292.741 ms], [4,095],
-    [1 changed source], [309.608 ms], [0.350 ms], [12],
-    [8 changed sources], [297.049 ms], [1.358 ms], [23],
-    [64 changed sources], [330.318 ms], [9.175 ms], [132],
-    [512 changed sources], [294.623 ms], [73.310 ms], [1,007],
-    [2,048 changed sources], [292.589 ms], [303.648 ms], [4,038],
-    [Dense cheap negative control], [0.227 ms], [43.698 ms], [245,730],
-  )
+  #figure(
+    table(
+      columns: (1.68fr, 0.92fr, 0.92fr, 0.82fr),
+      table.header([*Scenario*], [*Direct raw mean*], [*DOC raw mean*], [*Evaluations*]),
+      [Cold 2,048-leaf reduction], [194.648 ms], [195.767 ms], [4,095],
+      [1 changed source], [193.009 ms], [0.384 ms], [12],
+      [8 changed sources], [192.774 ms], [1.045 ms], [23],
+      [64 changed sources], [192.349 ms], [6.029 ms], [132],
+      [512 changed sources], [193.580 ms], [48.242 ms], [1,007],
+      [2,048 changed sources], [189.052 ms], [189.989 ms], [4,038],
+      [Dense cheap negative control], [0.223 ms], [33.887 ms], [245,730],
+    ),
+    caption: [Finite-kernel reduction workload on the reproduced 2026-09-29 environment. Timings are raw means over 20 fresh processes; evaluation counts are deterministic.],
+  ) <tab:reduction-results>
 ]
 
-The count curve is the stable result: sparse updates reconsider only the changed leaves and their ancestors, while dense updates approach complete work. Exact equality cutoff required one producer evaluation and activated no expensive user. Timing follows the same broad shape but is noisy and host-specific. Cold evaluation is near parity; complete change is slightly slower in raw mean; and the deliberately cheap dense graph is decisively worse under DOC because metadata and scheduling cost exceed useful work.
+#figure(
+  block(width: 100%, height: 126pt, inset: 4pt, fill: pale, stroke: 0.45pt + luma(215), radius: 4pt)[
+    #dline(42pt, 96pt, 448pt, 96pt, stroke: 0.65pt + luma(130))
+    #dlabel(3pt, 8pt, [fraction of 4,095 definitions evaluated], size: 7.4pt)
+    #place(top + left, dx: 58pt, dy: 94pt)[#rect(width: 46pt, height: 2pt, fill: accent)]
+    #place(top + left, dx: 133pt, dy: 94pt)[#rect(width: 46pt, height: 2pt, fill: accent)]
+    #place(top + left, dx: 208pt, dy: 93pt)[#rect(width: 46pt, height: 3pt, fill: accent)]
+    #place(top + left, dx: 283pt, dy: 76pt)[#rect(width: 46pt, height: 20pt, fill: accent)]
+    #place(top + left, dx: 358pt, dy: 17pt)[#rect(width: 46pt, height: 79pt, fill: accent)]
+    #dlabel(60pt, 100pt, [1], size: 7.6pt)
+    #dlabel(135pt, 100pt, [8], size: 7.6pt)
+    #dlabel(207pt, 100pt, [64], size: 7.6pt)
+    #dlabel(280pt, 100pt, [512], size: 7.6pt)
+    #dlabel(350pt, 100pt, [2,048], size: 7.6pt)
+    #dlabel(57pt, 82pt, [0.29%], size: 7pt)
+    #dlabel(131pt, 81pt, [0.56%], size: 7pt)
+    #dlabel(205pt, 79pt, [3.22%], size: 7pt)
+    #dlabel(278pt, 64pt, [24.59%], size: 7pt)
+    #dlabel(350pt, 6pt, [98.61%], size: 7pt)
+    #dlabel(165pt, 114pt, [changed sources in the 2,048-leaf reduction], size: 7.5pt)
+  ],
+  caption: [Repair work grows with update density. Bars show selected definitions as a fraction of the 4,095 derived definitions; equality cutoff leaves the full-change row slightly below 100%.],
+) <fig:repair-density>
 
-== Externally granted parallel capacity
+The structural trend in @fig:repair-density is the main result of this workload: sparse updates reconsider only the changed leaves and their ancestors, while dense updates approach complete work. Exact equality cutoff required one producer evaluation and one cutoff in its dedicated microbenchmark. Cold DOC and direct execution are near parity on this expensive reduction, whereas a complete source change also approaches parity. The deliberately cheap dense graph is a negative control: DOC is roughly two orders of magnitude slower because metadata, frontier construction, and synchronization dominate the useful arithmetic. The model therefore predicts *where work may be avoided*, not a universal timing improvement.
+
+=== Externally granted parallel capacity
+
+@tab:parallel-results uses the same 40-leaf graph and output oracle at every externally imposed participant limit. The table reports raw means and confidence intervals; speedup is the ratio of the one-participant raw mean to each raw mean.
 
 #block[
-  #set text(size: 8.35pt)
-  #set table(inset: 2.7pt)
-  #table(
-    columns: (1.45fr, 1fr, 1.2fr),
-    table.header([*Externally allowed participants*], [*Median time*], [*Median paired speedup*]),
-    [1], [142.589 ms], [1.000$times$],
-    [2], [72.274 ms], [*1.959$times$*],
-    [3], [49.605 ms], [*2.853$times$*],
-    [4], [37.527 ms], [*3.847$times$*],
-  )
+  #set text(size: 8.2pt)
+  #set table(inset: 2.6pt)
+  #figure(
+    table(
+      columns: (1.2fr, 1.7fr, 0.9fr),
+      table.header([*Participants*], [*Raw mean (95% CI)*], [*Raw speedup*]),
+      [1], [150.221 ms (147.290--153.153)], [1.000$times$],
+      [2], [82.267 ms (75.266--89.267)], [1.826$times$],
+      [3], [60.325 ms (55.587--65.064)], [2.490$times$],
+      [4], [46.412 ms (42.761--50.062)], [3.237$times$],
+    ),
+    caption: [Ready-frontier scaling under externally granted participant limits on one host with a four-CPU cgroup quota.],
+  ) <tab:parallel-results>
 ]
 
-The same graph and output oracle were used at every externally passed limit. Median time decreases monotonically from one through four participants, while median paired speedup rises to $3.847 times$ at four participants. The four-CPU quota still makes this a bounded single-host result, not a many-core or multi-host scaling claim. It confirms that a coarse ready frontier can consume capacity granted by the environment without embedding capacity in the program.
+#figure(
+  block(width: 100%, height: 126pt, inset: 4pt, fill: pale, stroke: 0.45pt + luma(215), radius: 4pt)[
+    #dline(58pt, 96pt, 430pt, 96pt, stroke: 0.65pt + luma(130))
+    #place(top + left, dx: 82pt, dy: 76pt)[#rect(width: 52pt, height: 20pt, fill: accent)]
+    #place(top + left, dx: 164pt, dy: 59pt)[#rect(width: 52pt, height: 37pt, fill: accent)]
+    #place(top + left, dx: 246pt, dy: 46pt)[#rect(width: 52pt, height: 50pt, fill: accent)]
+    #place(top + left, dx: 328pt, dy: 31pt)[#rect(width: 52pt, height: 65pt, fill: accent)]
+    #dlabel(92pt, 101pt, [1], size: 7.7pt)
+    #dlabel(174pt, 101pt, [2], size: 7.7pt)
+    #dlabel(256pt, 101pt, [3], size: 7.7pt)
+    #dlabel(338pt, 101pt, [4], size: 7.7pt)
+    #dlabel(84pt, 64pt, [1.00$times$], size: 7.2pt)
+    #dlabel(165pt, 47pt, [1.83$times$], size: 7.2pt)
+    #dlabel(247pt, 34pt, [2.49$times$], size: 7.2pt)
+    #dlabel(329pt, 19pt, [3.24$times$], size: 7.2pt)
+    #dlabel(185pt, 114pt, [externally allowed participants], size: 7.5pt)
+  ],
+  caption: [Single-host ready-frontier speedup. The result demonstrates use of granted parallel capacity for a coarse frontier; it is not evidence of distributed scalability.],
+) <fig:parallel-speedup>
 
-== Realistic persistent financial projection
+The reproduced single-host result reaches a raw-mean speedup of $3.237 times$ at four participants. The first frontier contains 40 independent expensive leaf definitions, so there is enough coarse work to amortize runtime overhead. @fig:parallel-speedup must not be extrapolated to more cores or multiple hosts: the experiment contains no inter-host transport and the cgroup allows only four CPUs. It supports only the narrower claim that a dependency-minimal frontier can consume externally granted local capacity without a worker count in the program.
 
-The non-synthetic workload models 4,096 business units. Each unit has four source cells and a deterministic 360-period fixed-point cash-flow projection; a balanced tree consolidates unit values. Complete serial reevaluation, a conventional serial cached segment-tree repair, and DOC must produce the same total.
+=== Realistic persistent financial projection
+
+The financial workload models 4,096 business units. Each unit has four source cells and one deterministic 360-period fixed-point cash-flow projection; a balanced tree consolidates unit values. Each changed unit updates both its revenue and payroll sources. Complete serial reevaluation, a conventional serial cached segment-tree repair, and DOC must produce the same total.
 
 #block[
   #set text(size: 8.45pt)
   #set table(inset: 2.8pt)
-  #table(
-    columns: (1fr, 1fr, 1fr, 1fr, 0.82fr),
-    table.header([*Changed units*], [*Full raw mean*], [*Cached raw mean*], [*DOC raw mean*], [*DOC evals*]),
-    [1], [5.316 ms], [0.001 ms], [2.356 ms], [13],
-    [64], [4.779 ms], [0.075 ms], [1.942 ms], [133],
-    [1,024], [5.214 ms], [1.235 ms], [4.064 ms], [2,049],
-  )
+  #figure(
+    table(
+      columns: (1fr, 1fr, 1fr, 1fr, 0.82fr),
+      table.header([*Changed units*], [*Full raw mean*], [*Cached raw mean*], [*DOC raw mean*], [*DOC evals*]),
+      [1], [4.823 ms], [0.00134 ms], [1.256 ms], [13],
+      [64], [4.991 ms], [0.0795 ms], [1.397 ms], [133],
+      [1,024], [4.965 ms], [1.296 ms], [2.682 ms], [2,049],
+    ),
+    caption: [Financial projection workload. The cached baseline is workload-specific and all three implementations are checked for equal output.],
+  ) <tab:financial-results>
 ]
 
-DOC avoids most of the projection and consolidation graph under sparse change and is faster than complete reevaluation in these runs. The specialized cached baseline is much faster because it encodes exactly the workload's update strategy and has far less generic machinery. This is the honest engineering boundary: DOC supplies reusable semantics and general conformance properties, not a guarantee of beating a domain-specific incremental algorithm.
+As @tab:financial-results shows, DOC is faster than complete reevaluation for all three displayed update sizes on this run, but the specialized cache is substantially faster than generic DOC repair. For one changed unit, DOC takes about 26% of full reevaluation time yet about 935 times the cached update time; at 64 units the cached baseline is about 17.6 times faster than DOC; at 1,024 units it remains about 2.1 times faster. The useful conclusion is therefore workload-specific: DOC's generic overhead is justified only when its reusable semantics, dynamic affected-region discovery, graph evolution, conformance properties, or common runtime mechanism are worth more than a hand-specialized incremental update path.
 
-== Fine-grained graph negative case
+=== Fine-grained graph negative case
 
-A 512-input Batcher sorting network contains 11,520 compare-exchanges represented by 23,040 derived definitions and 23,552 total states. Sparse updates avoid many definitions and expose equality cutoffs, but direct complete network execution remains about two orders of magnitude faster: raw DOC update means range from 9.84 to 10.33 ms, while raw direct update means are below 0.09 ms. At full change, all 23,040 definitions execute and no cutoff remains. The result shows that expansion can expose logical reuse without making node granularity profitable; fusion, batching, or specialized operators would be required for this workload.
+A 512-input Batcher sorting network contains 11,520 compare-exchanges represented by 23,040 derived definitions and 23,552 total states. Sparse updates avoid many definitions and expose equality cutoffs, but direct complete network execution is far faster: raw DOC update means range from 5.85 to 6.48 ms, while raw direct update means range from 0.0247 to 0.0413 ms. The DOC/direct ratio ranges from about $142 times$ to $263 times$ across the displayed update sizes. At full change, all 23,040 definitions execute and no cutoff remains. This negative case shows that exposing a dependency at every comparator can make the logical graph useful for reasoning while making the runtime granularity uneconomic; fusion, batching, or specialized operators would be required for a competitive implementation.
 
-#boundary([Evaluation boundary], [These measurements support cost-shape and conformance claims only. They do not establish universal speedup, production distributed scalability, accelerator efficiency, or a hardware-independent constant. Stronger scaling evidence requires rerunning the preserved commands on dedicated many-core and multi-host systems.])
+#boundary([Evaluation boundary], [These measurements support conformance and workload-specific cost-shape claims only. They do not establish universal speedup, production distributed scalability, accelerator efficiency, or a hardware-independent constant. Stronger scaling evidence requires new experiments on dedicated many-core and multi-host systems rather than extrapolation from @fig:parallel-speedup.])
 
 = Limitations
 
@@ -1037,35 +1189,52 @@ A 512-input Batcher sorting network contains 11,520 compare-exchanges represente
 4. *No universal memory or performance bound.* Logically rooted recurrence or audit history may grow without bound. Direct or specialized incremental execution may outperform the generic runtime, especially for dense or fine-grained work.
 5. *Evidence limits.* The finite metatheory is not proof-assistant mechanized. Exhaustive checking is bounded. The physical witness is a bounded single-coordinator implementation, and the present scaling measurements are limited to four quota-granted CPUs on one host.
 
-= Related work
+= Related work <sec:related-work>
 
-Dependency-based evaluation has several established lineages. Kahn gives a deterministic semantic account of process networks whose communication structure constrains execution [1]. Attribute grammars attach semantic values and dependency relations to syntax; Knuth established the framework, and Demers, Reps, and Teitelbaum studied incremental reevaluation for editors [2-4]. Spreadsheets provide a widely used end-user form of dependency-maintained computation, and recent work studies scalable incremental spreadsheet applications [12]. These traditions ground DOC's use of explicit logical dependencies; DOC's finite kernel instead fixes one persistent state graph, one valuation, one repair-obligation set, and one frontier-subset repair relation.
+Dependency-oriented evaluation has several established lineages. Kahn process networks provide deterministic semantics for communicating processes @kahn1974. Attribute grammars attach semantic values to syntactic structure and expose dependency relations; Knuth established the framework @knuth1968 @knuth1971correction, and Demers, Reps, and Teitelbaum studied incremental reevaluation for syntax-directed editors @demers1981. INC is an early language explicitly designed for incremental computations @yellin1991. These works establish that dependency structure and incremental maintenance are not new ingredients of DOC.
 
-Incremental and self-adjusting computation maintain results across change using recorded dependence, change propagation, memoization, or dynamically discovered dependency graphs [5-7]. Adapton combines demand with incremental maintenance [7]. Static differentiation derives change functions for higher-order languages [8]. Parallel self-adjusting computation develops richer control-dependence machinery and work/span bounds for parallel change propagation [9]. DOC does not claim these ingredients as new. Its contribution is a smaller, language-neutral semantic boundary for persistent logical states: local deterministic definitions, dependency-minimal active repair, an always-correct conservative cutoff profile, and a direct separation between logical metatheory and physical realization contracts.
+The closest comparison is self-adjusting computation. Acar's model represents computations with dynamic dependence graphs and uses change propagation to adjust them after external changes @acar2005. Parallel self-adjusting computation develops additional machinery and work/span analysis for parallel change propagation @anderson2021. Adapton combines incremental computation with demand and introduces a demanded computation graph plus an explicit observer boundary @hammer2014adapton. DOC makes a different representational choice: the graph of logical state identities and definitions is declared as the persistent program for one graph version, while the transient repair state is represented separately by $A$; the finite repair relation then acts only on dependency-minimal active definitions. This is a distinction in factorization and proof boundary, not a claim that change propagation, memoization, demand, or parallel dependency processing originated here.
 
-Other domains organize incremental maintenance around specialized structure. Materialized-view maintenance derives updates for database views [10]. Build-system analysis separates dependency discovery, rebuilding, and scheduling policies [11]. Differential dataflow maintains collections of differences across partially ordered versions and supports iterative data-parallel computation; timely dataflow supplies a distributed cyclic execution substrate [13, 14]. These systems establish that incremental and distributed dependency maintenance can require substantially richer domains, timestamps, operators, or runtime protocols. DOC keeps recurrence, immutable graph succession, placement, recovery, and effects outside the finite nucleus so that each claim is stated at the level actually defined.
+Build systems provide another close comparison because they preserve results across repeated changes. *Build Systems à la Carte* factors build systems into tasks plus scheduling and rebuilding components and systematically compares static and dynamic dependency strategies @mokhov2018. DOC instead fixes a language-neutral state/definition representation for the finite theorem and derives its ready relation from the current active set. A build engine could implement DOC's finite kernel, but DOC does not replace build-specific questions such as dependency discovery, command execution, artifact hashing, or failure policy.
 
-Persistent traces also create storage and reclamation concerns; prior self-adjusting-computation work develops explicit memory-management techniques for such traces [15]. DOC's corresponding statement is deliberately semantic rather than algorithmic: the model defines which logical observations remain available, while a conforming runtime chooses storage, reconstruction, pinning, and reclamation policy. Minsky's counter machines provide the classical universality basis used only for the versioned-recurrence construction [16].
+Incremental dataflow systems occupy a richer iteration/distribution point in the design space. Differential dataflow associates state and updates with partially ordered logical versions and retains indexed differences to support incremental iterative computation @mcsherry2013. Naiad's timely dataflow is a distributed cyclic dataflow model with logical timestamps and progress coordination @murray2013. DOC deliberately does not place those mechanisms in its finite acyclic kernel; recurrence is expressed by forward-linked finite epochs, while placement and transport are realization contracts. This choice simplifies the finite theorem but gives up the native cyclic/timestamp semantics supplied by those dataflow systems.
 
-The novelty claim is therefore conservative. DOC does not assert historical priority for dependency graphs, incremental repair, demand, parallel frontiers, recurrence, or distributed placement individually. It presents and analyzes their particular factorization around the unchanged nucleus $G=(S,Delta)$ and $Q=(nu,A)$, with one frontier-subset transition and explicit extension and realization boundaries.
+@tab:related-comparison makes the technical comparison explicit. The “DOC distinction” column should be read as a representational difference relevant to this paper's proofs, not as an assertion that another system cannot emulate the behavior.
+
+#block[
+  #set text(size: 7.75pt)
+  #set table(inset: 2.5pt)
+  #figure(
+    table(
+      columns: (0.95fr, 1.45fr, 1.45fr, 1.55fr),
+      table.header([*Approach*], [*Primary representation*], [*Repair / execution mechanism*], [*DOC distinction used here*]),
+      [Self-adjusting computation @acar2005], [Dynamic dependence graph of an execution; dependence tracking is part of the self-adjusting mechanism.], [Change propagation adjusts computation and dependence structure after external change.], [One declared logical-state graph is fixed within a graph version; repair obligations are the separate set $A$, and the theorem ranges over frontier-subset schedules.],
+      [Adapton @hammer2014adapton], [Demanded computation graph with explicit observer/inner-computation separation.], [Demand-driven incremental recomputation and reuse.], [Demand is a restriction of the same finite state graph; the proved whole-graph kernel does not require demand nodes or an observer calculus.],
+      [Build Systems à la Carte @mokhov2018], [Keys/tasks plus parameterized scheduler and rebuilder; dependencies may be obtained by different strategies.], [Build-specific scheduling/rebuilding decides which tasks execute and whether results are current.], [DOC fixes one state/definition semantics and one repair relation; command effects and dependency discovery remain outside the pure theorem.],
+      [Differential dataflow @mcsherry2013], [Collections of differences indexed by partially ordered logical versions.], [Incremental operators reuse updates across versions and nested iteration.], [Finite DOC has one retained valuation plus active set for the current epoch; recurrence is an additional forward-epoch construction rather than a partial-order timestamp algebra.],
+      [Naiad / timely dataflow @murray2013], [Distributed cyclic dataflow with logical timestamps and progress tracking.], [Data-parallel cyclic execution with coordination based on timestamp progress.], [DOC's finite theorem is acyclic; transport, placement, and fail-stop reconstruction are separated as conditional realization contracts.],
+    ),
+    caption: [Focused comparison with the closest incremental and dataflow models. The table identifies which representation or repair boundary differs from DOC's finite kernel.],
+  ) <tab:related-comparison>
+]
+
+Static differentiation takes a different route by deriving change functions for higher-order programs @cai2014; materialized-view maintenance derives incremental updates for database views @blakeley1986; and spreadsheet systems provide a familiar dependency-maintained interface, with recent work on scalable incremental spreadsheet applications @hadar2023. These approaches reinforce the paper's narrower positioning: DOC contributes neither a new general change calculus nor a domain-specific optimal incremental algorithm.
+
+Persistent incremental traces also create storage-management problems. Hammer and Acar study memory management specifically for self-adjusting computation @hammer2008memory. DOC's logical-availability contract is intentionally less prescriptive: it states what must remain observable or reconstructible, while reclamation strategy belongs to a conforming realization. Minsky's counter-machine model supplies the classical universality basis used only for the forward recurrence construction @minsky1967.
+
+The assessable technical claim is therefore limited to the finite factorization proved in @thm:finite-stabilization and its explicitly separated extensions: a persistent typed logical-state graph $G=(S,Delta)$; a retained valuation $nu$; a transient repair-obligation set $A$; dependency-minimal ready states; arbitrary nonempty ready-frontier subset selection from one settled pre-state; atomic publication of changed conclusions; and a one-way sound cutoff predicate whose always-false implementation remains correct. The experimental validation in @sec:validation asks whether this factorization is coherent, executable, and useful as a generic semantic boundary—not whether it dominates specialized incremental systems.
 
 = Conclusion
 
-Dependency-Oriented Computation begins with a shift:
-
-#quote(block: true)[
-#strong[Do not begin by asking what executes next. Begin by asking what depends on what.]
-]
-
-The compact finite representation is
+The finite model makes dependency structure, retained values, and repair obligations explicit. Its compact representation is
 
 $ G=(S,Delta), #h(2em) Q=(nu,A). $
 
 A program is a family of typed logical states and partial local definitions. A stable valuation agrees with current sources and every required definition. A source change adds induced users to the current repair obligations. One transition selects any subset of the dependency-minimal active frontier, evaluates it from a common settled pre-state, and publishes complete candidates together. Candidates not proven equal propagate; a sound equality proof stops the wave.
 
-The nucleus stays small without hiding implementation reality. Retained values provide semantic reuse; the ready frontier exposes parallel work; versioned recurrence provides temporal unboundedness; immutable graph versions permit dynamic structure without mutating active work; and logical identities permit different memory and resource placements. Publication, reclamation, transport, authority, reconstruction, and effects remain explicit realization obligations rather than hidden primitives.
+The finite kernel deliberately contains only the persistent graph, retained valuation, repair obligations, and transition relation. Recurrence, graph replacement, and physical placement are separate layers with additional assumptions. Publication, reclamation, transport, authority, reconstruction, and effects therefore remain explicit contracts rather than consequences silently attributed to the finite theorem.
 
-DOC does not promise universal speedup or erase distributed-systems policy. It gives evaluation, reactive repair, temporal reuse, parallel readiness, versioned recurrence, immutable topology evolution, and bounded elastic reconstruction one shared structural account while keeping its four durable boundaries named and testable.
+DOC does not claim universal speedup or distributed-systems guarantees. Its contribution is the specific finite repair semantics proved here, together with separately stated extension and realization contracts and an executable implementation that tests those boundaries.
 
 #set heading(numbering: none)
 
@@ -1152,11 +1321,14 @@ $ upright("Obs")_P(eta)=upright("Obs")_(upright("DOC"))(G_0,Q_0,eta). $
 
 The sequence is a meta-level conformance test, not stored history or logical configuration.
 
-= Appendix B. Terminology
+= Appendix B. Terminology <app:terminology>
+
+@tab:terminology consolidates the terms used for logical state, repair, graph versions, observation, and physical placement so that similarly named concepts are not conflated.
 
 #set text(size: 8.65pt)
 #set table(inset: 2.8pt)
-#table(
+#figure(
+  table(
   columns: (1.25fr, 3fr),
   table.header([*Term*], [*Meaning in this paper*]),
   [State], [Stable logical identity with a typed value domain.],
@@ -1173,7 +1345,9 @@ The sequence is a meta-level conformance test, not stored history or logical con
   [Logical availability], [Entitlement to observe or consume a value, preserved by residency or authoritative reconstruction.],
   [Physical residency], [Current presence of one materialized representation; a realization choice, not a component of $Q$.],
   [Placement generation], [Physical authority token changed by reassignment or drain; not a logical value revision.],
-)
+),
+  caption: [Terminology used throughout the manuscript.],
+) <tab:terminology>
 
 #set text(size: 10.2pt)
 #set table(inset: 5.5pt)
@@ -1188,39 +1362,4 @@ The sequence is a meta-level conformance test, not stored history or logical con
 
 #strong[Generative-AI disclosure.] During the preparation of this work, the author used OpenAI ChatGPT to assist with language refinement, manuscript critique, implementation review, test design, and supporting development tasks. The author reviewed and edited all generated material, independently checked the formal claims, references, implementation, and reported results, and takes full responsibility for the content of the article.
 
-#heading(level: 1, numbering: none, outlined: true)[Bibliography]
-
-#set par(leading: 0.69em, spacing: 0.54em)
-#text(size: 9.18pt)[
-1. Gilles Kahn. “The Semantics of a Simple Language for Parallel Programming.” In J. L. Rosenfeld (ed.), *Information Processing 74: Proceedings of IFIP Congress 74*. North-Holland, 1974, pp. 471-475. DBLP: conf/ifip/Kahn74.
-
-2. Donald E. Knuth. “Semantics of Context-Free Languages.” *Mathematical Systems Theory*, 2(2), 1968, pp. 127-145. DOI: 10.1007/BF01692511.
-
-3. Donald E. Knuth. “Semantics of Context-Free Languages: Correction.” *Mathematical Systems Theory*, 5, 1971, pp. 95-96. DOI: 10.1007/BF01702865.
-
-4. Alan J. Demers, Thomas W. Reps, and Tim Teitelbaum. “Incremental Evaluation for Attribute Grammars with Application to Syntax-Directed Editors.” *Proceedings of POPL 1981*, pp. 105-116. DOI: 10.1145/567532.567544.
-
-5. Daniel M. Yellin and Robert E. Strom. “INC: A Language for Incremental Computations.” *ACM Transactions on Programming Languages and Systems*, 13(2), 1991, pp. 211-236. DOI: 10.1145/103135.103137.
-
-6. Umut A. Acar. *Self-Adjusting Computation*. PhD thesis, Carnegie Mellon University, 2005. Technical report CMU-CS-05-129.
-
-7. Matthew A. Hammer, Khoo Yit Phang, Michael Hicks, and Jeffrey S. Foster. “Adapton: Composable, Demand-Driven Incremental Computation.” *Proceedings of PLDI 2014*, pp. 156-166. DOI: 10.1145/2666356.2594324.
-
-8. Yufei Cai, Paolo G. Giarrusso, Tillmann Rendel, and Klaus Ostermann. “A Theory of Changes for Higher-Order Languages: Incrementalizing Lambda-Calculi by Static Differentiation.” *Proceedings of PLDI 2014*, pp. 145-155. DOI: 10.1145/2594291.2594304.
-
-9. Daniel Anderson, Guy E. Blelloch, Anubhav Baweja, and Umut A. Acar. “Efficient Parallel Self-Adjusting Computation.” *Proceedings of SPAA 2021*, pp. 59-70. DOI: 10.1145/3409964.3461799.
-
-10. Jose A. Blakeley, Per-Åke Larson, and Frank Wm. Tompa. “Efficiently Updating Materialized Views.” *Proceedings of SIGMOD 1986*, pp. 61-71. DOI: 10.1145/16894.16861.
-
-11. Andrey Mokhov, Neil Mitchell, and Simon Peyton Jones. “Build Systems à la Carte.” *Proceedings of the ACM on Programming Languages*, 2(ICFP), Article 79, 2018, pp. 1-29. DOI: 10.1145/3236774.
-
-12. Sean Hadar and Shachar Itzhaky. “Scalable Spreadsheet-Driven End-User Applications with Incremental Computation.” *Proceedings of Onward! 2023*, pp. 1-14. DOI: 10.1145/3622758.3622887.
-
-13. Frank McSherry, Derek G. Murray, Rebecca Isaacs, and Michael Isard. “Differential Dataflow.” *Proceedings of the 6th Biennial Conference on Innovative Data Systems Research (CIDR 2013)*, 2013. CIDR paper 111.
-
-14. Derek G. Murray, Frank McSherry, Rebecca Isaacs, Michael Isard, Paul Barham, and Martín Abadi. “Naiad: A Timely Dataflow System.” *Proceedings of SOSP 2013*, pp. 439-455. DOI: 10.1145/2517349.2522738.
-
-15. Matthew A. Hammer and Umut A. Acar. “Memory Management for Self-Adjusting Computation.” *Proceedings of ISMM 2008*, pp. 51-60. DOI: 10.1145/1375634.1375642.
-
-16. Marvin L. Minsky. *Computation: Finite and Infinite Machines*. Prentice-Hall, Englewood Cliffs, NJ, 1967. OCLC 523923.
-]
+#bibliography("references.bib", title: [References], style: "ieee")
