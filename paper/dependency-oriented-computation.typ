@@ -19,7 +19,7 @@
   },
 )
 #set text(size: 10.2pt, lang: "en")
-#set par(justify: true, leading: 0.68em, first-line-indent: 0em)
+#set par(justify: true, leading: 0.70em, first-line-indent: 0em)
 #set heading(numbering: "1.")
 #set figure(gap: 4pt)
 #set math.equation(numbering: "(1)")
@@ -27,14 +27,14 @@
 #set list(indent: 1.15em, body-indent: 0.55em)
 #set table(inset: 5.5pt, stroke: 0.45pt + luma(205))
 #show link: set text(fill: rgb("1f5a88"))
-#show heading.where(level: 1): it => block(above: 1.15em, below: 0.55em)[
+#show heading.where(level: 1): it => block(above: 1.25em, below: 0.65em, sticky: true)[
   #text(size: 15pt, weight: "bold", fill: rgb("203a5f"))[#it]
 ]
-#show heading.where(level: 2): it => block(above: 0.9em, below: 0.35em)[
+#show heading.where(level: 2): it => block(above: 1.05em, below: 0.48em, sticky: true)[
   #text(size: 12pt, weight: "bold", fill: rgb("284d6d"))[#it]
 ]
-#show heading.where(level: 3): it => block(above: 0.65em, below: 0.25em)[
-  #text(size: 10.7pt, weight: "bold")[#it]
+#show heading.where(level: 3): it => block(above: 0.92em, below: 0.38em, sticky: true)[
+  #text(size: 10.65pt, weight: "semibold", fill: rgb("354f63"))[#it]
 ]
 #show raw.where(block: true): it => block(
   width: 100%, inset: 8pt, fill: luma(247), stroke: 0.45pt + luma(205),
@@ -236,6 +236,10 @@ The closest prior models often make different representational choices. Self-adj
 A DOC local definition may be arithmetic, pattern matching, a query operator, a vector kernel, a verified routine, or another deterministic host function. DOC specifies the global relation among persistent states: which conclusions are justified, which states become repair obligations, what work is ready, when a repair episode is stable, and what stable value may be observed. It does not prescribe one universal syntax for the internals of every local function.
 
 When internal structure matters for reuse or parallelism, a coarse local definition can be replaced by a finite boundary-equivalent DOC expansion. Conversely, an implementation may physically fuse several logical definitions when that preserves the same observations. This keeps the formal boundary small while making the granularity trade-off explicit.
+
+#block(width: 100%, inset: (x: 9pt, y: 7pt), fill: rgb("f7f9fb"), stroke: 0.55pt + luma(210), radius: 3pt, above: 0.7em, below: 0.75em)[
+  #text(size: 9.55pt)[#strong[Reading guide.] The next four sections establish the model intuition, assumptions, finite transition system, and central stabilization results. The paper then separates demand and recurrence, immutable graph change, and physical realization contracts from that finite theorem. The final sections report executable validation and performance evidence, state limitations, compare prior work, and conclude.]
+]
 
 = Model intuition and contributions
 
