@@ -1,8 +1,0 @@
-$ TSAN_OPTIONS=halt_on_error=1 ctest --test-dir build/tsan --output-on-failure
-Internal ctest changing into directory: build/tsan
-Test project build/tsan
-    Start 1: doc_tests
-1/7 Test #1: doc_tests ...........................   Passed    2.98 sec
-    Start 2: doc_benchmark_generator
-2/7 Test #2: doc_benchmark_generator .............   Passed   14.81 sec
-    Start 3: doc_bounded_model_check

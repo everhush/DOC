@@ -86,3 +86,10 @@ The supplied PDF was compiled with Typst 0.15.1.
 - `runtime/results/scaling/raw.csv` preserves the supplied local-machine paired scaling measurements.
 - `runtime/results/scaling/SUMMARY.md` reproduces the Section 9.2 median-time and paired-speedup series.
 
+
+
+## Continuous publication validation
+
+`.github/workflows/publication-validation.yml` rebuilds and tests the C++20 runtime with GCC and Clang, runs ASan/UBSan and ThreadSanitizer native suites, executes the bounded model checkers through CTest, recompiles the Typst manuscript with pinned Typst 0.15.1, preflights the generated PDF, renders every PDF page, and executes a fresh publication-scale benchmark campaign.
+
+The workflow uses read-only repository permissions and no manually configured credentials or secrets. All uploaded workflow artifacts use `retention-days: 1`. The generated PDF, page renders, benchmark measurements, and validation logs are therefore reproducible CI evidence rather than long-lived generated files in version control.
