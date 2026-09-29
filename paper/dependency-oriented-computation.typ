@@ -327,7 +327,7 @@ A finite DOC program is
 
 $ G=(S,Delta), $ <eq:program>
 
-where $S$ is a finite family of stable logical state identities and $Delta$ is a partial map whose domain contains exactly the derived states. Every $s in S$ has a declared value domain $V_s$. Equation @eq:program fixes the notation used throughout the finite semantics; physical addresses, workers, and storage locations are not elements of $S$.
+where $S$ is a finite family of stable logical state identities and $Delta$ is a partial map whose domain contains exactly the derived states. Every $s in S$ has a declared value domain $V_s$. @eq:program fixes the notation used throughout the finite semantics; physical addresses, workers, and storage locations are not elements of $S$.
 
 === Typed state
 
@@ -505,7 +505,7 @@ $ nu_0=nu[s arrow.r.bar U_b(s) #h(0.25em) upright("for") #h(0.25em) s in X], $ <
 
 $ A_0=A union union_(s in X) upright("users")(s). $ <eq:update-active>
 
-Equations @eq:update-valuation and @eq:update-active define the post-boundary seed $(nu_0,A_0)$ for the next stabilization episode. The subscript $0$ means "after the boundary event and before the first repair transition." The assignments in $X$ are installed atomically, and the direct users of those sources are added to any obligations already present. The step preserves repair-admissibility: an inactive direct user of a changed source becomes active, while every other inactive state remains locally satisfied until a changed active premise publishes. An empty batch, or a batch whose assignments are all proven equal, yields $X=emptyset$ and leaves $A$ unchanged. With a conservative always-false predicate, an exactly equal assignment may still start harmless repair. Stable-boundary epochs are the common case $A=emptyset$; after an exceptional frontier failure, a later serialized source batch may instead supersede the still-active obligations without discarding them.
+@eq:update-valuation and @eq:update-active define the post-boundary seed $(nu_0,A_0)$ for the next stabilization episode. The subscript $0$ means "after the boundary event and before the first repair transition." The assignments in $X$ are installed atomically, and the direct users of those sources are added to any obligations already present. The step preserves repair-admissibility: an inactive direct user of a changed source becomes active, while every other inactive state remains locally satisfied until a changed active premise publishes. An empty batch, or a batch whose assignments are all proven equal, yields $X=emptyset$ and leaves $A$ unchanged. With a conservative always-false predicate, an exactly equal assignment may still start harmless repair. Stable-boundary epochs are the common case $A=emptyset$; after an exceptional frontier failure, a later serialized source batch may instead supersede the still-active obligations without discarding them.
 
 === One frontier-subset transition
 
