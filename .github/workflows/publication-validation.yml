@@ -1,0 +1,324 @@
+name: Publication validation
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publication-validation-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.13"
+  TYPST_VERSION: "0.15.1"
+
+jobs:
+  runtime:
+    name: Runtime / ${{ matrix.compiler }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        compiler: [gcc, clang]
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends cmake ninja-build clang
+
+      - name: Configure compiler
+        id: compiler
+        shell: bash
+        run: |
+          if [[ "${{ matrix.compiler }}" == "gcc" ]]; then
+            echo "cxx=g++" >> "$GITHUB_OUTPUT"
+          else
+            echo "cxx=clang++" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Configure Release build
+        shell: bash
+        run: |
+          mkdir -p ci-artifacts/runtime-${{ matrix.compiler }}
+          cmake -S runtime -B build/ci-${{ matrix.compiler }} -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_CXX_COMPILER=${{ steps.compiler.outputs.cxx }} \
+            -DCMAKE_CXX_FLAGS=-Werror \
+            2>&1 | tee ci-artifacts/runtime-${{ matrix.compiler }}/configure.log
+
+      - name: Build with warnings as errors
+        run: |
+          cmake --build build/ci-${{ matrix.compiler }} \
+            2>&1 | tee ci-artifacts/runtime-${{ matrix.compiler }}/build.log
+
+      - name: Run complete registered suite
+        run: |
+          ctest --test-dir build/ci-${{ matrix.compiler }} --output-on-failure \
+            2>&1 | tee ci-artifacts/runtime-${{ matrix.compiler }}/ctest.log
+
+      - name: Compile Python verification sources
+        run: |
+          python -m compileall -q runtime/formal runtime/scripts verification \
+            2>&1 | tee ci-artifacts/runtime-${{ matrix.compiler }}/python-compile.log
+
+      - name: Upload runtime logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: runtime-${{ matrix.compiler }}-${{ github.sha }}-attempt-${{ github.run_attempt }}
+          path: ci-artifacts/runtime-${{ matrix.compiler }}/
+          if-no-files-found: warn
+          retention-days: 1
+
+  sanitizers:
+    name: Sanitizer / ${{ matrix.sanitizer }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        sanitizer: [asan-ubsan, tsan]
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends cmake ninja-build g++
+
+      - name: Configure sanitizer build
+        shell: bash
+        run: |
+          mkdir -p ci-artifacts/sanitizer-${{ matrix.sanitizer }}
+          if [[ "${{ matrix.sanitizer }}" == "asan-ubsan" ]]; then
+            flag=-DDOC_ENABLE_ASAN=ON
+          else
+            flag=-DDOC_ENABLE_TSAN=ON
+          fi
+          cmake -S runtime -B build/ci-${{ matrix.sanitizer }} -G Ninja \
+            -DCMAKE_BUILD_TYPE=Debug "$flag" \
+            2>&1 | tee ci-artifacts/sanitizer-${{ matrix.sanitizer }}/configure.log
+          cmake --build build/ci-${{ matrix.sanitizer }} \
+            2>&1 | tee ci-artifacts/sanitizer-${{ matrix.sanitizer }}/build.log
+
+      - name: Run native suites under sanitizer
+        env:
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+          UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+          TSAN_OPTIONS: halt_on_error=1
+        run: |
+          ctest --test-dir build/ci-${{ matrix.sanitizer }} \
+            --output-on-failure -R '^(doc_tests|doc_benchmark_generator)$' \
+            2>&1 | tee ci-artifacts/sanitizer-${{ matrix.sanitizer }}/ctest.log
+
+      - name: Upload sanitizer logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: sanitizer-${{ matrix.sanitizer }}-${{ github.sha }}-attempt-${{ github.run_attempt }}
+          path: ci-artifacts/sanitizer-${{ matrix.sanitizer }}/
+          if-no-files-found: warn
+          retention-days: 1
+
+  manuscript:
+    name: Typst manuscript and PDF preflight
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install PDF tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends curl xz-utils qpdf poppler-utils
+
+      - name: Install pinned Typst
+        run: |
+          curl --fail --silent --show-error --location \
+            "https://github.com/typst/typst/releases/download/v${TYPST_VERSION}/typst-x86_64-unknown-linux-musl.tar.xz" \
+            --output /tmp/typst.tar.xz
+          tar -xJf /tmp/typst.tar.xz -C /tmp
+          sudo install -m 0755 /tmp/typst-x86_64-unknown-linux-musl/typst /usr/local/bin/typst
+          typst --version
+
+      - name: Check manuscript evidence and references
+        run: |
+          mkdir -p ci-artifacts/manuscript
+          python verification/check_manuscript.py \
+            2>&1 | tee ci-artifacts/manuscript/manuscript-check.log
+
+      - name: Compile PDF from Typst source
+        run: |
+          typst compile \
+            paper/dependency-oriented-computation.typ \
+            ci-artifacts/manuscript/dependency-oriented-computation.pdf \
+            2>&1 | tee ci-artifacts/manuscript/typst.log
+          sha256sum ci-artifacts/manuscript/dependency-oriented-computation.pdf \
+            | tee ci-artifacts/manuscript/pdf.sha256
+
+      - name: Preflight generated PDF
+        run: |
+          REQUIRE_QPDF=1 bash verification/check_pdf.sh ci-artifacts/manuscript/dependency-oriented-computation.pdf \
+            2>&1 | tee ci-artifacts/manuscript/pdf-preflight.log
+
+      - name: Render every page for visual inspection
+        run: |
+          mkdir -p ci-artifacts/manuscript/renders
+          pdftoppm -png -r 120 \
+            ci-artifacts/manuscript/dependency-oriented-computation.pdf \
+            ci-artifacts/manuscript/renders/page >/dev/null
+          test "$(find ci-artifacts/manuscript/renders -name 'page-*.png' | wc -l)" -gt 0
+
+      - name: Record CI provenance and source snapshot
+        if: always()
+        run: |
+          mkdir -p ci-artifacts/manuscript/source
+          cp paper/dependency-oriented-computation.typ ci-artifacts/manuscript/source/
+          cp paper/references.bib ci-artifacts/manuscript/source/
+          {
+            echo "repository=${GITHUB_REPOSITORY}"
+            echo "commit=${GITHUB_SHA}"
+            echo "run_id=${GITHUB_RUN_ID}"
+            echo "run_attempt=${GITHUB_RUN_ATTEMPT}"
+            echo "runner=${RUNNER_NAME}"
+            echo "os=${RUNNER_OS}"
+            typst --version
+            python --version
+          } > ci-artifacts/manuscript/ci-provenance.txt
+
+      - name: Upload manuscript and renders
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: manuscript-${{ github.sha }}-attempt-${{ github.run_attempt }}
+          path: ci-artifacts/manuscript/
+          if-no-files-found: error
+          retention-days: 1
+
+  benchmarks:
+    name: Full benchmark campaign
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    needs: runtime
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install benchmark dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends cmake ninja-build g++
+
+      - name: Run publication-scale benchmark matrix
+        run: |
+          mkdir -p ci-artifacts/benchmarks
+          python runtime/scripts/run_all_benchmarks.py \
+            --samples 20 \
+            --warmups 1 \
+            --max-participants 4 \
+            --build-dir build/ci-benchmarks \
+            --results-dir ci-artifacts/benchmarks
+
+      - name: Validate benchmark artifact
+        run: |
+          python verification/check_benchmark_artifact.py ci-artifacts/benchmarks \
+            2>&1 | tee ci-artifacts/benchmarks/artifact-validation.log
+
+      - name: Record CI provenance
+        if: always()
+        run: |
+          {
+            echo "repository=${GITHUB_REPOSITORY}"
+            echo "commit=${GITHUB_SHA}"
+            echo "run_id=${GITHUB_RUN_ID}"
+            echo "run_attempt=${GITHUB_RUN_ATTEMPT}"
+            echo "runner=${RUNNER_NAME}"
+            echo "os=${RUNNER_OS}"
+            python --version
+          } > ci-artifacts/benchmarks/ci-provenance.txt
+
+      - name: Upload raw benchmark evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: benchmarks-${{ github.sha }}-attempt-${{ github.run_attempt }}
+          path: ci-artifacts/benchmarks/
+          if-no-files-found: warn
+          retention-days: 1
+
+  policy:
+    name: CI policy
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Validate workflow policy
+        run: python verification/check_ci_policy.py
+
+  publication-gate:
+    name: Publication gate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    if: always()
+    needs: [runtime, sanitizers, manuscript, benchmarks, policy]
+    steps:
+      - name: Require every publication job to pass
+        env:
+          RUNTIME_RESULT: ${{ needs.runtime.result }}
+          SANITIZER_RESULT: ${{ needs.sanitizers.result }}
+          MANUSCRIPT_RESULT: ${{ needs.manuscript.result }}
+          BENCHMARK_RESULT: ${{ needs.benchmarks.result }}
+          POLICY_RESULT: ${{ needs.policy.result }}
+        run: |
+          printf 'runtime=%s\nsanitizers=%s\nmanuscript=%s\nbenchmarks=%s\npolicy=%s\n' \
+            "$RUNTIME_RESULT" "$SANITIZER_RESULT" "$MANUSCRIPT_RESULT" "$BENCHMARK_RESULT" "$POLICY_RESULT"
+          test "$RUNTIME_RESULT" = success
+          test "$SANITIZER_RESULT" = success
+          test "$MANUSCRIPT_RESULT" = success
+          test "$BENCHMARK_RESULT" = success
+          test "$POLICY_RESULT" = success
