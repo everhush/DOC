@@ -1,0 +1,39 @@
+name,group,label,sample,external_workers,scenario,changed,direct_ms,cached_ms,doc_ms,elapsed_ms,direct_cold_ms,doc_cold_ms,direct_update_ms,doc_update_ms,evaluations,update_evaluations,cutoffs,participants,owner_jobs,worker_jobs,states,comparators,units,periods,value
+density-1,core,1 changed source,5,1,density,1,198.20306,,0.473802,,,,,,12,,0,,,,,,,,222052
+density-1,core,1 changed source,6,1,density,1,197.511499,,0.562516,,,,,,12,,0,,,,,,,,222052
+density-8,core,8 changed sources,14,1,density,8,194.369195,,1.341467,,,,,,23,,0,,,,,,,,222024
+density-512,core,512 changed sources,14,1,density,512,213.743592,,45.807757,,,,,,1007,,26,,,,,,,,221398
+density-2048,core,"2,048 changed sources",2,1,density,2048,204.275872,,197.896697,,,,,,4038,,93,,,,,,,,209944
+density-2048,core,"2,048 changed sources",14,1,density,2048,200.993694,,203.114903,,,,,,4038,,93,,,,,,,,209944
+dense-cheap,core,Dense cheap negative control,1,1,dense-cheap,,0.258328,,31.732655,,,,,,245730,,,,,,,,,,
+dense-cheap,core,Dense cheap negative control,6,1,dense-cheap,,0.30572,,43.372259,,,,,,245730,,,,,,,,,,
+dense-cheap,core,Dense cheap negative control,9,1,dense-cheap,,0.256937,,32.930394,,,,,,245730,,,,,,,,,,
+parallel-1,parallel,1 participant,17,1,parallel,,,,,168.644189,,,,,79,,,1,79,0,,,,,
+parallel-2,parallel,2 participants,7,2,parallel,,,,,100.431741,,,,,79,,,2,59,20,,,,,
+parallel-2,parallel,2 participants,14,2,parallel,,,,,110.122754,,,,,79,,,2,59,20,,,,,
+parallel-2,parallel,2 participants,17,2,parallel,,,,,130.582241,,,,,79,,,2,59,20,,,,,
+parallel-4,parallel,4 participants,4,4,parallel,,,,,69.971908,,,,,79,,,4,20,59,,,,,
+financial-1,financial,1 changed business unit,5,1,financial,1,5.223302,0.001282,1.185382,,,,,,13,,0,,,,,,4096,360,2638904283
+financial-1,financial,1 changed business unit,11,1,financial,1,6.509596,0.001602,1.35738,,,,,,13,,0,,,,,,4096,360,2638904283
+financial-64,financial,64 changed business units,2,1,financial,64,5.527781,0.074572,1.314627,,,,,,133,,0,,,,,,4096,360,2639583043
+financial-64,financial,64 changed business units,6,1,financial,64,4.871363,0.168063,1.314917,,,,,,133,,0,,,,,,4096,360,2639583043
+financial-64,financial,64 changed business units,10,1,financial,64,5.299667,0.074382,1.205722,,,,,,133,,0,,,,,,4096,360,2639583043
+financial-64,financial,64 changed business units,15,1,financial,64,7.087225,0.074261,3.348194,,,,,,133,,0,,,,,,4096,360,2639583043
+financial-64,financial,64 changed business units,16,1,financial,64,5.404936,0.074813,1.287836,,,,,,133,,0,,,,,,4096,360,2639583043
+financial-64,financial,64 changed business units,17,1,financial,64,4.618844,0.077547,1.547617,,,,,,133,,0,,,,,,4096,360,2639583043
+financial-64,financial,64 changed business units,20,1,financial,64,4.730461,0.083245,1.308798,,,,,,133,,0,,,,,,4096,360,2639583043
+financial-1024,financial,"1,024 changed business units",7,1,financial,1024,5.84015,1.21757,2.557575,,,,,,2049,,0,,,,,,4096,360,2649926332
+bitonic-1,bitonic,1 changed input,2,1,bitonic,1,,,,,0.344879,7.049068,0.037206,7.456711,,1986,691,,,,23552,11520,,,
+bitonic-1,bitonic,1 changed input,11,1,bitonic,1,,,,,0.283146,7.100064,0.069564,5.629684,,1986,691,,,,23552,11520,,,
+bitonic-1,bitonic,1 changed input,16,1,bitonic,1,,,,,0.267672,7.715399,0.037857,7.594938,,1986,691,,,,23552,11520,,,
+bitonic-1,bitonic,1 changed input,18,1,bitonic,1,,,,,0.255504,6.079189,0.050666,5.600049,,1986,691,,,,23552,11520,,,
+bitonic-8,bitonic,8 changed inputs,6,1,bitonic,8,,,,,0.264478,7.09714,0.038578,6.744308,,2830,763,,,,23552,11520,,,
+bitonic-8,bitonic,8 changed inputs,11,1,bitonic,8,,,,,0.291989,7.486535,0.125008,6.213271,,2830,763,,,,23552,11520,,,
+bitonic-64,bitonic,64 changed inputs,16,1,bitonic,64,,,,,1.135658,7.030409,0.037326,8.592708,,8828,994,,,,23552,11520,,,
+bitonic-64,bitonic,64 changed inputs,19,1,bitonic,64,,,,,0.259109,5.996716,0.052639,5.695553,,8828,994,,,,23552,11520,,,
+bitonic-64,bitonic,64 changed inputs,20,1,bitonic,64,,,,,0.273891,6.89089,0.039439,5.824887,,8828,994,,,,23552,11520,,,
+bitonic-256,bitonic,256 changed inputs,4,1,bitonic,256,,,,,0.271038,6.272219,0.035934,6.150024,,13808,256,,,,23552,11520,,,
+bitonic-256,bitonic,256 changed inputs,13,1,bitonic,256,,,,,0.276355,7.207386,0.031257,8.306468,,13808,256,,,,23552,11520,,,
+bitonic-256,bitonic,256 changed inputs,18,1,bitonic,256,,,,,0.263576,6.034572,0.029815,5.868092,,13808,256,,,,23552,11520,,,
+bitonic-512,bitonic,512 changed inputs,9,1,bitonic,512,,,,,0.262735,7.466504,0.024747,7.740507,,23040,0,,,,23552,11520,,,
+bitonic-512,bitonic,512 changed inputs,20,1,bitonic,512,,,,,0.282875,6.600543,0.024837,7.503631,,23040,0,,,,23552,11520,,,

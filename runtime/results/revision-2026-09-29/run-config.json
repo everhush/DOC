@@ -1,0 +1,241 @@
+{
+  "samples": 20,
+  "warmups": 1,
+  "max_participants": 4,
+  "build_dir": "/mnt/data/DOC-revised/DOC-master/build-benchmarks",
+  "scenarios": [
+    {
+      "name": "cold",
+      "command": [
+        "cold"
+      ],
+      "workers": 1,
+      "filter_fields": [
+        "direct_ms",
+        "doc_ms"
+      ]
+    },
+    {
+      "name": "density-1",
+      "command": [
+        "density",
+        "1"
+      ],
+      "workers": 1,
+      "filter_fields": [
+        "direct_ms",
+        "doc_ms"
+      ]
+    },
+    {
+      "name": "density-8",
+      "command": [
+        "density",
+        "8"
+      ],
+      "workers": 1,
+      "filter_fields": [
+        "direct_ms",
+        "doc_ms"
+      ]
+    },
+    {
+      "name": "density-64",
+      "command": [
+        "density",
+        "64"
+      ],
+      "workers": 1,
+      "filter_fields": [
+        "direct_ms",
+        "doc_ms"
+      ]
+    },
+    {
+      "name": "density-512",
+      "command": [
+        "density",
+        "512"
+      ],
+      "workers": 1,
+      "filter_fields": [
+        "direct_ms",
+        "doc_ms"
+      ]
+    },
+    {
+      "name": "density-2048",
+      "command": [
+        "density",
+        "2048"
+      ],
+      "workers": 1,
+      "filter_fields": [
+        "direct_ms",
+        "doc_ms"
+      ]
+    },
+    {
+      "name": "cutoff",
+      "command": [
+        "cutoff"
+      ],
+      "workers": 1,
+      "filter_fields": [
+        "elapsed_ms"
+      ]
+    },
+    {
+      "name": "dense-cheap",
+      "command": [
+        "dense-cheap"
+      ],
+      "workers": 1,
+      "filter_fields": [
+        "direct_ms",
+        "doc_ms"
+      ]
+    },
+    {
+      "name": "parallel-1",
+      "command": [
+        "parallel"
+      ],
+      "workers": 1,
+      "filter_fields": [
+        "elapsed_ms"
+      ]
+    },
+    {
+      "name": "parallel-2",
+      "command": [
+        "parallel"
+      ],
+      "workers": 2,
+      "filter_fields": [
+        "elapsed_ms"
+      ]
+    },
+    {
+      "name": "parallel-3",
+      "command": [
+        "parallel"
+      ],
+      "workers": 3,
+      "filter_fields": [
+        "elapsed_ms"
+      ]
+    },
+    {
+      "name": "parallel-4",
+      "command": [
+        "parallel"
+      ],
+      "workers": 4,
+      "filter_fields": [
+        "elapsed_ms"
+      ]
+    },
+    {
+      "name": "financial-1",
+      "command": [
+        "financial",
+        "1"
+      ],
+      "workers": 1,
+      "filter_fields": [
+        "direct_ms",
+        "cached_ms",
+        "doc_ms"
+      ]
+    },
+    {
+      "name": "financial-64",
+      "command": [
+        "financial",
+        "64"
+      ],
+      "workers": 1,
+      "filter_fields": [
+        "direct_ms",
+        "cached_ms",
+        "doc_ms"
+      ]
+    },
+    {
+      "name": "financial-1024",
+      "command": [
+        "financial",
+        "1024"
+      ],
+      "workers": 1,
+      "filter_fields": [
+        "direct_ms",
+        "cached_ms",
+        "doc_ms"
+      ]
+    },
+    {
+      "name": "bitonic-1",
+      "command": [
+        "bitonic",
+        "1"
+      ],
+      "workers": 1,
+      "filter_fields": [
+        "direct_update_ms",
+        "doc_update_ms"
+      ]
+    },
+    {
+      "name": "bitonic-8",
+      "command": [
+        "bitonic",
+        "8"
+      ],
+      "workers": 1,
+      "filter_fields": [
+        "direct_update_ms",
+        "doc_update_ms"
+      ]
+    },
+    {
+      "name": "bitonic-64",
+      "command": [
+        "bitonic",
+        "64"
+      ],
+      "workers": 1,
+      "filter_fields": [
+        "direct_update_ms",
+        "doc_update_ms"
+      ]
+    },
+    {
+      "name": "bitonic-256",
+      "command": [
+        "bitonic",
+        "256"
+      ],
+      "workers": 1,
+      "filter_fields": [
+        "direct_update_ms",
+        "doc_update_ms"
+      ]
+    },
+    {
+      "name": "bitonic-512",
+      "command": [
+        "bitonic",
+        "512"
+      ],
+      "workers": 1,
+      "filter_fields": [
+        "direct_update_ms",
+        "doc_update_ms"
+      ]
+    }
+  ],
+  "benchmark_binary": "/mnt/data/DOC-revised/DOC-master/build-benchmarks/doc_benchmark",
+  "benchmark_binary_sha256": "8c4f9d20da82192203fe800da5310a7ae5c3f9a94cd2171ced9a77b08fc66323"
+}
