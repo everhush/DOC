@@ -10,7 +10,7 @@ The acceptance rule was conservative: keep a change only if it is semantics-pres
 
 ## Authoritative baseline
 
-The publication numbers remain the retained campaign in `runtime/results/revision-2026-09-29/`:
+At the time of this optimization audit, the reviewer-revision publication numbers came from `runtime/results/revision-2026-09-29/`:
 
 | Participants | Raw mean | Raw speedup |
 |---:|---:|---:|
@@ -19,7 +19,7 @@ The publication numbers remain the retained campaign in `runtime/results/revisio
 | 3 | 60.325 ms | 2.490x |
 | 4 | 46.412 ms | 3.237x |
 
-Those values are raw arithmetic means over 20 fresh processes per participant limit after one unrecorded warmup. They are the only scaling values used in the manuscript.
+Those values are raw arithmetic means over 20 fresh processes per participant limit after one unrecorded warmup. They were the manuscript values during the optimization audit and are retained below as historical context.
 
 ## Explored implementation changes
 
@@ -33,7 +33,7 @@ The optimization experiments were local exploratory passes and are not article e
 
 ## Final decision
 
-No optimization change is retained. The original reviewed runtime is simpler, already passes the conformance/sanitizer evidence, and its 3.237x four-participant result is reproducible within normal run variation on the retained environment.
+No optimization change is retained. The original reviewed runtime is simpler and already passes the conformance/sanitizer evidence. The later 100-sample bare-metal campaign uses the same runtime/benchmark implementation and reports a 3.544x four-participant raw-mean result without requiring a runtime optimization.
 
 The earlier submission's approximately 3.85x value was collected on a different Intel host and with a median/paired-speedup presentation. It is not an apples-to-apples target for the revised raw-mean AMD/cgroup campaign.
 
@@ -41,7 +41,7 @@ Further attempts to force a larger number would require machine-specific affinit
 
 ## Publication boundary
 
-The final manuscript therefore makes no optimization-derived speedup claim beyond the retained campaign. The implementation and paper remain synchronized: complete ready-frontier evaluation is unchanged, `DOC_MAX_WORKERS` remains an external participant limit, and the single-host four-CPU result is not extrapolated to distributed or many-core scaling.
+The final manuscript therefore makes no optimization-derived speedup claim. It reports the independently completed 100-sample bare-metal campaign as empirical evidence; complete ready-frontier evaluation is unchanged, `DOC_MAX_WORKERS` remains an external participant limit, and the four-participant result is not extrapolated to distributed or many-core scaling.
 
 
 ## Independent follow-up bottleneck analysis (2026-09-30)
@@ -126,3 +126,8 @@ Replacing the benchmark leaf's trial-division prime counter with a segmented sie
 For the unchanged parallel benchmark, there is no remaining generic runtime bottleneck large enough to explain the gap between a 3.237x raw-mean ratio and the near-4x samples. The implementation already reaches the work-conservation ceiling in favorable executions. Achieving a consistently higher raw mean on the current shared virtual host would require controlling host CPU service/placement, changing the benchmark granularity or user function, or introducing machine-specific scheduling policy. None is a justified generic DOC runtime optimization.
 
 The final runtime therefore remains unchanged.
+
+
+## Final 100-sample campaign adoption
+
+The completed campaign in `runtime/results/independent-dedicated-100/` was subsequently adopted as the article's authoritative timing evidence. It used the unchanged runtime and benchmark code on bare-metal AMD Ryzen hardware, 100 fresh processes per row after three warmups, and participant limits 1--4. Its raw ratio-of-means scaling is 1.000x, 1.928x, 2.759x, and 3.544x. This supersedes the 20-sample EPYC values for article presentation but does not alter the optimization conclusion: no experimental scheduler modification was required or retained.
