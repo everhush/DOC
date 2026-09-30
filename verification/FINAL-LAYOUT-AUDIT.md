@@ -35,7 +35,7 @@ This audit records the final post-review visual/readability iterations applied a
 - Checked every conceptual diagram/chart remains vector-native Typst content.
 - No clipping, overlap, broken glyphs, caption collisions, table overflow, malformed equations, inconsistent figure numbering, or actionable spacing defect remained in the local final render.
 
-The final hosted build at revision `d2e9edb4f962f132e96d7e342bd14f48ff8446cc` completed and produced the 33-page manuscript artifact. A subsequent 2026-09-30 local publication-readiness pass recompiled the final source with Typst 0.15.1, repeated PDF structure/font/vector checks, and hardened the repository PDF-preflight/pipefail logic without changing the reported benchmark measurements.
+The hosted build at revision `d2e9edb4f962f132e96d7e342bd14f48ff8446cc` completed and produced the 33-page reviewer-revision manuscript artifact. A subsequent 2026-09-30 publication-readiness pass hardened the repository PDF-preflight/pipefail logic; the later final evidence pass then adopted the completed 100-sample bare-metal campaign and repeated manuscript compilation, structure/font/vector checks, and page inspection.
 
 
 ## Final submission pass - 2026-09-30
@@ -47,3 +47,11 @@ The final hosted build at revision `d2e9edb4f962f132e96d7e342bd14f48ff8446cc` co
 - A clean-room rebuild from only the final `.typ` and `.bib` files produced the same 33-page A4 geometry and byte-identical extracted text.
 - Final PDF preflight again found all detected fonts embedded and no raster/image XObjects.
 - No clipping, overlap, broken glyph, caption collision, table overflow, orphaned level-3 heading, malformed equation, or inconsistent hierarchy remains.
+
+
+## 100-sample evidence adoption - 2026-09-30
+
+- Replaced all article performance numbers derived from the 20-sample EPYC campaign with the generated raw statistics from `runtime/results/independent-dedicated-100/`.
+- Updated the benchmark host/method description, reduction table, parallel means/confidence intervals/speedups, parallel chart labels, financial table and derived ratios, sorting-network ranges, limitations, and code/data availability statement.
+- Recompiled and re-rendered the full manuscript after the numerical substitution; page count remains 33 and the level-3 spacing/layout treatment remains intact.
+- The manuscript checker now reads the 100-sample statistics file, so stale 20-sample article numbers fail validation.
