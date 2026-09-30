@@ -23,7 +23,7 @@ This file records publication-affecting decisions made during the 2026-09-29 rev
 | Add a compact reading guide but do not restore the report-style contents page. | The original paper was easier to navigate, while a contents page made the revision look like a technical report. | The Introduction now explains the paper sequence in one compact callout. |
 | Reject the unbreakable six-item realization-contract experiment. | Keeping the list together produced a visibly under-filled preceding page and worse page balance. | The tested experiment was reverted; the balanced split is retained and documented in `verification/FINAL-LAYOUT-AUDIT.md`. |
 
-## Validation history
+| Keep submission-facing availability minimal and archive-based. | The source repository is private and should not be exposed or discussed in the article. | The final declaration says only that a source and reference archive is provided with the submission; private-repository identifiers/paths and the Generative-AI disclosure are omitted from the manuscript. |\n\n## Validation history
 
 The first GitHub Actions run established that the manuscript job compiled, preflighted, rendered, and uploaded correctly; it was superseded when a citation-scanner false-positive fix was committed. Run 2 (commit `b569982186c6546f78161d7b1b4500a438b90b21`) completed successfully across GCC, Clang, ASan/UBSan, ThreadSanitizer, Typst/PDF validation, the full benchmark campaign, CI policy, and the final publication gate.
 
