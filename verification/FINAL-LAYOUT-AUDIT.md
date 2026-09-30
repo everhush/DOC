@@ -36,3 +36,14 @@ This audit records the final post-review visual/readability iterations applied a
 - No clipping, overlap, broken glyphs, caption collisions, table overflow, malformed equations, inconsistent figure numbering, or actionable spacing defect remained in the local final render.
 
 The final hosted build at revision `d2e9edb4f962f132e96d7e342bd14f48ff8446cc` completed and produced the 33-page manuscript artifact. A subsequent 2026-09-30 local publication-readiness pass recompiled the final source with Typst 0.15.1, repeated PDF structure/font/vector checks, and hardened the repository PDF-preflight/pipefail logic without changing the reported benchmark measurements.
+
+
+## Final submission pass - 2026-09-30
+
+- Increased only level-3 heading separation from `above: 0.92em, below: 0.38em` to `above: 1.05em, below: 0.55em`; level-1/2 rules and paragraph leading were left unchanged.
+- Recompiled with Typst 0.15.1 with zero diagnostics and rendered all 33 pages again.
+- Inspected every page individually and then repeated the review from six whole-document contact sheets; two consecutive visual passes produced no conflicting finding.
+- Rechecked the title/abstract, all formal blocks and equations, nine labeled figures, eleven labeled tables, performance/limitations pages, related-work table, appendices, declarations, and all reference pages.
+- A clean-room rebuild from only the final `.typ` and `.bib` files produced the same 33-page A4 geometry and byte-identical extracted text.
+- Final PDF preflight again found all detected fonts embedded and no raster/image XObjects.
+- No clipping, overlap, broken glyph, caption collision, table overflow, orphaned level-3 heading, malformed equation, or inconsistent hierarchy remains.
