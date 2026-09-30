@@ -8,13 +8,12 @@ The paper's finite metatheory is a mathematical argument. The executable materia
 
 ## Layout
 
-- `paper/` — final Typst source, compiled PDF, and verified BibTeX metadata mirror;
+- `paper/` — final Typst source and verified BibTeX metadata; the submission PDF is generated from these sources rather than retained as a potentially stale binary;
 - `runtime/include`, `runtime/src`, `runtime/examples` — C++20 runtime and example;
 - `runtime/tests` — native and randomized/differential tests;
 - `runtime/formal` — five bounded model checkers;
 - `runtime/benchmarks` and `runtime/scripts` — benchmark implementation and complete campaign driver;
-- `runtime/results/primary` — preserved 20-process-per-row campaign for sparse/dense, cutoff, financial, and sorting-network results;
-- `runtime/results/scaling` — preserved local-machine scaling evidence and a summary matching Section 9.2;
+- `runtime/results/revision-2026-09-29/` — the single authoritative 20-process-per-row campaign used for every numerical result printed in the revised article;
 - `verification/` — one consolidated verification report, supporting logs, and the citation ledger.
 
 ## Dependencies
@@ -77,14 +76,14 @@ The complete campaign driver is included at `runtime/scripts/run_all_benchmarks.
 typst compile paper/dependency-oriented-computation.typ paper/rebuilt.pdf
 ```
 
-The supplied PDF was compiled with Typst 0.15.1.
+The journal-facing PDF is compiled from the checked-in Typst/BibTeX sources with Typst 0.15.1; the generated PDF is intentionally not version-controlled.
 
 ## Raw data and summaries
 
-- `runtime/results/primary/raw.csv` is the unfiltered primary campaign.
-- `runtime/results/primary/statistics.csv` and `summary.csv` contain the generated distributions and filtered/raw summaries.
-- `runtime/results/scaling/raw.csv` preserves the supplied local-machine paired scaling measurements.
-- `runtime/results/scaling/SUMMARY.md` reproduces the Section 9.2 median-time and paired-speedup series.
+- `runtime/results/revision-2026-09-29/raw.csv` contains every recorded process measurement.
+- `retained.csv`, `statistics.csv`, `summary.csv`, `filter-bounds.csv`, and `outliers.csv` record the declared sensitivity analysis and aggregate statistics.
+- `machine.json` and `run-config.json` record the exact benchmark host, compiler, quota, sample count, and campaign settings.
+- The manuscript's displayed parallel series uses raw arithmetic means and 95% confidence intervals over 20 fresh processes per participant limit.
 
 
 
