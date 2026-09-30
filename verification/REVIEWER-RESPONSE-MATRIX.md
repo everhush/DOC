@@ -16,7 +16,7 @@ This matrix maps the two initial reviews to concrete repository/manuscript chang
 | Formal assumptions are demanding for build/compiler settings. | The paper states pure/total/deterministic finite-kernel assumptions and explains that failures/effects/external observations must be values/contracts or remain outside the kernel. | Addressed |
 | Broader claims may be mistaken for consequences of the finite theorem. | Claim/evidence mapping separates the finite theorem, conditional recurrence/versioning results, realization contracts, runtime evidence, and empirical evidence. | Addressed |
 | Semantic-key compatibility is underspecified. | Added an operational graph-version example and states that arbitrary function equivalence is not decided by DOC. | Addressed |
-| Parallel result could be overgeneralized. | The article reports one-host, four-CPU-quota evidence only and explicitly rejects distributed-scalability inference. | Addressed |
+| Parallel result could be overgeneralized. | The article reports one-host, four-participant evidence only and explicitly rejects many-core or distributed-scalability inference. | Addressed |
 | Reproducibility details need to be in the article and stable. | The retained campaign includes machine/config/raw/statistical files; the manuscript names the exact command and authoritative campaign path; repository validation rebuilds the manuscript/runtime and independently checks the retained evidence. | Addressed |
 
 All fourteen reviewer concerns are represented above; none is marked partially addressed or open in the final revision.
