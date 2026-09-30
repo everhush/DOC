@@ -35,4 +35,4 @@ This audit records the final post-review visual/readability iterations applied a
 - Checked every conceptual diagram/chart remains vector-native Typst content.
 - No clipping, overlap, broken glyphs, caption collisions, table overflow, malformed equations, inconsistent figure numbering, or actionable spacing defect remained in the local final render.
 
-The final hosted-CI artifact check is recorded separately after the corresponding GitHub Actions run completes.
+The final hosted build at revision `d2e9edb4f962f132e96d7e342bd14f48ff8446cc` completed and produced the 33-page manuscript artifact. A subsequent 2026-09-30 local publication-readiness pass recompiled the final source with Typst 0.15.1, repeated PDF structure/font/vector checks, and hardened the repository PDF-preflight/pipefail logic without changing the reported benchmark measurements.

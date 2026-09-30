@@ -1,6 +1,6 @@
 # Citation-verification ledger
 
-Checked on 2026-07-30. Each entry was verified against a publisher page, official proceedings record, institutional thesis record, primary paper, or stable library record. The ledger records the limited manuscript statement supported; it does not imply that cited authors endorse DOC.
+Rechecked on 2026-09-30. Each entry was verified against a publisher page, official proceedings record, institutional thesis record, primary paper, or stable library record. The ledger records the limited manuscript statement supported; it does not imply that cited authors endorse DOC.
 
 | # | Verified publication | Official or primary identifier | Manuscript use and support boundary |
 |---:|---|---|---|
@@ -28,4 +28,4 @@ Checked on 2026-07-30. Each entry was verified against a publisher page, officia
 - No bibliography entry is uncited.
 - The related-work statements were checked against the cited works' actual scope and were kept deliberately limited.
 - No historical “first,” “only,” or absolute superiority claim is made.
-- No named foundational model was added for competitive comparison.
+- No named foundational model was added for competitive comparison.\n- The DOI/primary-record links and bibliographic metadata were rechecked during the final publication-readiness pass on 2026-09-30.
