@@ -14,7 +14,7 @@ The paper's finite metatheory is a mathematical argument. The executable materia
 - `runtime/formal` — five bounded model checkers;
 - `runtime/benchmarks` and `runtime/scripts` — benchmark implementation and complete campaign driver;
 - `runtime/results/revision-2026-09-29/` — the single authoritative 20-process-per-row campaign used for every numerical result printed in the revised article;
-- `verification/` — one consolidated verification report, supporting logs, and the citation ledger.
+- `verification/` — consolidated verification records, reviewer-response matrix, performance-optimization audit, CI/PDF checks, and the citation ledger.
 
 ## Dependencies
 
