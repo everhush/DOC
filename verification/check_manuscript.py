@@ -10,7 +10,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PAPER = ROOT / "paper" / "dependency-oriented-computation.typ"
 BIB = ROOT / "paper" / "references.bib"
-STATS = ROOT / "runtime" / "results" / "revision-2026-09-29" / "statistics.csv"
+STATS = ROOT / "runtime" / "results" / "independent-dedicated-100" / "statistics.csv"
 
 errors: list[str] = []
 notes: list[str] = []
@@ -84,8 +84,8 @@ for token, why in [
     ("repair-admissible", "finite theorem precondition"),
     ("pure, total, deterministic", "finite kernel assumptions"),
     ("specialized", "specialized-baseline performance discussion"),
-    ("four-CPU quota", "parallel capacity boundary"),
-    ("runtime/results/revision-2026-09-29/", "stable evidence path"),
+    ("bare-metal", "authoritative benchmark host boundary"),
+    ("runtime/results/independent-dedicated-100/", "stable evidence path"),
 ]:
     require(token, why)
 
@@ -137,7 +137,7 @@ require_number(f"{min(direct):.4f} to {max(direct):.4f} ms", "bitonic direct ran
 require_number(f"{min(ratios):.0f} times", "bitonic minimum overhead")
 require_number(f"{max(ratios):.0f} times", "bitonic maximum overhead")
 
-for stale in ("Intel(R) Xeon", "Section 9.2", "142.589", "3.847"):
+for stale in ("Intel(R) Xeon", "Section 9.2", "142.589", "3.847", "150.221", "3.237", "runtime/results/revision-2026-09-29/"):
     if stale in source:
         fail(f"stale pre-revision text remains: {stale}")
 
@@ -151,5 +151,5 @@ print("MANUSCRIPT CHECK: PASS")
 print(f"- {len(labels)} unique Typst labels")
 print(f"- {len(citations)} bibliography citations resolve with no unused entry")
 print(f"- {len(visual_labels)} visual figures share the native Typst figure counter")
-print("- displayed benchmark statistics agree with the retained revision campaign")
+print("- displayed benchmark statistics agree with the authoritative 100-sample campaign")
 print("- reviewer-targeted notation, assumptions, compatibility, and performance boundaries are present")
