@@ -33,4 +33,4 @@ Rechecked on 2026-09-30. Each entry was verified against a publisher page, offic
 - The Kahn DBLP record, Acar CMU thesis record, and official CIDR Differential Dataflow PDF resolve to metadata matching the bibliography.
 - Reference 10 intentionally retains proceedings DOI `10.1145/16894.16861`: DBLP and the University of Waterloo proceedings record use that identifier, while ACM's current SIGMOD Record landing page also displays journal-form DOI `10.1145/16856.16861`.
 - The manuscript ORCID `0009-0002-7347-7064` has a valid ISO 7064 MOD 11-2 check digit; the `mailto:` link is syntactically valid.
-- The immutable GitHub evidence revision `8d3d647ea913732a39ad4cb83d17b9f7f3e20d17` and the retained numerical-evidence path under `d2e9edb4f962f132e96d7e342bd14f48ff8446cc` were both checked through the authenticated repository connection.
+- The immutable GitHub evidence revision `8d3d647ea913732a39ad4cb83d17b9f7f3e20d17` and the authoritative numerical-evidence path `runtime/results/independent-dedicated-100/` were both checked through the authenticated repository connection.
