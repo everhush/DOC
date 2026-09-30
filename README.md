@@ -14,6 +14,7 @@ The paper's finite metatheory is a mathematical argument. The executable materia
 - `runtime/formal` — five bounded model checkers;
 - `runtime/benchmarks` and `runtime/scripts` — benchmark implementation and complete campaign driver;
 - `runtime/results/revision-2026-09-29/` — the single authoritative 20-process-per-row campaign used for every numerical result printed in the revised article;
+- `runtime/results/independent-dedicated-100/` — 100-process-per-row bare-metal follow-up evidence retained for independent validation, not as a replacement article dataset;
 - `verification/` — consolidated verification records, reviewer-response matrix, performance-optimization audit, CI/PDF checks, and the citation ledger.
 
 ## Dependencies
@@ -84,6 +85,7 @@ The journal-facing PDF is compiled from the checked-in Typst/BibTeX sources with
 - `retained.csv`, `statistics.csv`, `summary.csv`, `filter-bounds.csv`, and `outliers.csv` record the declared sensitivity analysis and aggregate statistics.
 - `machine.json` and `run-config.json` record the exact benchmark host, compiler, quota, sample count, and campaign settings.
 - The manuscript's displayed parallel series uses raw arithmetic means and 95% confidence intervals over 20 fresh processes per participant limit.
+- The later `independent-dedicated-100/` campaign is intentionally reported separately; its host-specific timings are not substituted into the manuscript.
 
 
 
