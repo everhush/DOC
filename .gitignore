@@ -9,3 +9,4 @@
 runtime/results/ci-*/
 paper/*.png
 paper/*.svg
+/paper/dependency-oriented-computation.pdf

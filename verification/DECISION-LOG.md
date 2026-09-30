@@ -28,3 +28,12 @@ The first GitHub Actions run established that the manuscript job compiled, prefl
 The manuscript artifact from that run was downloaded and visually inspected page by page. That pre-spacing article contained 31 A4 pages and nine sequentially numbered native-vector figures; no clipping, overlap, broken glyph, or raster-diagram regression was observed.
 
 A later independent readability cycle compared that render against the originally submitted paper. Global heading rhythm and paragraph leading were relaxed, a compact Introduction reading guide was added, two duplicated automatic-reference supplements were corrected, and a pagination experiment that created a half-empty page was explicitly rejected. The resulting local article is 33 A4 pages. Four independent passes—visual hierarchy, pagination/compiled text, implementation/evidence, and 200-DPI page inspection—found no remaining actionable defect before the final hosted-CI rebuild.
+
+
+## Final publication-hardening pass (2026-09-30)
+
+- Hosted publication-validation run 36583157931 completed successfully for revision `d2e9edb4f962f132e96d7e342bd14f48ff8446cc` and produced the 33-page manuscript artifact.
+- A later evidence audit found a brittle fixed-field `pdffonts` parser and piped commands without an explicit pipefail shell. Direct inspection confirmed every detected font in the submitted PDF is embedded.
+- The repository now parses the embedding field relative to the end of each `pdffonts` row and sets the workflow run shell explicitly to bash, so `tee` cannot mask a failing validation command.
+- Stale `runtime/results/primary` and `runtime/results/scaling` documentation was replaced with the single authoritative `runtime/results/revision-2026-09-29/` campaign.
+- Performance-optimization experiments were not retained: input-preparation parallelization showed a non-stable apparent gain, while atomic-index and targeted-wakeup scheduler variants regressed; statistics-counter aggregation reproduced the retained four-participant speedup within run noise. The simpler reviewed runtime therefore remains the final implementation.
