@@ -57,3 +57,10 @@ The hosted build at revision `d2e9edb4f962f132e96d7e342bd14f48ff8446cc` complete
 - The manuscript checker now reads the 100-sample statistics file, so stale 20-sample article numbers fail validation.
 - Post-substitution PDF preflight reports 33 A4 pages, all detected fonts embedded, and zero raster/image XObjects.
 - Modified pages 1, 26, 27, 28, and 32 were inspected individually at rendered resolution; a second whole-document pass used six contact sheets covering all 33 pages. No clipping, overlap, chart-label collision, table overflow, malformed line wrap, or new pagination defect was found.
+
+## Submission declaration simplification - 2026-09-30
+
+- Replaced the detailed private-repository/data-availability paragraph with the single sentence: “A source and reference archive is provided with this submission.”
+- Removed the Generative-AI disclosure from the manuscript at the author's request.
+- Recompiled the manuscript with Typst 0.15.1; it remains 33 A4 pages with zero compiler diagnostics and all detected fonts embedded.
+- Re-rendered and inspected pages 32-33 after the declaration changes. The Declarations/References transition is clean, with no clipping, overlap, orphaning, or pagination defect.
