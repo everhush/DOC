@@ -1,6 +1,6 @@
 # Dependency-Oriented Computation supplementary artifact
 
-This archive accompanies the manuscript **Dependency-Oriented Computation**. It contains the neutral final manuscript source and PDF, the C++20 executable witness, registered tests, bounded model checkers, benchmark implementation, preserved raw benchmark evidence, verification records, and citation metadata.
+This repository accompanies the manuscript **Dependency-Oriented Computation**. It contains the final manuscript source, the C++20 executable witness, registered tests, bounded model checkers, benchmark implementation, preserved raw benchmark evidence, verification records, and citation metadata. The journal-facing PDF is generated from the checked-in Typst source and is distributed as a submission artifact rather than committed as a potentially stale binary.
 
 ## Relationship to the manuscript
 
