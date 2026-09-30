@@ -1368,8 +1368,6 @@ The sequence is a meta-level conformance test, not stored history or logical con
 
 #strong[Competing interests.] The author declares no competing interests.
 
-#strong[Code and data availability.] The manuscript source and compilation instructions are included with this submission. The complete runtime implementation, tests, bounded model checkers, benchmark driver, authoritative 100-sample benchmark data, and verification materials correspond to immutable private-repository revision `8d3d647ea913732a39ad4cb83d17b9f7f3e20d17`. The benchmark dataset used for the numerical results printed in this article is `runtime/results/independent-dedicated-100/`. The repository is private at submission, so no public repository URL is listed; access can be provided to editors and reviewers as required by the venue.
-
-#strong[Generative-AI disclosure.] During the preparation of this work, the author used OpenAI ChatGPT to assist with language refinement, manuscript critique, implementation review, test design, and supporting development tasks. The author reviewed and edited all generated material, independently checked the formal claims, references, implementation, and reported results, and takes full responsibility for the content of the article.
+#strong[Code and data availability.] A source and reference archive is provided with this submission.
 
 #bibliography("references.bib", title: [References], style: "ieee")
