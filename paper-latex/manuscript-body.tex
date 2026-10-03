@@ -306,18 +306,17 @@ Parallelism has the same structural cause. The active region identifies potentia
 \centering
 \begin{tikzpicture}[>=Latex,
   state/.style={draw,rounded corners,minimum height=7mm,minimum width=24mm,inner sep=3pt,font=\footnotesize,align=center}]
-\node[draw=none,font=\footnotesize\itshape] at (3.4,2.05) {both branches are in the same ready frontier $F\subseteq R(A)$};
-\node[state,fill=green!8] (a) at (0.6,1.15) {source $a$};
+\node[draw=none,font=\footnotesize\itshape] at (3.4,1.65) {both branches are in the same ready frontier $F\subseteq R(A)$};
+\node[state,fill=green!8] (a) at (0.6,0.85) {source $a$};
 \node[state,fill=orange!8] (l) at (0.6,0) {left branch};
-\node[state,fill=blue!7] (u) at (0.6,-1.15) {result $u$};
-\node[state,fill=green!8] (b) at (6.2,1.15) {source $b$};
+\node[state,fill=blue!7] (u) at (0.6,-0.85) {result $u$};
+\node[state,fill=green!8] (b) at (6.2,0.85) {source $b$};
 \node[state,fill=orange!8] (r) at (6.2,0) {right branch};
-\node[state,fill=blue!7] (v) at (6.2,-1.15) {result $v$};
+\node[state,fill=blue!7] (v) at (6.2,-0.85) {result $v$};
 \draw[->] (a)--(l); \draw[->] (l)--(u); \draw[->] (b)--(r); \draw[->] (r)--(v);
 \end{tikzpicture}
 \caption{Independent active branches can belong to one ready frontier. No horizontal dependency connects the branches, and the program contains no worker-count syntax.}\label{fig:frontier-parallelism}
 \end{figure}
-Figure~\ref{fig:frontier-parallelism} shows the structural source of parallel work: readiness exposes independence before a runtime chooses any physical worker allocation.
 \fi
 
 Persistent editors, compilers, servers, simulations, dashboards, and workflows repeatedly receive partial change. DOC therefore treats temporal reuse as foundational while leaving local kernels free to use reduction-optimal, vectorized, incrementalized, or hardware-specific techniques.
@@ -406,23 +405,22 @@ A logically available value need not remain resident in its current physical for
 \begin{figure}[t]
 \centering
 \begin{tikzpicture}[>=Latex,
-  box/.style={draw,rounded corners,minimum height=9mm,text width=37mm,inner sep=3pt,font=\footnotesize,align=center}]
-\node[box,fill=green!8] (a1) at (0,1.6) {logically available};
-\node[box,fill=blue!7] (a2) at (5.1,1.6) {resident immutable value};
-\node[box,fill=green!8] (a3) at (10.2,1.6) {protected observation};
+  box/.style={draw,rounded corners,minimum height=7.5mm,text width=37mm,inner sep=3pt,font=\footnotesize,align=center}]
+\node[box,fill=green!8] (a1) at (0,1.25) {logically available};
+\node[box,fill=blue!7] (a2) at (5.1,1.25) {resident immutable value};
+\node[box,fill=green!8] (a3) at (10.2,1.25) {protected observation};
 \draw[->] (a1.east)--(a2.west); \draw[->] (a2.east)--(a3.west);
 \node[box,fill=green!8] (b1) at (0,0) {logically available};
 \node[box,fill=orange!8] (b2) at (5.1,0) {reconstruction data retained};
 \node[box,fill=blue!7] (b3) at (10.2,0) {complete value reconstructed};
 \draw[->] (b1.east)--(b2.west); \draw[->] (b2.east)--(b3.west);
-\node[box,fill=orange!8] (c1) at (0,-1.6) {no logical root / active pin};
-\node[box,fill=orange!8] (c2) at (5.1,-1.6) {old object unreachable};
-\node[box,fill=green!8] (c3) at (10.2,-1.6) {reclaimable};
+\node[box,fill=orange!8] (c1) at (0,-1.25) {no logical root / active pin};
+\node[box,fill=orange!8] (c2) at (5.1,-1.25) {old object unreachable};
+\node[box,fill=green!8] (c3) at (10.2,-1.25) {reclaimable};
 \draw[->] (c1.east)--(c2.west); \draw[->] (c2.east)--(c3.west);
 \end{tikzpicture}
 \caption{Logical availability is a semantic obligation; residency, reconstruction, and reclamation are realization choices while active uses protect complete values.}\label{fig:logical-availability}
 \end{figure}
-Figure~\ref{fig:logical-availability} separates the logical entitlement to a value from one particular resident representation.
 \fi
 
 A conforming safe realization must (i) preserve every logically available value by residency or authoritative reconstruction information; (ii) protect complete values captured by active evaluation, observation, publication, or transport; (iii) publish or reconstruct only complete values; (iv) serialize reconstruction admission with replacement, or use equivalent generation checks; (v) prevent dangling access after logical replacement or physical eviction; and (vi) eventually reclaim physical materializations that remain unreachable under the stated reclamation-progress assumption. Tracing, ownership, regions, reference counting, arenas, recomputation, durable checkpoints, or hybrid collectors are possible implementations if they preserve these obligations.
@@ -446,26 +444,25 @@ A role may be temporarily unassigned during join, reassignment, drain, or fail-s
 \begin{tikzpicture}[>=Latex,
   role/.style={draw,rounded corners,minimum height=8mm,text width=31mm,inner sep=3pt,font=\footnotesize,align=center}]
 % Logical panel
-\node[draw,rounded corners,minimum width=6.2cm,minimum height=3.5cm] (left) at (0,0) {};
-\node[draw=none,font=\footnotesize\bfseries] at (0,2.05) {Logical graph unchanged};
-\node[role,fill=green!8,text width=12mm] (s) at (-1.65,0.45) {$s_1$};
-\node[role,text width=12mm] (d1) at (0,0.45) {$d_1$};
-\node[role,text width=12mm] (d2) at (1.65,0.45) {$d_2$};
+\node[draw,rounded corners,minimum width=6.2cm,minimum height=3.0cm] (left) at (0,0) {};
+\node[draw=none,font=\footnotesize\bfseries] at (0,1.75) {Logical graph unchanged};
+\node[role,fill=green!8,text width=12mm] (s) at (-1.65,0.38) {$s_1$};
+\node[role,text width=12mm] (d1) at (0,0.38) {$d_1$};
+\node[role,text width=12mm] (d2) at (1.65,0.38) {$d_2$};
 \draw[->] (s.east)--(d1.west); \draw[->] (d1.east)--(d2.west);
-\node[draw=none,text width=50mm,align=center,font=\footnotesize] at (0,-0.85) {$G$, $\nu$, and logical identities stay fixed};
+\node[draw=none,text width=50mm,align=center,font=\footnotesize] at (0,-0.72) {$G$, $\nu$, and logical identities stay fixed};
 % Physical panel
-\node[draw,rounded corners,minimum width=8.2cm,minimum height=3.5cm] (right) at (7.55,0) {};
-\node[draw=none,font=\footnotesize\bfseries] at (7.55,2.05) {Physical roles may move};
-\node[role] (r1) at (5.75,0.7) {resource A\\$\mathrm{value}(s_1)$};
-\node[role] (r2) at (9.35,0.7) {resource B\\$\mathrm{eval}(d_1)$};
-\node[role,fill=green!8] (r3) at (5.75,-0.45) {resource C joins};
-\node[role,fill=blue!7] (r4) at (9.35,-0.45) {$\mathrm{eval}(d_2)$ moves};
+\node[draw,rounded corners,minimum width=8.2cm,minimum height=3.0cm] (right) at (7.55,0) {};
+\node[draw=none,font=\footnotesize\bfseries] at (7.55,1.75) {Physical roles may move};
+\node[role] (r1) at (5.75,0.58) {resource A\\$\mathrm{value}(s_1)$};
+\node[role] (r2) at (9.35,0.58) {resource B\\$\mathrm{eval}(d_1)$};
+\node[role,fill=green!8] (r3) at (5.75,-0.38) {resource C joins};
+\node[role,fill=blue!7] (r4) at (9.35,-0.38) {$\mathrm{eval}(d_2)$ moves};
 \draw[->,dashed] (r3.east)--(r4.west);
-\node[draw=none,text width=70mm,align=center,font=\footnotesize] at (7.55,-1.35) {drain or failure advances the placement generation};
+\node[draw=none,text width=70mm,align=center,font=\footnotesize] at (7.55,-1.17) {drain or failure advances the placement generation};
 \end{tikzpicture}
 \caption{Joining, reassignment, graceful drain, and bounded fail-stop recovery change physical placement, not logical identities or dependency meaning.}\label{fig:placement}
 \end{figure}
-Figure~\ref{fig:placement} summarizes the separation between persistent logical roles and movable physical resources.
 \fi
 
 When a definition and one of its premises are on different resources, the dependency becomes a communication obligation. The bounded wire profile carries logical state identity, committed source epoch, placement-role key, placement generation, checksum, and an immutable scalar value. Reliable delivery may be delayed, duplicated, or reordered; a receiver therefore admits a value only for the expected role and current generation. An older epoch is stale, a duplicate same value is harmless, and a different value for the same state/role/epoch is a conflict. The executable placed profile sends every premise through real TCP loopback before evaluation, exercising transport framing, checksum validation, duplicate admission, wrong-role rejection, stale-epoch rejection, and stale-generation rejection without claiming a production multi-host system.
