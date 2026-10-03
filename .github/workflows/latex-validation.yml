@@ -56,7 +56,6 @@ jobs:
           from pathlib import Path
           text = Path("manuscript.txt").read_text(errors="replace")
           words = re.findall(r"\b[\w’'-]+\b", text)
-          print(f"pages={pages}")
           print(f"extracted_words={len(words)}")
           if len(words) > 15000:
               raise SystemExit("word-count ceiling exceeded")
