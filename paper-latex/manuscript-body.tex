@@ -304,15 +304,16 @@ Parallelism has the same structural cause. The active region identifies potentia
 \iffullvisuals
 \begin{figure}[t]
 \centering
-\begin{tikzpicture}[>=Latex,every node/.style={draw,rounded corners,minimum height=6mm,inner sep=3pt,font=\footnotesize}]
-\node[fill=green!8] (a) at (0,1.25) {source $a$};
-\node[fill=orange!8] (l) at (0,0) {left branch};
-\node[fill=blue!7] (u) at (0,-1.25) {result $u$};
-\node[fill=green!8] (b) at (6.2,1.25) {source $b$};
-\node[fill=orange!8] (r) at (6.2,0) {right branch};
-\node[fill=blue!7] (v) at (6.2,-1.25) {result $v$};
+\begin{tikzpicture}[>=Latex,
+  state/.style={draw,rounded corners,minimum height=7mm,minimum width=24mm,inner sep=3pt,font=\footnotesize,align=center}]
+\node[draw=none,font=\footnotesize\itshape] at (3.4,2.05) {both branches are in the same ready frontier $F\subseteq R(A)$};
+\node[state,fill=green!8] (a) at (0.6,1.15) {source $a$};
+\node[state,fill=orange!8] (l) at (0.6,0) {left branch};
+\node[state,fill=blue!7] (u) at (0.6,-1.15) {result $u$};
+\node[state,fill=green!8] (b) at (6.2,1.15) {source $b$};
+\node[state,fill=orange!8] (r) at (6.2,0) {right branch};
+\node[state,fill=blue!7] (v) at (6.2,-1.15) {result $v$};
 \draw[->] (a)--(l); \draw[->] (l)--(u); \draw[->] (b)--(r); \draw[->] (r)--(v);
-\node[draw=none,font=\footnotesize] at (3.1,0) {same ready frontier $F\subseteq R(A)$};
 \end{tikzpicture}
 \caption{Independent active branches can belong to one ready frontier. No horizontal dependency connects the branches, and the program contains no worker-count syntax.}\label{fig:frontier-parallelism}
 \end{figure}
@@ -404,19 +405,20 @@ A logically available value need not remain resident in its current physical for
 \iffullvisuals
 \begin{figure}[t]
 \centering
-\begin{tikzpicture}[>=Latex,every node/.style={draw,rounded corners,minimum height=6mm,inner sep=2.5pt,font=\scriptsize}]
-\node[fill=green!8] (a1) at (0,1.35) {logical value available};
-\node[fill=blue!7] (a2) at (3.2,1.35) {resident immutable value};
-\node[fill=green!8] (a3) at (6.4,1.35) {protected observation};
-\draw[->] (a1)--(a2); \draw[->] (a2)--(a3);
-\node[fill=green!8] (b1) at (0,0) {logical value available};
-\node[fill=orange!8] (b2) at (3.2,0) {authoritative information};
-\node[fill=blue!7] (b3) at (6.4,0) {reconstruct complete value};
-\draw[->] (b1)--(b2); \draw[->] (b2)--(b3);
-\node[fill=orange!8] (c1) at (0,-1.35) {no availability or pin};
-\node[fill=orange!8] (c2) at (3.2,-1.35) {unreachable old object};
-\node[fill=green!8] (c3) at (6.4,-1.35) {automatic reclaim};
-\draw[->] (c1)--(c2); \draw[->] (c2)--(c3);
+\begin{tikzpicture}[>=Latex,
+  box/.style={draw,rounded corners,minimum height=9mm,text width=37mm,inner sep=3pt,font=\footnotesize,align=center}]
+\node[box,fill=green!8] (a1) at (0,1.6) {logically available};
+\node[box,fill=blue!7] (a2) at (5.1,1.6) {resident immutable value};
+\node[box,fill=green!8] (a3) at (10.2,1.6) {protected observation};
+\draw[->] (a1.east)--(a2.west); \draw[->] (a2.east)--(a3.west);
+\node[box,fill=green!8] (b1) at (0,0) {logically available};
+\node[box,fill=orange!8] (b2) at (5.1,0) {reconstruction data retained};
+\node[box,fill=blue!7] (b3) at (10.2,0) {complete value reconstructed};
+\draw[->] (b1.east)--(b2.west); \draw[->] (b2.east)--(b3.west);
+\node[box,fill=orange!8] (c1) at (0,-1.6) {no logical root / active pin};
+\node[box,fill=orange!8] (c2) at (5.1,-1.6) {old object unreachable};
+\node[box,fill=green!8] (c3) at (10.2,-1.6) {reclaimable};
+\draw[->] (c1.east)--(c2.west); \draw[->] (c2.east)--(c3.west);
 \end{tikzpicture}
 \caption{Logical availability is a semantic obligation; residency, reconstruction, and reclamation are realization choices while active uses protect complete values.}\label{fig:logical-availability}
 \end{figure}
@@ -441,19 +443,25 @@ A role may be temporarily unassigned during join, reassignment, drain, or fail-s
 \iffullvisuals
 \begin{figure}[t]
 \centering
-\begin{tikzpicture}[>=Latex,every node/.style={draw,rounded corners,minimum height=6mm,inner sep=2.5pt,font=\scriptsize}]
-\node[draw,rounded corners,minimum width=4.3cm,minimum height=3.0cm,label={[font=\footnotesize\bfseries]above:Logical graph unchanged}] (left) at (0,0) {};
-\node[fill=green!8] (s) at (-1.25,0.3) {$s_1$};
-\node (d1) at (0,0.3) {$d_1$};
-\node (d2) at (1.25,0.3) {$d_2$};
-\draw[->] (s)--(d1); \draw[->] (d1)--(d2);
-\node[draw=none,font=\scriptsize] at (0,-0.75) {$G$, $\nu$, and logical identities do not move};
-\node[draw,rounded corners,minimum width=5.4cm,minimum height=3.0cm,label={[font=\footnotesize\bfseries]above:Physical roles may move}] (right) at (5.5,0) {};
-\node (r1) at (4.45,0.55) {resource A: $\mathrm{value}(s_1)$};
-\node (r2) at (6.55,0.55) {resource B: $\mathrm{eval}(d_1)$};
-\node[fill=green!8] (r3) at (4.45,-0.35) {resource C joins};
-\node[fill=blue!7] (r4) at (6.55,-0.35) {$\mathrm{eval}(d_2)$ moves};
-\node[draw=none,font=\scriptsize] at (5.5,-1.05) {drain/failure advances the placement generation};
+\begin{tikzpicture}[>=Latex,
+  role/.style={draw,rounded corners,minimum height=8mm,text width=31mm,inner sep=3pt,font=\footnotesize,align=center}]
+% Logical panel
+\node[draw,rounded corners,minimum width=6.2cm,minimum height=3.5cm] (left) at (0,0) {};
+\node[draw=none,font=\footnotesize\bfseries] at (0,2.05) {Logical graph unchanged};
+\node[role,fill=green!8,text width=12mm] (s) at (-1.65,0.45) {$s_1$};
+\node[role,text width=12mm] (d1) at (0,0.45) {$d_1$};
+\node[role,text width=12mm] (d2) at (1.65,0.45) {$d_2$};
+\draw[->] (s.east)--(d1.west); \draw[->] (d1.east)--(d2.west);
+\node[draw=none,text width=50mm,align=center,font=\footnotesize] at (0,-0.85) {$G$, $\nu$, and logical identities stay fixed};
+% Physical panel
+\node[draw,rounded corners,minimum width=8.2cm,minimum height=3.5cm] (right) at (7.55,0) {};
+\node[draw=none,font=\footnotesize\bfseries] at (7.55,2.05) {Physical roles may move};
+\node[role] (r1) at (5.75,0.7) {resource A\\$\mathrm{value}(s_1)$};
+\node[role] (r2) at (9.35,0.7) {resource B\\$\mathrm{eval}(d_1)$};
+\node[role,fill=green!8] (r3) at (5.75,-0.45) {resource C joins};
+\node[role,fill=blue!7] (r4) at (9.35,-0.45) {$\mathrm{eval}(d_2)$ moves};
+\draw[->,dashed] (r3.east)--(r4.west);
+\node[draw=none,text width=70mm,align=center,font=\footnotesize] at (7.55,-1.35) {drain or failure advances the placement generation};
 \end{tikzpicture}
 \caption{Joining, reassignment, graceful drain, and bounded fail-stop recovery change physical placement, not logical identities or dependency meaning.}\label{fig:placement}
 \end{figure}
