@@ -53,7 +53,7 @@ Repository CI builds and validates both PDFs, including page count, word-count c
 
 ## Computing submission note
 
-Computing's current author instructions request a professional or institutional author email and state that submissions using a private email address will be sent back. The Computing wrapper uses the author's professional-domain correspondence address, `rituraj@riturajbasak.tech`.
+Computing's current author instructions request a professional or institutional author email. The Computing wrapper uses `rituraj@riturajbasak.tech` and identifies the unaffiliated author by city and country (`Kolkata, India`).nd state that submissions using a private email address will be sent back. The Computing wrapper uses the author's professional-domain correspondence address, `rituraj@riturajbasak.tech`.
 
 ## Computing declaration checklist
 
