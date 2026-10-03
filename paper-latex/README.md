@@ -6,7 +6,7 @@ This folder contains the compact LaTeX form of **Dependency-Oriented Computation
 
 The manuscript uses Springer's one-column `svjour3` class with the `smallextended` option because **Computing** currently requires that format and limits submissions to 25 pages. The resulting single-column reviewer PDF is also suitable for regular initial submission to **Journal of Systems and Software**, **Future Generation Computer Systems**, and **Information and Software Technology**, whose regular Elsevier initial-submission workflows accept reviewer-readable manuscripts without requiring this source to be rewritten. A special issue may impose its own template or page limit.
 
-The scientific content follows the finalized Typst manuscript. Space was saved by consolidating redundant explanatory graphics into text/tables, not by shrinking fonts, margins, proofs, or negative results.
+The scientific content follows the finalized Typst manuscript. Space was saved by consolidating redundant explanatory graphics and one duplicate related-work table into prose/tables, not by shrinking fonts, margins, proofs, or negative results.
 
 The source deliberately omits repository URLs, checksums, AI-related declarations, and submission-internal provenance. A source/reference archive is supplied separately with the journal submission.
 
