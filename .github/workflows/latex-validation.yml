@@ -3,7 +3,7 @@ name: LaTeX validation
 on:
   push:
     branches:
-      - submission-2026-09-30
+      - master
     paths:
       - "paper-latex/**"
       - ".github/workflows/latex-validation.yml"
@@ -25,61 +25,86 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y             texlive-latex-base             texlive-latex-extra             texlive-fonts-recommended             lmodern             texlive-pictures             poppler-utils             qpdf
 
-      - name: Build manuscript
+      - name: Build manuscripts
         working-directory: paper-latex
         run: |
           set -euo pipefail
-          pdflatex -interaction=nonstopmode -halt-on-error -file-line-error dependency-oriented-computation.tex
-          bibtex dependency-oriented-computation
-          pdflatex -interaction=nonstopmode -halt-on-error -file-line-error dependency-oriented-computation.tex
-          pdflatex -interaction=nonstopmode -halt-on-error -file-line-error dependency-oriented-computation.tex
+          for base in dependency-oriented-computation dependency-oriented-computation-computing; do
+            pdflatex -interaction=nonstopmode -halt-on-error -file-line-error "$base.tex"
+            bibtex "$base"
+            pdflatex -interaction=nonstopmode -halt-on-error -file-line-error "$base.tex"
+            pdflatex -interaction=nonstopmode -halt-on-error -file-line-error "$base.tex"
+          done
 
-      - name: Validate manuscript
+      - name: Validate manuscripts
         working-directory: paper-latex
         run: |
           set -euo pipefail
-          test -s dependency-oriented-computation.pdf
-          qpdf --check dependency-oriented-computation.pdf
 
-          if grep -Eq 'LaTeX Warning:.*undefined|There were undefined references|Citation .* undefined|Reference .* undefined|multiply defined|Overfull \\hbox' dependency-oriented-computation.log; then
-            echo "LaTeX validation found unresolved references or layout overflow."
-            grep -E 'LaTeX Warning:.*undefined|There were undefined references|Citation .* undefined|Reference .* undefined|multiply defined|Overfull \\hbox' dependency-oriented-computation.log || true
-            exit 1
-          fi
+          validate_pdf() {
+            local base="$1"
+            local expected_max="$2"
+            test -s "$base.pdf"
+            qpdf --check "$base.pdf"
 
-          pages="$(pdfinfo dependency-oriented-computation.pdf | awk '/^Pages:/ {print $2}')"
-          test "$pages" -le 25
+            if grep -Eq 'LaTeX Warning:.*undefined|There were undefined references|Citation .* undefined|Reference .* undefined|multiply defined|Overfull \\hbox' "$base.log"; then
+              echo "LaTeX validation found unresolved references or layout overflow in $base."
+              grep -E 'LaTeX Warning:.*undefined|There were undefined references|Citation .* undefined|Reference .* undefined|multiply defined|Overfull \\hbox' "$base.log" || true
+              exit 1
+            fi
 
-          pdftotext dependency-oriented-computation.pdf manuscript.txt
-          python3 - <<'PY'
+            pages="$(pdfinfo "$base.pdf" | awk '/^Pages:/ {print $2}')"
+            test "$pages" -le "$expected_max"
+
+            if ! pdfinfo "$base.pdf" | grep -q 'Page size:.*A4'; then
+              echo "$base is not A4."
+              exit 1
+            fi
+
+            pdftotext "$base.pdf" "$base.txt"
+            python3 - "$base.txt" <<'PY'
           import re
+          import sys
           from pathlib import Path
-          text = Path("manuscript.txt").read_text(errors="replace")
+          text = Path(sys.argv[1]).read_text(errors="replace")
           words = re.findall(r"\b[\w’'-]+\b", text)
-          print(f"extracted_words={len(words)}")
+          print(f"{sys.argv[1]} extracted_words={len(words)}")
           if len(words) > 15000:
               raise SystemExit("word-count ceiling exceeded")
           if "??" in text or "[?]" in text:
               raise SystemExit("unresolved reference marker in PDF")
           PY
 
-          if pdffonts dependency-oriented-computation.pdf | tail -n +3 | awk 'NF && $(NF-4) != "yes" {bad=1} END {exit bad ? 0 : 1}'; then
-            echo "One or more fonts are not embedded."
-            exit 1
-          fi
+            if pdffonts "$base.pdf" | tail -n +3 | awk 'NF && $(NF-4) != "yes" {bad=1} END {exit bad ? 0 : 1}'; then
+              echo "One or more fonts are not embedded in $base."
+              exit 1
+            fi
+          }
 
-      - name: Upload manuscript PDF
+          validate_pdf dependency-oriented-computation 25
+          validate_pdf dependency-oriented-computation-computing 25
+
+          neutral_pages="$(pdfinfo dependency-oriented-computation.pdf | awk '/^Pages:/ {print $2}')"
+          computing_pages="$(pdfinfo dependency-oriented-computation-computing.pdf | awk '/^Pages:/ {print $2}')"
+          echo "neutral_pages=$neutral_pages"
+          echo "computing_pages=$computing_pages"
+
+      - name: Upload manuscript PDFs
         uses: actions/upload-artifact@v4
         with:
-          name: doc-latex-manuscript
+          name: doc-latex-manuscripts
           path: |
             paper-latex/dependency-oriented-computation.tex
+            paper-latex/dependency-oriented-computation-computing.tex
+            paper-latex/manuscript-body.tex
+            paper-latex/manuscript-preamble.tex
             paper-latex/references.bib
             paper-latex/svjour3.cls
             paper-latex/svglov3.clo
             paper-latex/spmpsci.bst
             paper-latex/README.md
             paper-latex/dependency-oriented-computation.pdf
+            paper-latex/dependency-oriented-computation-computing.pdf
           if-no-files-found: error
 
 
@@ -91,6 +116,8 @@ jobs:
           mkdir -p "$root/manuscript-latex" "$root/manuscript-typst" "$root/runtime/results"
 
           cp paper-latex/dependency-oriented-computation.tex "$root/manuscript-latex/"
+          cp paper-latex/dependency-oriented-computation-computing.tex "$root/manuscript-latex/"
+          cp paper-latex/manuscript-body.tex paper-latex/manuscript-preamble.tex "$root/manuscript-latex/"
           cp paper-latex/references.bib "$root/manuscript-latex/"
           cp paper-latex/svjour3.cls paper-latex/svglov3.clo paper-latex/spmpsci.bst "$root/manuscript-latex/"
           cp paper-latex/README.md "$root/manuscript-latex/"
@@ -107,7 +134,7 @@ jobs:
 
           This archive accompanies the manuscript submission. It contains:
 
-          - the journal-neutral LaTeX manuscript source and Springer class/style files;
+          - the journal-neutral LaTeX source, Computing wrapper, and Springer class/style files;
           - the original Typst manuscript source;
           - the C++20 runtime, examples, benchmarks, and registered tests;
           - five bounded model checkers and the benchmark driver;
@@ -116,11 +143,14 @@ jobs:
 
           The main manuscript PDF is submitted separately.
 
-          Build the LaTeX manuscript from manuscript-latex/ with:
+          Build the neutral LaTeX manuscript from manuscript-latex/ with:
             pdflatex dependency-oriented-computation.tex
             bibtex dependency-oriented-computation
             pdflatex dependency-oriented-computation.tex
             pdflatex dependency-oriented-computation.tex
+
+          For Computing, use dependency-oriented-computation-computing.tex
+          with the same four-step pdflatex/bibtex/pdflatex/pdflatex sequence.
 
           Build/test the runtime from runtime/ with the CMake instructions in
           runtime/README.md. The authoritative benchmark command and machine
