@@ -53,8 +53,8 @@ Repository CI builds and validates both PDFs, including page count, word-count c
 
 ## Computing submission note
 
-Computing's current author instructions request a professional or institutional author email and state that submissions using a private email address will be sent back. The manuscript currently contains the author's existing Gmail address. Replace it with a professional/institutional address before submitting to Computing if one is available.
+Computing's current author instructions request a professional or institutional author email and state that submissions using a private email address will be sent back. The Computing wrapper uses the author's professional-domain correspondence address, `rituraj@riturajbasak.tech`.
 
 ## Computing declaration checklist
 
-Computing currently requires a Data Availability Statement and a competing-interest disclosure in the manuscript; the Computing wrapper includes both. Computing also requires funding information to be disclosed in the submission and summarized in the declarations section when applicable. The repository does not invent a funding statement: add the truthful funding/no-funding wording before submission if it is not already supplied through your final author metadata. The journal also states that submissions using a private email address will be returned, so replace the current Gmail address with a professional/institutional address if one is available.
+Computing currently requires a Data Availability Statement and a competing-interest disclosure in the manuscript; the Computing wrapper includes both. Computing also requires funding information to be disclosed in the submission and summarized in the declarations section when applicable. The repository does not invent a funding statement: add the truthful funding/no-funding wording before submission if it is not already supplied through your final author metadata. The journal also states that submissions using a private email address will be returned; the Computing wrapper therefore uses `rituraj@riturajbasak.tech`.
