@@ -1,0 +1,4 @@
+# Exclusive choice: exactly one input must be true.
+source a: bool = false
+source b: bool = false
+derive chosen: bool (a,b) = if(eq(a,b),false,true)
