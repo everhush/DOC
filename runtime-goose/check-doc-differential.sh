@@ -28,14 +28,21 @@ for case_name in conditional interlock xor; do
         printf 'FAIL goose %s a=%s b=%s expected=%s output=%s\n' "$case_name" "$a" "$b" "$expected" "$goose_out" | tee -a "$logs/doc-rust-goose-differential.log" >&2
         exit 1
       fi
+      baseline=''
       for workers in 1 2 4; do
         rust_out=$(DOC_WORKERS="$workers" "$rust" "$fixture" "a=$a" "b=$b" 2> "$logs/rust-${case_name}-${a}-${b}-w${workers}.stderr")
-        rust_value=$(printf '%s\n' "$rust_out" | sed -n 's/^chosen: \(true\|false\)$/\1/p')
-        if [[ "$rust_value" != "$expected" || $(printf '%s\n' "$rust_out" | grep -c '^chosen: ') -ne 1 ]]; then
-          printf 'FAIL rust %s a=%s b=%s workers=%s expected=%s output=%s\n' "$case_name" "$a" "$b" "$workers" "$expected" "$rust_out" | tee -a "$logs/doc-rust-goose-differential.log" >&2
+        # Check the complete observation: no duplicate, missing, or extra state.
+        expected_out=$(printf 'a: %s\nb: %s\nchosen: %s' "$a" "$b" "$expected")
+        if [[ "$rust_out" != "$expected_out" ]]; then
+          printf 'FAIL rust %s a=%s b=%s workers=%s expected-observation=%q actual=%q\n' "$case_name" "$a" "$b" "$workers" "$expected_out" "$rust_out" | tee -a "$logs/doc-rust-goose-differential.log" >&2
           exit 1
         fi
-        printf 'PASS %s a=%s b=%s workers=%s expected=%s rust=%s goose=%s\n' "$case_name" "$a" "$b" "$workers" "$expected" "$rust_value" "$expected" | tee -a "$logs/doc-rust-goose-differential.log"
+        if [[ -n "$baseline" && "$rust_out" != "$baseline" ]]; then
+          printf 'FAIL worker-dependent observation %s a=%s b=%s workers=%s\n' "$case_name" "$a" "$b" "$workers" | tee -a "$logs/doc-rust-goose-differential.log" >&2
+          exit 1
+        fi
+        baseline=$rust_out
+        printf 'PASS %s a=%s b=%s workers=%s expected=%s\n' "$case_name" "$a" "$b" "$workers" "$expected" | tee -a "$logs/doc-rust-goose-differential.log"
       done
     done
   done
