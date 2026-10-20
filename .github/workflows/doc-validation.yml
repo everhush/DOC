@@ -47,6 +47,8 @@ jobs:
           grep -Fx 'sum: 5' validation-logs/doc-worker1.txt
           grep -Fx 'doubled: 10' validation-logs/doc-worker1.txt
           grep -Fx 'chosen: 10' validation-logs/doc-worker1.txt
+      - name: Black-box DOC finite branch and failure conformance (1, 2, 4 workers)
+        run: bash runtime-rust/check-doc-finite-cli.sh runtime-rust/target/release/doc validation-logs
       - name: Source format and lint diagnostics (record until existing sources are normalized)
         continue-on-error: true
         run: |
