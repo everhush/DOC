@@ -167,7 +167,7 @@ impl Graph {
                     }
                 }
                 let tokens=lex(body)?;
-                let mut parser=Parser{tokens:&tokens,pos:0,args:&args};
+                let mut parser=Parser{tokens:&tokens,pos:0,args:&args,depth:0};
                 let expr=parser.expr()?;
                 if parser.pos!=tokens.len(){return Err("trailing tokens".into());}
                 State::derived(name.trim(),Type::parse(t)?,premises,expr)
@@ -194,7 +194,7 @@ fn lex(text:&str)->Result<Vec<String>>{
     if !word.is_empty(){tokens.push(word);}
     Ok(tokens)
 }
-struct Parser<'a>{tokens:&'a[String],pos:usize,args:&'a HashMap<String,usize>}
+struct Parser<'a>{tokens:&'a[String],pos:usize,args:&'a HashMap<String,usize>,depth:usize}
 impl Parser<'_>{
     fn next(&mut self)->Result<String>{
         let tok=self.tokens.get(self.pos).cloned().ok_or("unexpected end")?;
@@ -205,6 +205,14 @@ impl Parser<'_>{
         if found==expected {Ok(())}else{Err(format!("expected {expected}, found {found}"))}
     }
     fn expr(&mut self)->Result<Expr>{
+        // Bound untrusted source nesting before recursive descent can exhaust the host stack.
+        if self.depth >= 128 { return Err("expression nesting exceeds 128".into()); }
+        self.depth += 1;
+        let result=self.parse_expr_inner();
+        self.depth -= 1;
+        result
+    }
+    fn parse_expr_inner(&mut self)->Result<Expr>{
         let token=self.next()?;
         if self.tokens.get(self.pos).map(String::as_str)==Some("("){
             self.eat("(")?;
@@ -358,5 +366,25 @@ impl Runtime {
             }else{vals[id]=self.values[id];}
         }
         vals.into_iter().map(|v|v.ok_or("missing oracle result".into())).collect()
+    }
+}
+
+#[cfg(test)]
+mod source_depth_regression {
+    use super::Graph;
+
+    #[test]
+    fn deeply_nested_untrusted_doc_is_rejected_without_host_stack_overflow() {
+        let mut expression = "a".to_string();
+        for _ in 0..129 { expression = format!("eq(a,{expression})"); }
+        let source = format!("source a: bool = true\\nderive chosen: bool (a) = {expression}\\n");
+        let error = Graph::parse(&source).expect_err("deep source must fail safely");
+        assert!(error.contains("nesting"), "unexpected error: {error}");
+    }
+
+    #[test]
+    fn ordinary_nested_doc_source_still_elaborates() {
+        let source = "source a: bool = true\\nderive chosen: bool (a) = eq(eq(a,true),true)\\n";
+        assert!(Graph::parse(source).is_ok());
     }
 }
