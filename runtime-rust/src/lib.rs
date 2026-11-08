@@ -377,14 +377,14 @@ mod source_depth_regression {
     fn deeply_nested_untrusted_doc_is_rejected_without_host_stack_overflow() {
         let mut expression = "a".to_string();
         for _ in 0..129 { expression = format!("eq(a,{expression})"); }
-        let source = format!("source a: bool = true\\nderive chosen: bool (a) = {expression}\\n");
+        let source = format!("source a: bool = true\nderive chosen: bool (a) = {expression}\n");
         let error = Graph::parse(&source).expect_err("deep source must fail safely");
         assert!(error.contains("nesting"), "unexpected error: {error}");
     }
 
     #[test]
     fn ordinary_nested_doc_source_still_elaborates() {
-        let source = "source a: bool = true\\nderive chosen: bool (a) = eq(eq(a,true),true)\\n";
+        let source = "source a: bool = true\nderive chosen: bool (a) = eq(eq(a,true),true)\n";
         assert!(Graph::parse(source).is_ok());
     }
 }
