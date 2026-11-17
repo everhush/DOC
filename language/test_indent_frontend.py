@@ -39,12 +39,12 @@ derive chosen: int (flag,doubled) = if(flag, doubled, 0)
     def test_i64_source_boundaries(self):
         for value in (-(1 << 63), (1 << 63) - 1):
             with self.subTest(value=value):
-                self.assertEqual(frontend.lower(f'source a: int = {value}\\n'),
-                                 f'source a: int = {value}\\n')
+                self.assertEqual(frontend.lower(f'source a: int = {value}\n'),
+                                 f'source a: int = {value}\n')
         for value in (-(1 << 63) - 1, 1 << 63, 10 ** 100):
             with self.subTest(value=value):
                 with self.assertRaisesRegex(frontend.SyntaxErrorDOC, 'signed 64-bit range'):
-                    frontend.lower(f'source a: int = {value}\\n')
+                    frontend.lower(f'source a: int = {value}\n')
 
     def test_invalid(self):
         bad = [
