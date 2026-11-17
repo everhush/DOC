@@ -50,6 +50,8 @@ def lower(source: str) -> str:
                 raise SyntaxErrorDOC(f"line {number}: source requires an int/bool literal")
             if (kind == 'bool') != (literal.strip() in ('true', 'false')):
                 raise SyntaxErrorDOC(f"line {number}: source type mismatch")
+            if kind == 'int' and not -(1 << 63) <= int(literal.strip()) < (1 << 63):
+                raise SyntaxErrorDOC(f"line {number}: source integer outside signed 64-bit range")
             names.add(name)
             output.append(f"source {name}: {kind} = {literal.strip()}")
             continue
