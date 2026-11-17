@@ -20,7 +20,9 @@ INTEGER_TOKEN = re.compile(r"(?<![A-Za-z_0-9])-?[0-9]+(?![A-Za-z_0-9])")
 
 def check_i64_literal(literal: str, number: int) -> None:
     """Reject out-of-range integer tokens without converting huge decimal strings."""
-    digits = literal.lstrip('-')
+    # Rust i64 parsing accepts leading zeroes, including very long zero-padded
+    # literals. Compare only the significant digits, without int() conversion.
+    digits = literal.lstrip('-').lstrip('0') or '0'
     limit = '9223372036854775808' if literal.startswith('-') else '9223372036854775807'
     if len(digits) > len(limit) or (len(digits) == len(limit) and digits > limit):
         raise SyntaxErrorDOC(f"line {number}: integer outside signed 64-bit range")
