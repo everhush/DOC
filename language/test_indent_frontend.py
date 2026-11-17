@@ -46,6 +46,24 @@ derive chosen: int (flag,doubled) = if(flag, doubled, 0)
                 with self.assertRaisesRegex(frontend.SyntaxErrorDOC, 'signed 64-bit range'):
                     frontend.lower(f'source a: int = {value}\n')
 
+    def test_zero_padded_source_i64_literals(self):
+        # Source literals must follow the same Rust i64 lexical contract as
+        # literals in derived expressions; avoid int() on huge digit strings.
+        for literal in ('000', '-000', '0001', '-0001',
+                        '0' * 10000 + '1',
+                        '-' + '0' * 10000 + str(1 << 63),
+                        '0' * 10000 + str((1 << 63) - 1)):
+            with self.subTest(prefix=literal[:24], length=len(literal)):
+                self.assertEqual(frontend.lower(
+                    f'source x: int = {literal}\n'),
+                    f'source x: int = {literal}\n')
+        for literal in ('0' * 10000 + str(1 << 63),
+                        '-' + '0' * 10000 + str((1 << 63) + 1)):
+            with self.subTest(prefix=literal[:24], length=len(literal)):
+                with self.assertRaisesRegex(frontend.SyntaxErrorDOC,
+                                            'signed 64-bit range'):
+                    frontend.lower(f'source x: int = {literal}\n')
+
     def test_derived_i64_literal_boundaries(self):
         for value in (-(1 << 63), (1 << 63) - 1):
             with self.subTest(value=value):
