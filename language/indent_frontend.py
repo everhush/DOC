@@ -16,6 +16,15 @@ EXPRESSION = re.compile(r"[A-Za-z_0-9(),\s-]+\Z")
 class SyntaxErrorDOC(ValueError):
     pass
 
+INTEGER_TOKEN = re.compile(r"(?<![A-Za-z_0-9])-?[0-9]+(?![A-Za-z_0-9])")
+
+def check_i64_literal(literal: str, number: int) -> None:
+    """Reject out-of-range integer tokens without converting huge decimal strings."""
+    digits = literal.lstrip('-')
+    limit = '9223372036854775808' if literal.startswith('-') else '9223372036854775807'
+    if len(digits) > len(limit) or (len(digits) == len(limit) and digits > limit):
+        raise SyntaxErrorDOC(f"line {number}: integer outside signed 64-bit range")
+
 def lower(source: str) -> str:
     output = []
     names = set()
@@ -36,6 +45,8 @@ def lower(source: str) -> str:
                 raise SyntaxErrorDOC(f"line {number}: expected four-space expression body for line {header_line}")
             if not EXPRESSION.fullmatch(stripped):
                 raise SyntaxErrorDOC(f"line {number}: unsupported expression characters")
+            for integer in INTEGER_TOKEN.finditer(stripped):
+                check_i64_literal(integer.group(), number)
             output.append(f"derive {name}: {kind} ({','.join(args)}) = {stripped}")
             pending = None
             continue
@@ -51,10 +62,7 @@ def lower(source: str) -> str:
             if (kind == 'bool') != (literal.strip() in ('true', 'false')):
                 raise SyntaxErrorDOC(f"line {number}: source type mismatch")
             if kind == 'int':
-                digits = literal.strip().lstrip('-')
-                limit = '9223372036854775808' if literal.strip().startswith('-') else '9223372036854775807'
-                if len(digits) > len(limit) or (len(digits) == len(limit) and digits > limit):
-                    raise SyntaxErrorDOC(f"line {number}: source integer outside signed 64-bit range")
+                check_i64_literal(literal.strip(), number)
             names.add(name)
             output.append(f"source {name}: {kind} = {literal.strip()}")
             continue
