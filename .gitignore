@@ -1,4 +1,3 @@
-/runtime/build-*/
 /dependency-oriented-computation-v1.7.pdf
 /result
 /build/
@@ -6,7 +5,7 @@
 **/__pycache__/
 *.pyc
 *.pyo
-runtime/results/ci-*/
 paper/*.png
 paper/*.svg
 /paper/dependency-oriented-computation.pdf
+/runtime-rust/target/

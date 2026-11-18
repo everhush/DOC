@@ -1,26 +1,11 @@
-# Environment and dependencies
+# Development environment and verification
 
-## Supported assumptions
+The active DOC project targets two first-class runtime implementations: **Rust** and **Goose**, with one independent general-purpose DOC language and shared conformance tests. The precise compiler versions, reproducible installation, supported operating systems and local build/test recipes must be recorded after each backend actually compiles.
 
-The supplied runtime is portable C++20 and was verified in a 64-bit Linux environment. The CMake configuration requires:
+## Observed blocker (2026-11-18)
 
-- CMake 3.20 or later;
-- a C++20 compiler;
-- POSIX threads through CMake's `Threads` package;
-- Python 3 for the bounded model checkers;
-- Ninja is recommended but not required.
+At the last recorded automation checks, the execution environment did **not** have `rustc`, `cargo`, or the Goose compiler, and did not expose a local checkout; GitHub DNS was unavailable from the isolated shell. Native execution, memory-safety tests and Rust-versus-Goose measurements were **not run**. Connected GitHub repository read/write tools do not themselves supply a compiler.
 
-The manuscript was compiled with Typst 0.15.1. Typst is not bundled; use a compatible local installation.
+Do not use GitHub Actions (quota exhausted); use verified local toolchains. No C++ compiler, CMake or C++ reference implementation is required by the new DOC language or either runtime.
 
-## Verification environment
-
-- Debian GNU/Linux 13 (trixie), Linux 6.12.13, x86-64;
-- GCC 14.2.0;
-- Clang 17.0.0;
-- CMake 3.31.6;
-- Ninja 1.12.1;
-- Python 3.13.5;
-- Typst 0.15.1;
-- five visible logical CPUs, with a four-CPU cgroup quota during verification.
-
-The authoritative article benchmark campaign is `runtime/results/independent-dedicated-100/`. Its `machine.json` records Linux 6.18.53 x86-64 with glibc 2.42, GCC 15.3.0 in Release mode, Python 3.14.7, CMake 4.4.2, and an AMD Ryzen AI 7 350 w/ Radeon 860M on bare metal. Eight physical cores / 16 logical CPUs were visible by affinity/OS, no cgroup CPU quota was recorded, and the campaign deliberately capped participants at four. Every reported row uses 100 fresh processes after three unrecorded warmups. Timing values remain host- and workload-specific.
+The source paper may be built separately with an appropriate Typst installation. The historical C++ research environment and the numerical evidence cited by the submitted paper are available only from the immutable [pre-Rust snapshot](https://github.com/imxade/DOC/tree/snapshot-2026-11-17-pre-rust-runtime), not the current runtime source tree.

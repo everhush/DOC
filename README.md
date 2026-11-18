@@ -1,96 +1,35 @@
-# Dependency-Oriented Computation supplementary artifact
+# Dependency-Oriented Computation (DOC)
 
-This repository accompanies the manuscript **Dependency-Oriented Computation**. It contains the final manuscript source, the C++20 executable witness, registered tests, bounded model checkers, benchmark implementation, preserved raw benchmark evidence, verification records, and citation metadata. The journal-facing PDF is generated from the checked-in Typst source and is distributed as a submission artifact rather than committed as a potentially stale binary.
+DOC is a persistent dependency-graph computation model for typed, reactive incremental repair, with additional, **separately scoped** contracts for recurrence, changing graph versions, safe physical realization, placement and external effects.
 
-## Relationship to the manuscript
+## Current development objective
 
-The paper's finite metatheory is a mathematical argument. The executable material checks representative and bounded cases; it does not replace the proofs. The runtime is a bounded witness for the realization contracts, not a production consensus or partition-tolerant distributed platform. Timing data supports workload- and host-specific cost-shape claims, not universal performance superiority. See `CLAIM-EVIDENCE-MAP.md` for the exact classification of each major claim.
+Build one small, expressive, general-purpose **DOC language** with **two independent runtimes**:
 
-## Layout
+- `runtime-rust/` — Rust implementation; current finite int/bool kernel is preliminary and has **not passed native compilation or integration validation**.
+- Goose implementation — **not yet present**; required to implement the same DOC language and conformance suite independently.
 
-- `paper/` — final Typst source and verified BibTeX metadata; the submission PDF is generated from these sources rather than retained as a potentially stale binary;
-- `runtime/include`, `runtime/src`, `runtime/examples` — C++20 runtime and example;
-- `runtime/tests` — native and randomized/differential tests;
-- `runtime/formal` — five bounded model checkers;
-- `runtime/benchmarks` and `runtime/scripts` — benchmark implementation and complete campaign driver;
-- `runtime/results/independent-dedicated-100/` — the authoritative 100-process-per-row bare-metal campaign used for every numerical result printed in the revised article;
-- `runtime/results/revision-2026-09-29/` — the earlier 20-process EPYC reviewer-revision campaign retained as historical evidence;
-- `verification/` — consolidated verification records, reviewer-response matrix, performance-optimization audit, CI/PDF checks, and the citation ledger.
+Neither backend is production-ready. The finite acyclic core alone is **not** Turing-complete. The manuscript's claimed universality explicitly requires separate demand-driven unbounded *versioned recurrence*, unbounded values and adequate branching, with finite requested-prefix execution. Ordinary programs also need explicit effects, diagnostics, functions, data, packages and safe physical lifetime management.
 
-## Dependencies
+**No active C++ runtime, CMake build, legacy C++ benchmark suite or GitHub Actions workflows remain on `master`.** The prior research snapshot is available at [`snapshot-2026-11-17-pre-rust-runtime`](https://github.com/imxade/DOC/tree/snapshot-2026-11-17-pre-rust-runtime), commit `1ab3e3987477b1638f1abde58102704fa353d656`. It is a historical research and reproducibility artifact, **not** an implementation or oracle dependency for the new runtimes. Submitted manuscript sources are deliberately preserved; any references there to the historical witness and numbers refer to that archived research, not to the current language implementations.
 
-Use a 64-bit Linux environment with CMake 3.20+, a C++20 compiler, POSIX threads, Python 3, and optionally Ninja. Typst 0.15.1 or a compatible release is required only to rebuild the manuscript. Typst and fonts are not bundled.
+## Normative sources and evidence
 
-## Build the runtime
+- [Main manuscript](paper/dependency-oriented-computation.typ): formal DOC semantics, metatheory, conditional extensions, realization contracts and historically measured claims.
+- [Independent calculus draft](paper-calculus/dependency-oriented-calculus.typ): a limited typed finite calculus, **not** the full general-purpose language.
+- [Paper-ordered acceptance trace](MODEL-REQUIREMENT-TRACE.md): required semantics, language completeness, two-runtime conformance and unverified gaps.
+- [Claim/evidence boundaries](CLAIM-EVIDENCE-MAP.md): distinctions between theorem arguments, historical research evidence, new implementation and production evidence.
+- [Issue #7](https://github.com/imxade/DOC/issues/7): implementation and production gates for both runtimes.
+- [Issue #8](https://github.com/imxade/DOC/issues/8): open-ended research on model-level memory-safety gaps.
+- [Issue #9](https://github.com/imxade/DOC/issues/9): append-only Rust-versus-Goose conformance, safety and benchmark results.
 
-From the artifact root:
+## Implementation invariants
 
-```sh
-cmake -S runtime -B build/release -G Ninja -DCMAKE_BUILD_TYPE=Release
-cmake --build build/release
-```
+1. User-facing code is the same independent DOC language under both runtimes, not a Python, Rust or Goose dialect.
+2. Use **as few fundamental semantic primitives as correctness and universality permit**; validate expressivity with formal lowering and executable representative programs. Surface convenience is not a new primitive by default.
+3. Pure deterministic finite computations retain DOC's typed graph, validated source batches, ready frontiers, same-pre-state private evaluation, immutable atomic publication and sound equality cutoff. Do not infer general-purpose external effects from the finite theorem.
+4. Support the paper's qualified demand/recurrence, graph-version, protected observation/reclamation, and bounded placed-realization properties under their separate assumptions.
+5. Memory safety, automatic lifetime, explicit effect boundaries, and safe-by-default Rust/Goose code; unsafe exceptions require an independently tested narrow justification.
+6. Real local compilation, executed conformance tests, practical programs and reproduced performance evidence are release gates. No benchmark results or production compliance are claimed before measurement. GitHub Actions are not used.
 
-When Ninja is unavailable, omit `-G Ninja`.
-
-## Run the full registered suite
-
-```sh
-ctest --test-dir build/release --output-on-failure
-```
-
-This runs both native executables and all five bounded model checkers.
-
-## Run bounded verification directly
-
-```sh
-python3 runtime/formal/model_check.py
-python3 runtime/formal/repair_model_check.py
-python3 runtime/formal/graph_version_model_check.py
-python3 runtime/formal/duplicate_premise_model_check.py
-python3 runtime/formal/demand_recurrence_model_check.py
-```
-
-The repair and demand/recurrence checkers are the longest of these checks.
-
-## Run benchmark correctness checks
-
-The following commands execute each benchmark family once. Each process checks result equality and exits nonzero on disagreement. The timings are only a smoke check and must not be substituted for the preserved campaigns.
-
-```sh
-DOC_MAX_WORKERS=1 build/release/doc_benchmark cold
-DOC_MAX_WORKERS=1 build/release/doc_benchmark density 1
-DOC_MAX_WORKERS=1 build/release/doc_benchmark density 2048
-DOC_MAX_WORKERS=1 build/release/doc_benchmark cutoff
-DOC_MAX_WORKERS=4 build/release/doc_benchmark parallel
-DOC_MAX_WORKERS=1 build/release/doc_benchmark dense-cheap
-DOC_MAX_WORKERS=1 build/release/doc_benchmark financial 1
-DOC_MAX_WORKERS=1 build/release/doc_benchmark financial 1024
-DOC_MAX_WORKERS=1 build/release/doc_benchmark bitonic 1
-DOC_MAX_WORKERS=1 build/release/doc_benchmark bitonic 512
-```
-
-The complete campaign driver is included at `runtime/scripts/run_all_benchmarks.py`. Its `--help` output documents campaign options. A full timing campaign is intentionally not required for correctness verification because new timings are expected to vary by host and must not be substituted silently for the preserved evidence.
-
-## Compile the manuscript
-
-```sh
-typst compile paper/dependency-oriented-computation.typ paper/rebuilt.pdf
-```
-
-The journal-facing PDF is compiled from the checked-in Typst/BibTeX sources with Typst 0.15.1; the generated PDF is intentionally not version-controlled.
-
-## Raw data and summaries
-
-- `runtime/results/independent-dedicated-100/raw.csv` contains all 2,000 recorded process measurements.
-- `retained.csv`, `statistics.csv`, `summary.csv`, `filter-bounds.csv`, and `outliers.csv` record the declared sensitivity analysis and aggregate statistics.
-- `machine.json` and `run-config.json` record the exact benchmark host, compiler, quota, sample count, and campaign settings.
-- The manuscript's displayed parallel series uses raw arithmetic means and 95% confidence intervals over 100 fresh processes per participant limit.
-- The earlier `revision-2026-09-29/` campaign remains available for revision history but is not substituted into the final manuscript.
-
-
-
-## Continuous publication validation
-
-`.github/workflows/publication-validation.yml` rebuilds and tests the C++20 runtime with GCC and Clang, runs ASan/UBSan and ThreadSanitizer native suites, executes the bounded model checkers through CTest, recompiles the Typst manuscript with pinned Typst 0.15.1, preflights the generated PDF, renders every PDF page, and executes a fresh publication-scale benchmark campaign.
-
-The workflow uses read-only repository permissions and no manually configured credentials or secrets. All uploaded workflow artifacts use `retention-days: 1`. The generated PDF, page renders, benchmark measurements, and validation logs are therefore reproducible CI evidence rather than long-lived generated files in version control.
+For the preliminary Rust kernel, consult `runtime-rust/README.md`. It must not be treated as a usable general-purpose DOC distribution yet.

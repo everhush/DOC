@@ -1,28 +1,21 @@
-# Rust DOC calculus and finite-kernel runtime
+# Rust DOC runtime — incomplete finite-kernel prototype
 
-This is a correctness-first executable implementation of the **finite acyclic DOC kernel**, not a complete implementation of the extensions and not a production-ready or HVM-compatible machine.
+This package is a preliminary interpreter for a **finite typed acyclic DOC graph**, **not** a production-ready general-purpose language or the complete DOC paper's extensions. The required independent Goose backend is not yet implemented.
 
-## Commands
+The minimal current source format accepts typed `source` and `derive` declarations with ordered premises, literals/variables, integer addition/subtraction/multiplication, equality and conditional expressions. Its active-set repair, sound exact/conservative cutoff and ready-frontier parallel path are source-level implementations but **have not yet been compiled or tested natively** in the current environment. Checked `i64` overflow aborts frontier publication; it is not a total result value and falls outside the paper's pure-total theorem.
 
-    cargo test --manifest-path runtime-rust/Cargo.toml
-    cargo run --manifest-path runtime-rust/Cargo.toml --bin doc -- runtime-rust/examples/repair.doc a=4 b=1
-    DOC_WORKERS=1 cargo run --release --manifest-path runtime-rust/Cargo.toml --bin doc-bench
-    DOC_WORKERS=4 cargo run --release --manifest-path runtime-rust/Cargo.toml --bin doc-bench
+When a working toolchain and checkout exist, the unverified smoke commands are:
 
-No external crates. Source language: signed 64-bit integers, booleans, pure literals and formal premise variables, add/sub/mul/eq/if. Declarations in the text syntax appear in topological order; library graphs accept any finite acyclic order.
+```sh
+cargo fmt --manifest-path runtime-rust/Cargo.toml --all -- --check
+cargo test --manifest-path runtime-rust/Cargo.toml --all-targets
+cargo run --manifest-path runtime-rust/Cargo.toml --bin doc -- runtime-rust/examples/repair.doc a=4 b=1
+DOC_WORKERS=1 cargo run --release --manifest-path runtime-rust/Cargo.toml --bin doc-bench
+DOC_WORKERS=4 cargo run --release --manifest-path runtime-rust/Cargo.toml --bin doc-bench
+```
 
-Programmatic source updates validate fully before changing values. Every legal nonempty ready-frontier subset evaluates from one settled valuation; successful candidates publish at a logical barrier. Sound exact cutoff suppresses propagation, and always-propagate is a conservative alternative. The finite-kernel theorem assumes total functions: a checked integer overflow reports a failed evaluation before publication and is not a proved total DOC value.
+These commands are proposed validation, **not** reported passing. Current parallel execution launches scoped threads for wide frontiers; it lacks a persistent worker pool and production profiling. The preliminary benchmark is not comparable to the manuscript's historical measurements or to Goose.
 
-Parallel evaluation currently launches scoped OS threads for wide frontiers. It needs an amortized pool and extensive profiling. The smoke benchmark is NOT comparable to HVM or the preserved C++ campaign.
+The goal is **one original, minimal-core, general-purpose DOC source language** running independently under safe Rust and safe Goose, including the model's qualified demand/recurrence universality, immutable graph evolution, safe materializations, placed execution and effects, plus common executed conformance tests. Read [MODEL-REQUIREMENT-TRACE.md](../MODEL-REQUIREMENT-TRACE.md) for every acceptance boundary and [issue #9](https://github.com/imxade/DOC/issues/9) for benchmark records.
 
-## Remaining work
-
-- Versioned recurrence, finite demand support, retention and carry.
-- Graph-version replacement with observational compatibility.
-- General typed value domains and physical pin/evict/reconstruct obligations.
-- Placed/distributed execution, resource changes and fail-stop recovery.
-- Typed result values for errors, effect boundary, resource controls.
-- Fuzzing, model-checking, concurrent mutation boundary tests, cancellation and CI security review.
-- Compiler optimizations, persistent scheduler, reproducible matched baselines and HVM comparison.
-
-See paper-calculus/dependency-oriented-calculus.typ for the draft calculus. No existing journal manuscript files have been edited.
+Submitted paper sources and their historically reported C++ experimental evidence are preserved unchanged; that earlier implementation is archived solely in the pre-Rust snapshot and is **not** a build or verification dependency of this crate.
