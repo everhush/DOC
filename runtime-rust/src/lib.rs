@@ -1,5 +1,6 @@
 //! Executable finite DOC calculus. Extensions (recurrence, placement, effects)
 //! are deliberately outside this crate's proof and runtime contract.
+pub mod wgsl;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::thread;
 
