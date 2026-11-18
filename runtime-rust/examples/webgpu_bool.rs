@@ -36,20 +36,25 @@ async fn run() -> Result<(), Box<dyn Error>> {
         expected.push(u32::from(rt.value(target) == Some(Value::Bool(true))));
     }
 
-    let instance = wgpu::Instance::default();
-    let listed = instance.enumerate_adapters(wgpu::Backends::VULKAN);
-    println!("WebGPU Vulkan adapters enumerated: {}", listed.len());
+    let instance = wgpu::Instance::new(wgpu::InstanceDescriptor {
+        backends: wgpu::Backends::VULKAN | wgpu::Backends::GL,
+        ..Default::default()
+    });
+    let listed = instance.enumerate_adapters(wgpu::Backends::VULKAN | wgpu::Backends::GL);
+    println!("WebGPU Vulkan/GLES adapters enumerated: {}", listed.len());
     for item in &listed {
         println!("Candidate: {:?}", item.get_info());
     }
-    let adapter = instance
-        .request_adapter(&wgpu::RequestAdapterOptions {
+    let mut adapter = None;
+    for fallback in [true, false] {
+        adapter = instance.request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::LowPower,
             compatible_surface: None,
-            force_fallback_adapter: true,
-        })
-        .await
-        .ok_or("No conforming WebGPU adapter available, including software fallback")?;
+            force_fallback_adapter: fallback,
+        }).await;
+        if adapter.is_some() { break; }
+    }
+    let adapter = adapter.ok_or("No conforming Vulkan or GLES WebGPU adapter available")?;
     let info = adapter.get_info();
     println!("WebGPU adapter: {} ({:?}, {:?})", info.name, info.device_type, info.backend);
     let (device, queue) = adapter
