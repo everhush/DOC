@@ -15,6 +15,7 @@ fn main() -> Result<(), Box<dyn Error>> {
 }
 
 async fn run() -> Result<(), Box<dyn Error>> {
+    let _ = env_logger::try_init();
     let source = "source a: bool = true\nsource b: bool = false\nderive equal: bool (a,b) = eq(a,b)\n";
     let graph = Graph::parse(source)?;
     let target = graph.id("equal").ok_or("missing derived target")?;

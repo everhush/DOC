@@ -21,11 +21,12 @@ lto = "thin"
 codegen-units = 1
 
 [features]
-webgpu = ["dep:wgpu", "dep:pollster"]
+webgpu = ["dep:wgpu", "dep:pollster", "dep:env_logger"]
 
 [dependencies]
 wgpu = { version = "24.0.3", optional = true }
 pollster = { version = "0.4", optional = true }
+env_logger = { version = "0.11", optional = true }
 
 [[example]]
 name = "webgpu_bool"
