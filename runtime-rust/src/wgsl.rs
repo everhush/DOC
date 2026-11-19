@@ -113,7 +113,7 @@ mod tests {
     #[test]
     fn boolean_conditional_cpu_truth_table_and_wgsl_validation() {
         use crate::{Cutoff, Runtime, Value};
-        let source = "source a: bool = true\\nsource b: bool = false\\nderive chosen: bool (a,b) = if(eq(a,b),true,eq(a,false))\\n";
+        let source = include_str!("../examples/boolean_conditional.doc");
         let graph = Graph::parse(source).unwrap();
         let target = graph.id("chosen").unwrap();
         let shader = lower_bool_derived(&graph, target).unwrap();
