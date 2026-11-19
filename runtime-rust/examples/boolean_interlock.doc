@@ -1,0 +1,4 @@
+# An operation requires a request and a closed interlock.
+source a: bool = false
+source b: bool = false
+derive chosen: bool (a,b) = if(a,b,false) # Open interlocks deny requests.

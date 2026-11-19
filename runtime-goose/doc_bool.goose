@@ -71,8 +71,10 @@ fn main() {
     var count_derive = 0;
     var answer = false;
     for line in split(source, '\n') {
-        let body = trim(line);
-        if body.len == 0 || body[0] == '#' { continue; }
+        var comment = 0;
+        while comment < line.len && line[comment] != '#' { comment++; }
+        let body = trim(line[..comment]);
+        if body.len == 0 { continue; }
         if starts_with(body, "source a: bool = ") {
             if count_a != 0 { fail(); }
             let initial = trim(body[17..]);
