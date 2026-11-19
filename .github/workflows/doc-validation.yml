@@ -78,7 +78,12 @@ jobs:
           mkdir -p validation-logs /tmp/doc-xdg
           chmod 700 /tmp/doc-xdg
           ls -al /usr/share/vulkan/icd.d | tee validation-logs/vulkan-icds.log
-          vulkaninfo --summary 2>&1 | tee validation-logs/vulkan-adapter.log
+          vulkaninfo --summary > validation-logs/vulkan-adapter.log 2>&1 || true
+          cat validation-logs/vulkan-adapter.log
+          find /usr/share/vulkan/icd.d -maxdepth 1 -type f -name '*.json' -print | sort | tee validation-logs/icd-candidates.log
+          if [ -f /usr/share/vulkan/icd.d/lvp_icd.x86_64.json ]; then
+            echo "VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json" >> "$GITHUB_ENV"
+          fi
       - name: Compile, dispatch and compare DOC GPU vs CPU outputs
         env:
           XDG_RUNTIME_DIR: /tmp/doc-xdg
