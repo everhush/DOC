@@ -85,3 +85,30 @@ pub fn lower_bool_derived(graph: &Graph, state_id: StateId) -> Result<String> {
     ));
     Ok(wgsl)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn nested_pure_boolean_doc_is_valid_wgsl() {
+        let source = "source a: bool = true\nsource b: bool = false\nderive chosen: bool (a,b) = if(eq(a,b),true,eq(a,false))\n";
+        let graph = Graph::parse(source).unwrap();
+        let wgsl = lower_bool_derived(&graph, graph.id("chosen").unwrap()).unwrap();
+        let module = naga::front::wgsl::parse_str(&wgsl).unwrap();
+        let mut validator = naga::valid::Validator::new(
+            naga::valid::ValidationFlags::all(),
+            naga::valid::Capabilities::all(),
+        );
+        validator.validate(&module).unwrap();
+        assert!(wgsl.contains("select("));
+        assert!(wgsl.contains("arrayLength(&result.data)"));
+    }
+
+    #[test]
+    fn rejects_unsupported_integer_and_effectively_partial_computations() {
+        let source = "source a: int = 1\nsource b: int = 2\nderive equal: bool (a,b) = eq(a,b)\n";
+        let graph = Graph::parse(source).unwrap();
+        assert!(lower_bool_derived(&graph, graph.id("equal").unwrap()).is_err());
+    }
+}
