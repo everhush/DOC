@@ -124,6 +124,22 @@ jobs:
           /tmp/goose-build/goose check runtime-goose/finite_bool.goose 2>&1 | tee validation-logs/goose-check.log
           /tmp/goose-build/goose run runtime-goose/finite_bool.goose 2>&1 | tee validation-logs/goose-run.log
           grep -q 'DOC_GOOSE_SMOKE=ok' validation-logs/goose-run.log
+      - name: Compile and run independent Goose DOC Boolean source slice
+        run: |
+          set -euo pipefail
+          /tmp/goose-build/goose check runtime-goose/doc_bool.goose 2>&1 | tee validation-logs/goose-doc-check.log
+          for a in false true; do
+            for b in false true; do
+              actual=$(/tmp/goose-build/goose run runtime-goose/doc_bool.goose -- runtime-rust/examples/boolean_conditional.doc "$a" "$b")
+              if [[ "$a" == "$b" || "$a" == false ]]; then expected=true; else expected=false; fi
+              printf '%s,%s expected=%s actual=%s\n' "$a" "$b" "$expected" "$actual" | tee -a validation-logs/goose-doc-truth-table.log
+              test "$actual" = "DOC_GOOSE_RESULT=$expected"
+            done
+          done
+          if /tmp/goose-build/goose run runtime-goose/doc_bool.goose -- runtime-rust/examples/boolean_conditional.doc invalid true > validation-logs/goose-doc-negative.log 2>&1; then
+            echo 'Goose DOC accepted invalid boolean input' >&2
+            exit 1
+          fi
       - name: Preserve Goose compilation evidence
         if: always()
         uses: actions/upload-artifact@v4
