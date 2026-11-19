@@ -126,8 +126,11 @@ jobs:
           /tmp/goose-build/goose check runtime-goose/finite_bool.goose 2>&1 | tee validation-logs/goose-check.log
           /tmp/goose-build/goose run runtime-goose/finite_bool.goose 2>&1 | tee validation-logs/goose-run.log
           grep -q 'DOC_GOOSE_SMOKE=ok' validation-logs/goose-run.log
-      - name: Validate independent Goose DOC Boolean evaluator
-        run: bash runtime-goose/check-doc-bool.sh /tmp/goose-build/goose validation-logs
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build Rust DOC reference for cross-runtime source differential
+        run: cargo build --release --manifest-path runtime-rust/Cargo.toml --bin doc
+      - name: Validate Goose DOC and identical-source Rust/Goose differential
+        run: bash runtime-goose/check-doc-bool.sh /tmp/goose-build/goose validation-logs runtime-rust/target/release/doc
       - name: Preserve Goose compilation evidence
         if: always()
         uses: actions/upload-artifact@v4
