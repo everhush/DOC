@@ -65,6 +65,8 @@ jobs:
     name: DOC-derived WebGPU compute on Mesa lavapipe (software adapter)
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    env:
+      XDG_RUNTIME_DIR: /tmp/doc-xdg
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -73,23 +75,20 @@ jobs:
           workspaces: runtime-rust
       - name: Install Vulkan software adapter for real WebGPU dispatch
         run: |
+          set -o pipefail
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends mesa-vulkan-drivers libvulkan1 vulkan-tools libegl1 libgl1-mesa-dri
-          mkdir -p validation-logs /tmp/doc-xdg
-          chmod 700 /tmp/doc-xdg
-          ls -al /usr/share/vulkan/icd.d | tee validation-logs/vulkan-icds.log
-          vulkaninfo --summary > validation-logs/vulkan-adapter.log 2>&1 || true
-          cat validation-logs/vulkan-adapter.log
-          find /usr/share/vulkan/icd.d -maxdepth 1 -type f -name '*.json' -print | sort | tee validation-logs/icd-candidates.log
-          if [ -f /usr/share/vulkan/icd.d/lvp_icd.x86_64.json ]; then
-            echo "VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/lvp_icd.x86_64.json" >> "$GITHUB_ENV"
+          sudo apt-get install -y --no-install-recommends mesa-vulkan-drivers libvulkan1 vulkan-tools
+          mkdir -p validation-logs
+          install -d -m 700 "$XDG_RUNTIME_DIR"
+          lavapipe_icd=$(dpkg-query -L "mesa-vulkan-drivers:$(dpkg --print-architecture)" | awk '/\/lvp_icd(\.[^/]+)?\.json$/')
+          if [[ ! -f "$lavapipe_icd" ]]; then
+            echo 'Expected one installed lavapipe Vulkan manifest.' >&2
+            exit 1
           fi
+          printf 'VK_DRIVER_FILES=%s\n' "$lavapipe_icd" | tee validation-logs/vulkan-icd.log >> "$GITHUB_ENV"
+          VK_DRIVER_FILES="$lavapipe_icd" vulkaninfo --summary 2>&1 | tee validation-logs/vulkan-adapter.log
       - name: Compile, dispatch and compare DOC GPU vs CPU outputs
         env:
-          XDG_RUNTIME_DIR: /tmp/doc-xdg
-          EGL_PLATFORM: surfaceless
-          LIBGL_ALWAYS_SOFTWARE: "1"
-          MESA_LOADER_DRIVER_OVERRIDE: llvmpipe
           RUST_LOG: wgpu_core=debug,wgpu_hal=debug
         run: |
           set -o pipefail
