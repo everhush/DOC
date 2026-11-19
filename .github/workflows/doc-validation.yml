@@ -140,6 +140,7 @@ jobs:
             echo 'Goose DOC accepted invalid boolean input' >&2
             exit 1
           fi
+          grep -Fx 'DOC_GOOSE_ERROR' validation-logs/goose-doc-negative.log
       - name: Reject malformed DOC sources in independent Goose evaluator
         run: |
           set -euo pipefail
@@ -158,6 +159,7 @@ jobs:
               echo "Goose DOC accepted invalid ${kind} source" >&2
               exit 1
             fi
+            grep -Fx 'DOC_GOOSE_ERROR' "validation-logs/goose-negative-${kind}.log"
           done
       - name: Preserve Goose compilation evidence
         if: always()
