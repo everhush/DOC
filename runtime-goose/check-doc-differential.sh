@@ -21,8 +21,8 @@ for case_name in conditional interlock; do
       fi
       rust_out=$("$rust" "$fixture" "a=$a" "b=$b" 2> "$logs/rust-${case_name}-${a}-${b}.stderr")
       goose_out=$("$goose" "$fixture" "$a" "$b")
-      rust_value=$(printf '%s\n' "$rust_out" | sed -n 's/^chosen: \\(true\\|false\\)$/\\1/p')
-      goose_value=$(printf '%s\n' "$goose_out" | sed -n 's/^DOC_GOOSE_RESULT=\\(true\\|false\\)$/\\1/p')
+      rust_value=$(printf '%s\n' "$rust_out" | sed -n 's/^chosen: \(true\|false\)$/\1/p')
+      goose_value=$(printf '%s\n' "$goose_out" | sed -n 's/^DOC_GOOSE_RESULT=\(true\|false\)$/\1/p')
       if [[ "$rust_value" != "$expected" || "$goose_value" != "$expected" ]]; then
         printf 'FAIL %s a=%s b=%s expected=%s rust=%s goose=%s\n' "$case_name" "$a" "$b" "$expected" "$rust_value" "$goose_value" | tee -a "$logs/doc-rust-goose-differential.log" >&2
         exit 1
