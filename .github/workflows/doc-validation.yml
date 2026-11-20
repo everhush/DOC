@@ -30,6 +30,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: runtime-rust
+      - name: Enforce native Rust and Goose runtime source policy
+        run: bash runtime-goose/check-native-sources.sh
       - name: Native compile, tests and WGSL parse/validation
         run: |
           set -o pipefail
