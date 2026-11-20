@@ -66,6 +66,7 @@ jobs:
           if-no-files-found: warn
 
   webgpu-compute:
+    needs: goose-toolchain
     name: DOC-derived WebGPU compute on Mesa lavapipe (software adapter)
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -100,6 +101,17 @@ jobs:
           set -o pipefail
           cargo run --release --manifest-path runtime-rust/Cargo.toml --features webgpu --example webgpu_bool 2>&1 | tee validation-logs/doc-webgpu-compute.log
           grep -q DOC_WEBGPU_COMPUTE_PASS validation-logs/doc-webgpu-compute.log
+      - name: Get native Goose shader and CPU oracle
+        uses: actions/download-artifact@v4
+        with:
+          name: doc-goose-webgpu-input
+          path: validation-logs/goose-webgpu
+      - name: Dispatch Goose-derived WGSL and compare both native CPU results
+        run: |
+          set -o pipefail
+          cargo run --release --manifest-path runtime-rust/Cargo.toml --features webgpu --example webgpu_bool -- --shader validation-logs/goose-webgpu/conditional.wgsl 2>&1 | tee validation-logs/doc-goose-webgpu-compute.log
+          grep '^DOC_WEBGPU_COMPUTE_PASS:' validation-logs/doc-goose-webgpu-compute.log > validation-logs/doc-goose-webgpu-actual.txt
+          diff -u validation-logs/goose-webgpu/expected.txt validation-logs/doc-goose-webgpu-actual.txt
       - name: Preserve WebGPU adapter and correctness evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -139,6 +151,13 @@ jobs:
         run: bash runtime-goose/check-doc-graph.sh /tmp/goose-build/goose validation-logs runtime-rust/target/release/doc
       - name: Independent native Goose typed DOC and Rust differential
         run: bash runtime-goose/check-doc-typed.sh /tmp/goose-build/goose runtime-rust/target/release/doc validation-logs
+      - name: Publish native Goose shader and CPU oracle
+        uses: actions/upload-artifact@v4
+        with:
+          name: doc-goose-webgpu-input
+          path: validation-logs/goose-webgpu/
+          retention-days: 7
+          if-no-files-found: error
       - name: Preserve Goose compilation evidence
         if: always()
         uses: actions/upload-artifact@v4

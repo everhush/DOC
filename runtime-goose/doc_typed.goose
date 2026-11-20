@@ -280,6 +280,112 @@ fn show(nodes: State[:], values: Value[:]) {
         }
     }
 }
+// Emit the pure Boolean subset after the normal DOC loader has checked types.
+// The device inputs follow the definition's declared premise order.
+fn shader_index(out: u8[>..]&, index: i64) {
+    format_int(out,index,10,0,' ');
+}
+fn shader_ref(out: u8[>..]&, index: i64) {
+    out.append("t");
+    shader_index(out,index);
+}
+fn shader_let(out: u8[>..]&, index: i64) {
+    out.append("  let ");
+    shader_ref(out,index);
+    out.append(": bool = ");
+}
+recursive fn shader_expr(s: u8[:], p: i64, nodes: State[:], premises: i64[:],
+                         out: u8[>..]&, depth: i64) -> i64 {
+    if depth == 0 { fail(); }
+    let start = skip(s,p);
+    var end = start;
+    while end < s.len && ident(s[end]) { end++; }
+    if end == start { fail(); }
+    let word = s[start..end];
+    let after = skip(s,end);
+    if after >= s.len || s[after] != '(' {
+        shader_let(out,start);
+        if word == "true" || word == "false" {
+            out.append(word);
+            out.append(";\n");
+            return after;
+        }
+        for i in 0..premises.len {
+            if nodes[premises[i]].name == word {
+                out.append("a");
+                shader_index(out,i);
+                out.append(";\n");
+                return after;
+            }
+        }
+        fail();
+    }
+    if word != "eq" && word != "if" { fail(); }
+    let first = skip(s,after + 1);
+    let first_end = shader_expr(s,first,nodes,premises,out,depth - 1);
+    let second = skip(s,expect(s,first_end,','));
+    let second_end = shader_expr(s,second,nodes,premises,out,depth - 1);
+    if word == "eq" {
+        shader_let(out,start);
+        shader_ref(out,first);
+        out.append(" == ");
+        shader_ref(out,second);
+        out.append(";\n");
+        return expect(s,second_end,')');
+    }
+    let third = skip(s,expect(s,second_end,','));
+    let third_end = shader_expr(s,third,nodes,premises,out,depth - 1);
+    shader_let(out,start);
+    out.append("select(");
+    shader_ref(out,third);
+    out.append(", ");
+    shader_ref(out,second);
+    out.append(", ");
+    shader_ref(out,first);
+    out.append(");\n");
+    return expect(s,third_end,')');
+}
+fn emit_shader(nodes: State[:], target: u8[:], path: u8[:]) {
+    let id = lookup(nodes,target);
+    if id < 0 { fail(); }
+    let node = nodes[id];
+    if !node.derived || node.kind != 0 || node.count > 4 { fail(); }
+    let premises = node.premise[..node.count];
+    var out: u8[>..] = [];
+    out.append("struct Storage { data: array<u32>, }\n");
+    for i in 0..node.count {
+        if nodes[premises[i]].kind != 0 { fail(); }
+        out.append("@group(0) @binding(");
+        shader_index(out,i);
+        out.append(") var<storage, read> input_");
+        shader_index(out,i);
+        out.append(": Storage;\n");
+    }
+    out.append("@group(0) @binding(");
+    shader_index(out,node.count);
+    out.append(") var<storage, read_write> result: Storage;\n");
+    out.append("@compute @workgroup_size(64)\n");
+    out.append("fn main(@builtin(global_invocation_id) gid: vec3<u32>) {\n");
+    out.append("  let idx: u32 = gid.x;\n");
+    out.append("  if (idx >= arrayLength(&result.data)) { return; }\n");
+    for i in 0..node.count {
+        out.append("  if (idx >= arrayLength(&input_");
+        shader_index(out,i);
+        out.append(".data)) { return; }\n  let a");
+        shader_index(out,i);
+        out.append(": bool = input_");
+        shader_index(out,i);
+        out.append(".data[idx] != 0u;\n");
+    }
+    let body = node.expression[..];
+    let end = shader_expr(body,0,nodes,premises,out,128);
+    if skip(body,end) != body.len { fail(); }
+    out.append("  result.data[idx] = select(0u, 1u, ");
+    shader_ref(out,skip(body,0));
+    out.append(");\n}\n");
+    if !write_file_atomic(path,out) { fail(); }
+}
+
 fn main() {
     if arg_count() < 2 { fail(); }
     var path: u8[>..] = [];
@@ -290,6 +396,18 @@ fn main() {
     var values: Value[>..] = [];
     var active: bool[>..] = [];
     load(source,nodes,values,active);
+    if arg_count() == 5 {
+        var mode: u8[>..] = [];
+        arg(2,mode);
+        if mode == "--emit-wgsl" {
+            var target: u8[>..] = [];
+            var output: u8[>..] = [];
+            arg(3,target);
+            arg(4,output);
+            emit_shader(nodes,target,output);
+            return;
+        }
+    }
     // Validate the full command line before applying any source batch.
     var changes: Change[>..] = [];
     var next = false;
