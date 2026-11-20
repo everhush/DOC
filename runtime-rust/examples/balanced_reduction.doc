@@ -1,0 +1,17 @@
+# Eight independently supplied values, balanced pure dependency reduction.
+# The scheduler discovers the ready frontier without source-level threading.
+source v0: int = 0
+source v1: int = 0
+source v2: int = 0
+source v3: int = 0
+source v4: int = 0
+source v5: int = 0
+source v6: int = 0
+source v7: int = 0
+derive p0: int (v0,v1) = add(v0,v1)
+derive p1: int (v2,v3) = add(v2,v3)
+derive p2: int (v4,v5) = add(v4,v5)
+derive p3: int (v6,v7) = add(v6,v7)
+derive q0: int (p0,p1) = add(p0,p1)
+derive q1: int (p2,p3) = add(p2,p3)
+derive total: int (q0,q1) = add(q0,q1)
