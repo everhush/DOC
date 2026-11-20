@@ -167,6 +167,8 @@ jobs:
         run: bash runtime-goose/check-doc-graph.sh /tmp/goose-build/goose validation-logs runtime-rust/target/release/doc
       - name: Independent native Goose typed DOC and Rust differential
         run: bash runtime-goose/check-doc-typed.sh /tmp/goose-build/goose runtime-rust/target/release/doc validation-logs
+      - name: Same-source balanced reduction with independent oracle (1, 2, 4 workers)
+        run: bash runtime-goose/check-doc-reduction.sh /tmp/goose-build/goose runtime-rust/target/release/doc validation-logs
       - name: Publish native Goose shader and CPU oracle
         uses: actions/upload-artifact@v4
         with:
