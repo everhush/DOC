@@ -103,28 +103,37 @@ for target in sum equal; do
     grep -Fx DOC_TYPED_ERROR "$logs/goose-typed-wgsl-rejection-$target.log"
     test ! -e "$tmp/rejected.wgsl"
 done
-declare -A oracle_word
-for a in false true; do
-    for b in false true; do
-        result=$("$native" "$boolean_fixture" "a=$a" "b=$b" | grep '^chosen: ')
-        case "$result" in
-            'chosen: true') oracle_word[$a,$b]=1 ;;
-            'chosen: false') oracle_word[$a,$b]=0 ;;
-            *) exit 1 ;;
-        esac
+write_gpu_oracle() {
+    local source=$1 target=$2 a b lane result
+    declare -A oracle_word
+    for a in false true; do
+        for b in false true; do
+            result=$("$native" "$source" "a=$a" "b=$b" | grep "^$target: ")
+            case "$result" in
+                "$target: true") oracle_word[$a,$b]=1 ;;
+                "$target: false") oracle_word[$a,$b]=0 ;;
+                *) exit 1 ;;
+            esac
+        done
     done
-done
-{
-    printf 'DOC_WEBGPU_COMPUTE_PASS: ['
-    for ((lane = 0; lane < 130; lane++)); do
-        a=false b=false
-        if ((lane % 3 == 0)); then a=true; fi
-        if ((lane % 5 < 2)); then b=true; fi
-        if ((lane > 0)); then printf ', '; fi
-        printf '%s' "${oracle_word[$a,$b]}"
-    done
-    printf ']\n'
-} > "$logs/goose-webgpu/expected.txt"
+    {
+        printf 'DOC_WEBGPU_COMPUTE_PASS: ['
+        for ((lane = 0; lane < 130; lane++)); do
+            a=false b=false
+            if ((lane % 3 == 0)); then a=true; fi
+            if ((lane % 5 < 2)); then b=true; fi
+            if ((lane > 0)); then printf ', '; fi
+            printf '%s' "${oracle_word[$a,$b]}"
+        done
+        printf ']\n'
+    }
+}
+
+write_gpu_oracle "$boolean_fixture" chosen > "$logs/goose-webgpu/expected.txt"
+staged_fixture=runtime-rust/examples/boolean_staged.doc
+"$native" "$staged_fixture" --emit-wgsl chosen "$logs/goose-webgpu/stage-1.wgsl"
+"$native" "$staged_fixture" --emit-wgsl verified "$logs/goose-webgpu/stage-2.wgsl"
+write_gpu_oracle "$staged_fixture" verified > "$logs/goose-webgpu/staged-expected.txt"
 
 # Independent native epoch engines, unchanged DOC source and a closed-form oracle.
 triangle=runtime-rust/examples/triangular.doc

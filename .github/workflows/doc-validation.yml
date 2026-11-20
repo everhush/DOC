@@ -112,6 +112,22 @@ jobs:
           cargo run --release --manifest-path runtime-rust/Cargo.toml --features webgpu --example webgpu_bool -- --shader validation-logs/goose-webgpu/conditional.wgsl 2>&1 | tee validation-logs/doc-goose-webgpu-compute.log
           grep '^DOC_WEBGPU_COMPUTE_PASS:' validation-logs/doc-goose-webgpu-compute.log > validation-logs/doc-goose-webgpu-actual.txt
           diff -u validation-logs/goose-webgpu/expected.txt validation-logs/doc-goose-webgpu-actual.txt
+      - name: Check ordered device stages from both lowerers
+        run: |
+          set -o pipefail
+          cargo run --release --manifest-path runtime-rust/Cargo.toml --features webgpu --example webgpu_bool -- --staged 2>&1 | tee validation-logs/doc-rust-staged.log
+          cargo run --release --manifest-path runtime-rust/Cargo.toml --features webgpu --example webgpu_bool -- --staged-shaders validation-logs/goose-webgpu/stage-1.wgsl validation-logs/goose-webgpu/stage-2.wgsl 2>&1 | tee validation-logs/doc-goose-staged.log
+          for runtime in rust goose; do
+            grep '^DOC_WEBGPU_COMPUTE_PASS:' "validation-logs/doc-${runtime}-staged.log" > "validation-logs/doc-${runtime}-staged-actual.txt"
+            diff -u validation-logs/goose-webgpu/staged-expected.txt "validation-logs/doc-${runtime}-staged-actual.txt"
+          done
+          printf 'invalid WGSL\n' > validation-logs/invalid.wgsl
+          if cargo run --release --manifest-path runtime-rust/Cargo.toml --features webgpu --example webgpu_bool -- --staged-shaders validation-logs/goose-webgpu/stage-1.wgsl validation-logs/invalid.wgsl > validation-logs/doc-invalid-staged.log 2>&1; then
+            echo 'Invalid stage unexpectedly completed' >&2
+            exit 1
+          fi
+          grep -F 'DOC WebGPU validation failure:' validation-logs/doc-invalid-staged.log
+          if grep -q '^DOC_WEBGPU_COMPUTE_PASS:' validation-logs/doc-invalid-staged.log; then exit 1; fi
       - name: Preserve WebGPU adapter and correctness evidence
         if: always()
         uses: actions/upload-artifact@v4

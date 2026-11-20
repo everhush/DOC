@@ -28,14 +28,28 @@ fn main() -> Result<(), Box<dyn Error>> {
 
 async fn run() -> Result<(), Box<dyn Error>> {
     let _ = env_logger::try_init();
-    let source = include_str!("boolean_conditional.doc");
-    let graph = Graph::parse(source)?;
-    let target = graph.id("chosen").ok_or("missing derived target")?;
     let args: Vec<_> = std::env::args_os().skip(1).collect();
-    let shader_source = match args.as_slice() {
-        [] => wgsl::lower_bool_derived(&graph, target)?,
-        [flag, path] if flag == "--shader" => std::fs::read_to_string(path)?,
-        _ => return Err("usage: webgpu_bool [--shader WGSL_FILE]".into()),
+    let (staged, paths) = match args.as_slice() {
+        [] => (false, &args[..]),
+        [flag, _] if flag == "--shader" => (false, &args[1..]),
+        [flag] if flag == "--staged" => (true, &args[1..]),
+        [flag, _, _] if flag == "--staged-shaders" => (true, &args[1..]),
+        _ => return Err("usage: webgpu_bool [--shader FILE | --staged | --staged-shaders FIRST SECOND]".into()),
+    };
+    let graph = Graph::parse(if staged {
+        include_str!("boolean_staged.doc")
+    } else {
+        include_str!("boolean_conditional.doc")
+    })?;
+    let stages: &[&str] = if staged { &["chosen", "verified"] } else { &["chosen"] };
+    let target = graph.id(stages[stages.len() - 1]).ok_or("missing derived target")?;
+    let shaders = if paths.is_empty() {
+        stages.iter().map(|name| {
+            let id = graph.id(name).ok_or("missing derived stage")?;
+            wgsl::lower_bool_derived(&graph, id)
+        }).collect::<Result<Vec<_>, _>>()?
+    } else {
+        paths.iter().map(std::fs::read_to_string).collect::<Result<Vec<_>, _>>()?
     };
 
     // Exercise multiple workgroups and the out-of-range tail guard.
@@ -90,55 +104,59 @@ async fn run() -> Result<(), Box<dyn Error>> {
         contents: &bytes(&b),
         usage: wgpu::BufferUsages::STORAGE,
     });
-    let output = device.create_buffer(&wgpu::BufferDescriptor {
-        label: Some("DOC private candidates"),
+    let output_buffers: Vec<_> = stages.iter().map(|stage| device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some(stage),
         size: nbytes,
         usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
         mapped_at_creation: false,
-    });
+    })).collect();
     let readback = device.create_buffer(&wgpu::BufferDescriptor {
         label: Some("DOC candidate readback"),
         size: nbytes,
         usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
         mapped_at_creation: false,
     });
-    let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-        label: Some("DOC generated WGSL"),
-        source: wgpu::ShaderSource::Wgsl(shader_source.into()),
-    });
-    let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-        label: Some("DOC Boolean frontier batch"),
-        layout: None,
-        module: &shader,
-        entry_point: Some("main"),
-        compilation_options: wgpu::PipelineCompilationOptions::default(),
-        cache: None,
-    });
-    let layout = pipeline.get_bind_group_layout(0);
-    let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
-        label: Some("DOC Boolean inputs and output"),
-        layout: &layout,
-        entries: &[
-            wgpu::BindGroupEntry { binding: 0, resource: buffer_a.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 1, resource: buffer_b.as_entire_binding() },
-            wgpu::BindGroupEntry { binding: 2, resource: output.as_entire_binding() },
-        ],
-    });
     let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-        label: Some("DOC frontier compute and complete readback"),
+        label: Some("DOC ordered Boolean stages"),
     });
-    {
+    device.push_error_scope(wgpu::ErrorFilter::Validation);
+    for (index, shader_source) in shaders.into_iter().enumerate() {
+        let first_input = if index == 0 { &buffer_a } else { &output_buffers[index - 1] };
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("DOC generated WGSL"),
+            source: wgpu::ShaderSource::Wgsl(shader_source.into()),
+        });
+        let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: Some("DOC Boolean frontier batch"),
+            layout: None,
+            module: &shader,
+            entry_point: Some("main"),
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+            cache: None,
+        });
+        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("DOC Boolean inputs and output"),
+            layout: &pipeline.get_bind_group_layout(0),
+            entries: &[
+                wgpu::BindGroupEntry { binding: 0, resource: first_input.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 1, resource: buffer_b.as_entire_binding() },
+                wgpu::BindGroupEntry { binding: 2, resource: output_buffers[index].as_entire_binding() },
+            ],
+        });
         let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: Some("DOC compute"),
             timestamp_writes: None,
         });
         pass.set_pipeline(&pipeline);
         pass.set_bind_group(0, &bind_group, &[]);
-        // The shader declares 64 invocations per workgroup and checks idx.
+        // Each later pass consumes its predecessor's private GPU buffer.
         pass.dispatch_workgroups(workgroups, 1, 1);
     }
-    encoder.copy_buffer_to_buffer(&output, 0, &readback, 0, nbytes);
+    encoder.copy_buffer_to_buffer(output_buffers.last().ok_or("missing output buffer")?, 0, &readback, 0, nbytes);
     queue.submit(Some(encoder.finish()));
+    if let Some(error) = device.pop_error_scope().await {
+        return Err(format!("DOC WebGPU validation failure: {error}").into());
+    }
     let slice = readback.slice(..);
     let (tx, rx) = std::sync::mpsc::channel();
     slice.map_async(wgpu::MapMode::Read, move |res| {

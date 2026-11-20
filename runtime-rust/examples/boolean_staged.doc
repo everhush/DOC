@@ -1,0 +1,4 @@
+source a: bool = true
+source b: bool = false
+derive chosen: bool (a,b) = if(eq(a,b),true,eq(a,false))
+derive verified: bool (chosen,b) = eq(chosen,b)
