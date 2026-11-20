@@ -151,4 +151,40 @@ for bin in "$native" "$rust"; do
     fi
 done
 
+# A direct instruction oracle for the bounded two-counter transfer example.
+for stop in true false; do
+    machine="$tmp/counter-$stop.doc"
+    sed "s/^source stop_on_zero: bool = true$/source stop_on_zero: bool = $stop/" \
+        runtime-rust/examples/counter_transfer.doc > "$machine"
+    pc=0 left=3 right=0
+    {
+        for ((epoch = 0; epoch <= 40; epoch++)); do
+            next_pc=$pc next_left=$left next_right=$right
+            case "$pc" in
+                0)
+                    if ((left > 0)); then
+                        next_left=$((left - 1))
+                        next_pc=1
+                    elif [[ "$stop" == true ]]; then
+                        next_pc=2
+                    fi
+                    ;;
+                1) next_right=$((right + 1)); next_pc=0 ;;
+                2) ;;
+                *) exit 1 ;;
+            esac
+            printf 'epoch: %s\npc: %s\nleft: %s\nright: %s\nstop_on_zero: %s\nnext_pc: %s\nnext_left: %s\nnext_right: %s\n' \
+                "$epoch" "$pc" "$left" "$right" "$stop" "$next_pc" "$next_left" "$next_right"
+            pc=$next_pc left=$next_left right=$next_right
+        done
+    } > "$logs/counter-$stop-oracle.log"
+    machine_carry=(--through=40 pc=next_pc left=next_left right=next_right)
+    "$native" "$machine" "${machine_carry[@]}" > "$logs/counter-$stop-goose.log"
+    diff -u "$logs/counter-$stop-oracle.log" "$logs/counter-$stop-goose.log"
+    for workers in 1 4; do
+        DOC_WORKERS=$workers "$rust" "$machine" "${machine_carry[@]}" > "$logs/counter-$stop-rust-$workers.log"
+        diff -u "$logs/counter-$stop-oracle.log" "$logs/counter-$stop-rust-$workers.log"
+    done
+done
+
 echo DOC_TYPED_FINITE_PASS | tee -a "$logs/goose-typed-differential.log"

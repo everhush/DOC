@@ -1,0 +1,8 @@
+# 0 decrements left, 1 increments right, 2 is an absorbing halt.
+source pc: int = 0
+source left: int = 3
+source right: int = 0
+source stop_on_zero: bool = true
+derive next_pc: int (pc,left,stop_on_zero) = if(eq(pc,0),if(eq(left,0),if(stop_on_zero,2,0),1),if(eq(pc,1),0,2))
+derive next_left: int (pc,left) = if(eq(pc,0),if(eq(left,0),left,sub(left,1)),left)
+derive next_right: int (pc,right) = if(eq(pc,1),add(right,1),right)
