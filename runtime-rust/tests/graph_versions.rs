@@ -77,3 +77,16 @@ fn unstable_replacement_and_stale_tokens_are_rejected() {
     assert_eq!(rt.snapshot(),current);
     assert_eq!(saved,vec![Some(Value::Int(2)),Some(Value::Int(3))]);
 }
+
+#[test]
+fn malformed_public_graph_candidate_is_revalidated_before_commit() {
+    let mut rt=Runtime::new(original(),1,Cutoff::Exact);
+    rt.stabilize().unwrap();
+    let original=rt.snapshot();
+    let mut malformed=changed_definition();
+    malformed.states[0].name="total".into(); // duplicate name after parse
+    assert!(rt.replace_graph(malformed).is_err());
+    assert_eq!(rt.generation,0);
+    assert_eq!(rt.snapshot(),original);
+    assert!(rt.graph.id("total").is_some());
+}
