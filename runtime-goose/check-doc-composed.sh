@@ -16,7 +16,8 @@ expressions=(
   'eq(if(a,b,false),if(b,a,false))'
   'if(eq(a,b),if(a,false,true),if(b,true,false))'
 )
-masks=(1001 0111 0110 1111 1010)
+# The last expression evaluates true,true,false,false in the documented input order.
+masks=(1001 0111 0110 1111 1100)
 for i in "${!expressions[@]}"; do
   cat > "$scratch/case.doc" <<DOC
 source a: bool = false
