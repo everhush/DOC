@@ -74,4 +74,19 @@ for badsource in \
     fi
     grep -Fx DOC_TYPED_ERROR "$logs/goose-typed-source-error.log"
 done
+
+# Whitespace and an operator spelling used as a premise name are shared syntax.
+cat > "$tmp/syntax.doc" <<'DOC'
+source add:int=+7
+source b: int = 3
+derive sum:int(add, b) = add(add,b)
+derive neg: int(sum)=sub(0,sum)
+DOC
+goose_syntax=$("$native" "$tmp/syntax.doc" | sed '/^DOC_TYPED_EVALUATIONS=/d')
+rust_syntax=$("$rust" "$tmp/syntax.doc" 2>/dev/null)
+expected_syntax=$(printf 'add: 7\nb: 3\nsum: 10\nneg: -10')
+test "$goose_syntax" = "$expected_syntax"
+test "$rust_syntax" = "$expected_syntax"
+printf '%s\n' "$goose_syntax" | tee "$logs/goose-typed-shared-syntax.log"
+
 echo DOC_TYPED_FINITE_PASS | tee -a "$logs/goose-typed-differential.log"
