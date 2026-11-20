@@ -38,8 +38,8 @@ fn failed_candidate_preserves_graph_values_generation_and_readers() {
     rt.stabilize().unwrap();
     let before=rt.snapshot();
     let candidate=Graph::parse(
-        "source amount: int = 9223372036854775807\n\
-         derive broken: int (amount) = add(amount,1)\n"
+        "source amount: int = 0\n\
+         derive broken: int (amount) = add(amount,9223372036854775807)\n"
     ).unwrap();
     assert!(rt.replace_graph(candidate).is_err());
     assert_eq!(rt.generation,0);
