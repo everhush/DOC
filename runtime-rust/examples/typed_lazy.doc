@@ -1,0 +1,4 @@
+# Unselected branch overflow is never evaluated; branch types still checked.
+source a: int = 1
+source gate: bool = true
+derive chosen: int (a,gate) = if(gate,a,add(9223372036854775807,1))
