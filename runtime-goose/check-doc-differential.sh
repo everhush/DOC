@@ -47,3 +47,6 @@ for case_name in conditional interlock xor; do
     done
   done
 done
+
+# Expand beyond fixed fixtures with nested compositions and independent truth tables.
+bash runtime-goose/check-doc-composed.sh "$rust" "$goose" "$logs"
