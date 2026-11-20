@@ -1,7 +1,7 @@
 // Independent native-Goose interpreter for the typed, finite DOC graph subset.
 // Supports bool/int, type-checked conditional/equality, checked i64 arithmetic,
 // private ready-frontier evaluation, source updates and exact equality cutoffs.
-// It does not yet implement recurrence, I/O effects, threads or physical GC.
+// Also supports bounded-value forward carry with template defaults.
 import std;
 import os;
 
@@ -386,6 +386,43 @@ fn emit_shader(nodes: State[:], target: u8[:], path: u8[:]) {
     if !write_file_atomic(path,out) { fail(); }
 }
 
+struct Carry { source: i64, previous: i64 }
+
+fn run_recurrence(nodes: State[:], values: Value[:], active: bool[:], limit: i64) {
+    var carry: Carry[>..] = [];
+    for i in 3..arg_count() {
+        var raw: u8[>..] = [];
+        arg(i,raw);
+        let assign = find(raw,"=");
+        if assign <= 0 { fail(); }
+        let source = lookup(nodes,raw[..assign]);
+        let previous = lookup(nodes,raw[assign + 1..]);
+        if source < 0 || previous < 0 || nodes[source].derived ||
+           nodes[source].kind != nodes[previous].kind { fail(); }
+        for old in carry { if old.source == source { fail(); } }
+        carry.push(Carry { source: source, previous: previous });
+    }
+    var defaults: Value[>..] = [];
+    defaults.append(values);
+    var candidate: Value[>..] = [];
+    candidate.append(defaults);
+    let _initial = stabilize(nodes,values,active);
+    var epoch = 0;
+    loop {
+        print("epoch: ",epoch);
+        show(nodes,values);
+        if epoch == limit { return; }
+        for i in 0..nodes.len {
+            candidate[i] = defaults[i];
+            active[i] = nodes[i].derived;
+        }
+        for binding in carry { candidate[binding.source] = values[binding.previous]; }
+        let _checked = stabilize(nodes,candidate,active);
+        for i in 0..nodes.len { values[i] = candidate[i]; }
+        epoch++;
+    }
+}
+
 fn main() {
     if arg_count() < 2 { fail(); }
     var path: u8[>..] = [];
@@ -396,10 +433,17 @@ fn main() {
     var values: Value[>..] = [];
     var active: bool[>..] = [];
     load(source,nodes,values,active);
-    if arg_count() == 5 {
+    if arg_count() >= 3 {
         var mode: u8[>..] = [];
         arg(2,mode);
+        if starts_with(mode,"--through=") {
+            let limit, ok = parse_int(mode[10..]);
+            if !ok || limit < 0 { fail(); }
+            run_recurrence(nodes,values,active,limit);
+            return;
+        }
         if mode == "--emit-wgsl" {
+            if arg_count() != 5 { fail(); }
             var target: u8[>..] = [];
             var output: u8[>..] = [];
             arg(3,target);

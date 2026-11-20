@@ -126,4 +126,29 @@ done
     printf ']\n'
 } > "$logs/goose-webgpu/expected.txt"
 
+# Independent native epoch engines, unchanged DOC source and a closed-form oracle.
+triangle=runtime-rust/examples/triangular.doc
+carry=(--through=12 index=next_index total=next_total)
+"$native" "$triangle" "${carry[@]}" > "$logs/goose-recurrence.log"
+for workers in 1 4; do
+    DOC_WORKERS=$workers "$rust" "$triangle" "${carry[@]}" > "$logs/rust-recurrence-$workers.log"
+    diff -u "$logs/goose-recurrence.log" "$logs/rust-recurrence-$workers.log"
+done
+for ((epoch = 0; epoch <= 12; epoch++)); do
+    printf 'epoch: %s\nindex: %s\ntotal: %s\nincrement: 1\nnext_index: %s\nnext_total: %s\n' \
+        "$epoch" "$epoch" "$((epoch * (epoch + 1) / 2))" \
+        "$((epoch + 1))" "$(((epoch + 1) * (epoch + 2) / 2))"
+done > "$logs/recurrence-oracle.log"
+diff -u "$logs/recurrence-oracle.log" "$logs/goose-recurrence.log"
+for bin in "$native" "$rust"; do
+    if "$bin" "$triangle" --through=1 index=next_index index=next_total > "$tmp/carry-invalid.log" 2>&1; then
+        echo "Duplicate carry accepted by $bin" >&2
+        exit 1
+    fi
+    if grep -q '^epoch:' "$tmp/carry-invalid.log"; then
+        echo "Invalid carry produced an epoch in $bin" >&2
+        exit 1
+    fi
+done
+
 echo DOC_TYPED_FINITE_PASS | tee -a "$logs/goose-typed-differential.log"
