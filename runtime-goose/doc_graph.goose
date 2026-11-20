@@ -1,271 +1,208 @@
-// Independent Goose implementation of a bounded, typed Boolean DOC DAG.
-// Supports named sources, topologically ordered derived states, repeated
-// premises, multiple ready definitions, atomic candidate evaluation,
-// same-value cutoff and source-batch repair. Not a general-purpose runtime.
-// Explicit prototype limits: Boolean values, 16 premises per definition,
-// prior-declaration-only dependencies and no effects or recurrence.
+// Native Goose prototype: finite Boolean dependency DAG and exact-cutoff repair.
+// Uses a valid topological declaration order and singleton ready-frontier steps.
+// No recurrence, arbitrary types, concurrent execution, or physical GC claims.
 import std;
 import os;
 
 struct Node {
-    name_begin: i64, name_end: i64,
-    expr_begin: i64, expr_end: i64,
-    dependencies: i64[16], dep_count: i64,
-    derived: bool, value: bool, candidate: bool,
-    current: bool, active: bool, ready: bool, updated: bool
+    name: u8[..64],
+    expression: u8[..512],
+    premise: i64[16],
+    count: i64,
+    derived: bool,
 }
-
-fn space(c: u8) -> bool { return c == ' ' || c == '\t' || c == '\r'; }
-fn ident(c: u8) -> bool {
+fn fail() { print("DOC_GOOSE_GRAPH_ERROR"); exit(1); }
+fn identifier_char(c: u8) -> bool {
     return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
            (c >= '0' && c <= '9') || c == '_';
 }
-fn skip(s: u8[:], p: i64) -> i64 {
-    var i = p;
-    while i < s.len && space(s[i]) { i++; }
-    return i;
+fn valid_name(s: u8[:]) -> bool {
+    if s.len == 0 || s.len > 64 { return false; }
+    if s[0] >= '0' && s[0] <= '9' { return false; }
+    for c in s { if !identifier_char(c) { return false; } }
+    return s != "true" && s != "false" && s != "eq" && s != "if";
 }
-fn word_end(s: u8[:], p: i64) -> i64 {
-    var i = p;
-    while i < s.len && ident(s[i]) { i++; }
-    return i;
-}
-fn expect(s: u8[:], p: i64, ch: u8) -> i64, bool {
-    let i = skip(s, p);
-    if i >= s.len || s[i] != ch { return i, false; }
-    return i + 1, true;
-}
-fn lookup(src: u8[:], ns: Node[:], name: u8[:]) -> i64 {
-    var i = 0;
-    while i < ns.len {
-        if src[ns[i].name_begin..ns[i].name_end] == name { return i; }
-        i++;
-    }
+fn lookup(nodes: Node[:], name: u8[:]) -> i64 {
+    for i in 0..nodes.len { if nodes[i].name == name { return i; } }
     return -1;
 }
-fn allowed(deps: i64[:], id: i64) -> bool {
-    for d in deps { if d == id { return true; } }
+fn uses(node: Node&, id: i64) -> bool {
+    for i in 0..node.count { if node.premise[i] == id { return true; } }
     return false;
 }
-
-// DOC expression evaluation reads ONLY the settled pre-frontier values.
-// Lexical references must be declared in the ordered premise list.
-recursive fn expr(s: u8[:], p: i64, src: u8[:], ns: Node[:],
-                  deps: i64[:], depth: i64) -> bool, i64, bool {
+fn skip(s: u8[:], p: i64) -> i64 {
+    var i = p;
+    while i < s.len && (s[i] == ' ' || s[i] == '\t' || s[i] == '\r') { i++; }
+    return i;
+}
+fn expect(s: u8[:], p: i64, c: u8) -> i64, bool {
+    let i = skip(s, p);
+    if i >= s.len || s[i] != c { return i, false; }
+    return i + 1, true;
+}
+// All identifiers must appear in the definition's explicit premise sequence.
+recursive fn expr(s: u8[:], p: i64, nodes: Node[:], values: bool[:],
+                  premises: i64[:], depth: i64) -> bool, i64, bool {
     if depth == 0 { return false, p, false; }
-    let begin = skip(s, p);
-    let end = word_end(s, begin);
-    if end == begin { return false, begin, false; }
-    let token = s[begin..end];
+    let i = skip(s, p);
+    var end = i;
+    while end < s.len && identifier_char(s[end]) { end++; }
+    if end == i { return false, i, false; }
+    let word = s[i..end];
     let after = skip(s, end);
-    if token == "true" { return true, after, true; }
-    if token == "false" { return false, after, true; }
-    if token != "eq" && token != "if" {
-        let id = lookup(src, ns, token);
-        if id < 0 || !allowed(deps, id) || !ns[id].current || ns[id].active {
-            return false, after, false;
-        }
-        return ns[id].value, after, true;
+    if word == "true" { return true, after, true; }
+    if word == "false" { return false, after, true; }
+    if word != "eq" && word != "if" {
+        let id = lookup(nodes, word);
+        if id < 0 { return false, after, false; }
+        var allowed = false;
+        for premise in premises { if premise == id { allowed = true; } }
+        if !allowed { return false, after, false; }
+        return values[id], after, true;
     }
     let open, ok = expect(s, after, '(');
     if !ok { return false, open, false; }
-    let a, ae, ao = expr(s, open, src, ns, deps, depth - 1);
-    if !ao { return false, ae, false; }
-    let comma, co = expect(s, ae, ',');
-    if !co { return false, comma, false; }
-    let b, be, bo = expr(s, comma, src, ns, deps, depth - 1);
-    if !bo { return false, be, false; }
-    if token == "eq" {
-        let close, done = expect(s, be, ')');
+    let a, aend, aok = expr(s, open, nodes, values, premises, depth - 1);
+    if !aok { return false, aend, false; }
+    let comma, cok = expect(s, aend, ',');
+    if !cok { return false, comma, false; }
+    let b, bend, bok = expr(s, comma, nodes, values, premises, depth - 1);
+    if !bok { return false, bend, false; }
+    if word == "eq" {
+        let close, done = expect(s, bend, ')');
         return a == b, close, done;
     }
-    let next, no = expect(s, be, ',');
-    if !no { return false, next, false; }
-    let c, ce, c_ok = expr(s, next, src, ns, deps, depth - 1);
-    if !c_ok { return false, ce, false; }
-    let close, done = expect(s, ce, ')');
+    let comma2, cok2 = expect(s, bend, ',');
+    if !cok2 { return false, comma2, false; }
+    let c, cend, valid = expr(s, comma2, nodes, values, premises, depth - 1);
+    if !valid { return false, cend, false; }
+    let close, done = expect(s, cend, ')');
     return if a { b } else { c }, close, done;
 }
-fn fail() { print("DOC_GOOSE_ERROR"); exit(1); }
-
-fn main() {
-    if arg_count() < 2 { fail(); }
-    var path: u8[>..] = [];
-    arg(1, path);
-    var source: u8[>..] = [];
-    if !read_file(path, source) { fail(); }
-    var nodes: Node[>..] = [];
-    var start = 0;
-    while start < source.len {
-        var line_end = start;
-        while line_end < source.len && source[line_end] != '\n' { line_end++; }
-        var body_end = line_end;
-        var comment = start;
-        while comment < line_end {
-            if source[comment] == '#' { body_end = comment; break; }
-            comment++;
+fn evaluate(nodes: Node[:], values: bool[:], id: i64) -> bool {
+    let s = nodes[id].expression[..];
+    let deps = nodes[id].premise[..nodes[id].count];
+    let result, end, ok = expr(s, 0, nodes, values, deps, 128);
+    if !ok || skip(s, end) != s.len { fail(); }
+    return result;
+}
+// Singleton ready-frontier steps are legal under the finite DOC relation.
+fn stabilize(nodes: Node[:], values: bool[:], active: bool[:]) -> i64 {
+    var evaluations = 0;
+    for i in 0..nodes.len {
+        if !active[i] { continue; }
+        if !nodes[i].derived { fail(); }
+        let candidate = evaluate(nodes, values, i);
+        active[i] = false;
+        evaluations++;
+        if candidate != values[i] {
+            values[i] = candidate;
+            for j in i + 1..nodes.len {
+                if nodes[j].derived && uses(nodes[j], i) { active[j] = true; }
+            }
         }
-        let line = source[start..body_end];
-        let first = skip(line, 0);
-        if first < line.len {
-            var derived = false;
-            var cursor = first;
-            if starts_with(line[first..], "source ") {
-                cursor = first + 7;
-            } else if starts_with(line[first..], "derive ") {
-                derived = true;
-                cursor = first + 7;
-            } else { fail(); }
-            let nb = skip(line, cursor);
-            let ne = word_end(line, nb);
-            if nb == ne || (line[nb] >= '0' && line[nb] <= '9') { fail(); }
-            if lookup(source, nodes, line[nb..ne]) >= 0 { fail(); }
-            let colon, colon_ok = expect(line, ne, ':');
-            if !colon_ok { fail(); }
-            let tb = skip(line, colon);
-            if tb + 4 > line.len || line[tb..tb + 4] != "bool" { fail(); }
-            cursor = tb + 4;
+    }
+    return evaluations;
+}
+fn update(nodes: Node[:], values: bool[:], active: bool[:],
+          name: u8[:], value: bool) {
+    let id = lookup(nodes, name);
+    if id < 0 || nodes[id].derived { fail(); }
+    if values[id] == value { return; }
+    values[id] = value;
+    for j in 0..nodes.len {
+        if nodes[j].derived && uses(nodes[j], id) { active[j] = true; }
+    }
+}
+fn load(src: u8[:], nodes: Node[>..]&, values: bool[>..]&, active: bool[>..]&) {
+    for original in split(src, '\n') {
+        var comment = 0;
+        while comment < original.len && original[comment] != '#' { comment++; }
+        let line = trim(original[..comment]);
+        if line.len == 0 { continue; }
+        if starts_with(line, "source ") {
+            let text = line[7..];
+            let sep = find(text, ": bool = ");
+            if sep <= 0 { fail(); }
+            let name = trim(text[..sep]);
+            let value = trim(text[sep + 9..]);
+            if !valid_name(name) || lookup(nodes, name) >= 0 { fail(); }
+            if value != "true" && value != "false" { fail(); }
+            nodes.push(Node {
+                name: name, expression: "", premise: [0; 16],
+                count: 0, derived: false,
+            });
+            values.push(value == "true");
+            active.push(false);
+        } else if starts_with(line, "derive ") {
+            let text = line[7..];
+            let sep = find(text, ": bool (");
+            if sep <= 0 { fail(); }
+            let tail = text[sep + 8..];
+            let close = find(tail, ") = ");
+            if close < 0 { fail(); }
+            let name = trim(text[..sep]);
+            let parameters = trim(tail[..close]);
+            let body = trim(tail[close + 4..]);
+            if !valid_name(name) || lookup(nodes, name) >= 0 ||
+               body.len == 0 || body.len > 512 { fail(); }
             var node = Node {
-                name_begin: start + nb, name_end: start + ne,
-                expr_begin: 0, expr_end: 0,
-                dependencies: [0; 16], dep_count: 0,
-                derived: derived, value: false, candidate: false,
-                current: !derived, active: derived, ready: false,
-                updated: false
+                name: name, expression: body, premise: [0; 16],
+                count: 0, derived: true,
             };
-            if derived {
-                let open, open_ok = expect(line, cursor, '(');
-                if !open_ok { fail(); }
-                cursor = open;
-                while true {
-                    cursor = skip(line, cursor);
-                    if cursor >= line.len { fail(); }
-                    if line[cursor] == ')' { cursor++; break; }
-                    let pe = word_end(line, cursor);
-                    if pe == cursor || node.dep_count >= 16 { fail(); }
-                    let id = lookup(source, nodes, line[cursor..pe]);
-                    if id < 0 { fail(); }
-                    node.dependencies[node.dep_count] = id;
-                    node.dep_count++;
-                    cursor = skip(line, pe);
-                    if cursor >= line.len { fail(); }
-                    if line[cursor] == ')' { cursor++; break; }
-                    if line[cursor] != ',' { fail(); }
-                    cursor++;
+            if parameters.len > 0 {
+                for part in split(parameters, ',') {
+                    let pname = trim(part);
+                    let dep = lookup(nodes, pname);
+                    if dep < 0 || node.count >= 16 { fail(); }
+                    for k in 0..node.count {
+                        if node.premise[k] == dep { fail(); }
+                    }
+                    node.premise[node.count] = dep;
+                    node.count++;
                 }
-                let eq, eq_ok = expect(line, cursor, '=');
-                if !eq_ok || skip(line, eq) == line.len { fail(); }
-                node.expr_begin = start + eq;
-                node.expr_end = body_end;
-            } else {
-                let eq, eq_ok = expect(line, cursor, '=');
-                if !eq_ok { fail(); }
-                let value = trim(line[eq..]);
-                if value != "true" && value != "false" { fail(); }
-                node.value = value == "true";
             }
             nodes.push(node);
-        }
-        start = line_end + 1;
+            values.push(false);
+            active.push(true);
+        } else { fail(); }
     }
     if nodes.len == 0 { fail(); }
-
-    // Validate the WHOLE source-update batch before changing any source.
-    var update_arg = 2;
-    while update_arg < arg_count() {
-        var assignment: u8[>..] = [];
-        arg(update_arg, assignment);
-        var eq = 0;
-        while eq < assignment.len && assignment[eq] != '=' { eq++; }
-        if eq == 0 || eq >= assignment.len { fail(); }
-        let id = lookup(source, nodes, assignment[..eq]);
-        if id < 0 || nodes[id].derived || nodes[id].updated { fail(); }
-        let value = assignment[eq + 1..];
-        if value != "true" && value != "false" { fail(); }
-        nodes[id].updated = true;
-        nodes[id].candidate = value == "true";
-        update_arg++;
-    }
-    var i = 0;
-    while i < nodes.len {
-        if !nodes[i].derived && nodes[i].updated {
-            let changed = nodes[i].value != nodes[i].candidate;
-            nodes[i].value = nodes[i].candidate;
-            if changed {
-                var j = 0;
-                while j < nodes.len {
-                    var k = 0;
-                    while k < nodes[j].dep_count {
-                        if nodes[j].dependencies[k] == i { nodes[j].active = true; }
-                        k++;
-                    }
-                    j++;
-                }
-            }
-        }
-        i++;
-    }
-
-    // One private evaluation phase followed by one publication phase per
-    // dependency-minimal frontier. Dependency order is not textual scheduling.
-    while true {
-        var active_count = 0;
-        var ready_count = 0;
-        i = 0;
-        while i < nodes.len {
-            nodes[i].ready = false;
-            if nodes[i].derived && nodes[i].active {
-                active_count++;
-                var blocked = false;
-                var k = 0;
-                while k < nodes[i].dep_count {
-                    if nodes[nodes[i].dependencies[k]].active { blocked = true; }
-                    k++;
-                }
-                if !blocked { nodes[i].ready = true; ready_count++; }
-            }
-            i++;
-        }
-        if active_count == 0 { break; }
-        if ready_count == 0 { fail(); }
-        i = 0;
-        while i < nodes.len {
-            if nodes[i].ready {
-                let expression = source[nodes[i].expr_begin..nodes[i].expr_end];
-                let dependencies = nodes[i].dependencies[..nodes[i].dep_count];
-                let candidate, end, ok = expr(expression, 0, source, nodes, dependencies, 128);
-                if !ok || skip(expression, end) != expression.len { fail(); }
-                nodes[i].candidate = candidate;
-            }
-            i++;
-        }
-        i = 0;
-        while i < nodes.len {
-            if nodes[i].ready {
-                let changed = !nodes[i].current || nodes[i].value != nodes[i].candidate;
-                nodes[i].value = nodes[i].candidate;
-                nodes[i].current = true;
-                nodes[i].active = false;
-                nodes[i].ready = false;
-                if changed {
-                    var j = 0;
-                    while j < nodes.len {
-                        var k = 0;
-                        while k < nodes[j].dep_count {
-                            if nodes[j].dependencies[k] == i { nodes[j].active = true; }
-                            k++;
-                        }
-                        j++;
-                    }
-                }
-            }
-            i++;
-        }
-    }
-    i = 0;
-    while i < nodes.len {
-        if !nodes[i].current || nodes[i].active { fail(); }
-        print(source[nodes[i].name_begin..nodes[i].name_end], ": ", nodes[i].value);
-        i++;
+}
+fn argument_boolean(i: i64) -> bool {
+    var raw: u8[>..] = [];
+    arg(i, raw);
+    if raw != "true" && raw != "false" { fail(); }
+    return raw == "true";
+}
+fn output(nodes: Node[:], values: bool[:]) {
+    for i in 0..nodes.len { print(nodes[i].name, ": ", values[i]); }
+}
+fn main() {
+    if arg_count() != 4 && arg_count() != 6 { fail(); }
+    var path: u8[>..] = [];
+    arg(1, path);
+    let a = argument_boolean(2);
+    let b = argument_boolean(3);
+    var raw: u8[>..] = [];
+    if !read_file(path, raw) { fail(); }
+    var nodes: Node[>..] = [];
+    var values: bool[>..] = [];
+    var active: bool[>..] = [];
+    load(raw, nodes, values, active);
+    update(nodes, values, active, "a", a);
+    update(nodes, values, active, "b", b);
+    let first = stabilize(nodes, values, active);
+    output(nodes, values);
+    print("DOC_GOOSE_EVALUATIONS=", first);
+    if arg_count() == 6 {
+        let next_a = argument_boolean(4);
+        let next_b = argument_boolean(5);
+        update(nodes, values, active, "a", next_a);
+        update(nodes, values, active, "b", next_b);
+        let second = stabilize(nodes, values, active);
+        print("DOC_GOOSE_NEXT");
+        output(nodes, values);
+        print("DOC_GOOSE_EVALUATIONS=", second);
     }
 }

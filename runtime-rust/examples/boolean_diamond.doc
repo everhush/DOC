@@ -1,6 +1,7 @@
-# Two independent ready definitions then one dependent join.
+# Four derived Boolean states, two independently reusable branches.
 source a: bool = false
 source b: bool = false
-derive left: bool (a,b) = if(a,b,false)
-derive right: bool (a,b) = eq(a,b)
-derive joined: bool (left,right) = if(left,right,false)
+derive equal: bool (a,b) = eq(a,b)
+derive requested: bool (a) = if(a,true,false)
+derive granted: bool (equal,requested) = if(equal,requested,false)
+derive chosen: bool (granted,b) = if(b,granted,if(granted,false,true))
