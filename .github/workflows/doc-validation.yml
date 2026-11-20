@@ -135,6 +135,8 @@ jobs:
         run: bash runtime-goose/check-doc-bool.sh /tmp/goose-build/goose validation-logs runtime-rust/target/release/doc
       - name: Native Goose finite dependency graph and Rust differential
         run: bash runtime-goose/check-doc-graph.sh /tmp/goose-build/goose runtime-rust/target/release/doc validation-logs
+      - name: Goose finite DAG incremental repair and native Rust differential
+        run: bash runtime-goose/check-doc-graph.sh /tmp/goose-build/goose validation-logs runtime-rust/target/release/doc
       - name: Preserve Goose compilation evidence
         if: always()
         uses: actions/upload-artifact@v4
