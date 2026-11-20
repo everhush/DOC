@@ -196,4 +196,27 @@ for stop in true false; do
     done
 done
 
+
+# Frontier-wide failure must not publish a partial observable valuation.
+cat > "$tmp/frontier-atomic.doc" <<'DOC'
+source a: int = 1
+derive safe: int (a) = add(a,1)
+derive overflow: int (a) = add(9223372036854775807,a)
+DOC
+for bin in "$native" "$rust"; do
+    label=rust
+    if [[ "$bin" == "$native" ]]; then label=goose; fi
+    if "$bin" "$tmp/frontier-atomic.doc" > "$logs/frontier-atomic-$label.log" 2>&1; then
+        echo "Accepted overflowing ready frontier: $label" >&2
+        exit 1
+    fi
+    if grep -Eq '^(safe|overflow): ' "$logs/frontier-atomic-$label.log"; then
+        echo "Published a partial ready frontier: $label" >&2
+        exit 1
+    fi
+    "$bin" "$tmp/frontier-atomic.doc" a=0 > "$logs/frontier-safe-$label.log"
+    sed '/^DOC_TYPED_EVALUATIONS=/d' "$logs/frontier-safe-$label.log" > "$tmp/frontier-values-$label.log"
+    diff -u <(printf 'a: 0\nsafe: 1\noverflow: 9223372036854775807\n') "$tmp/frontier-values-$label.log"
+done
+
 echo DOC_TYPED_FINITE_PASS | tee -a "$logs/goose-typed-differential.log"
