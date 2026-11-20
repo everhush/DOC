@@ -1,5 +1,6 @@
-//! Executable finite DOC calculus. Extensions (recurrence, placement, effects)
-//! are deliberately outside this crate's proof and runtime contract.
+//! Executable finite DOC calculus and bounded-value forward recurrence.
+//! The finite-core proof excludes recurrence, placement and effects.
+pub mod recurrence;
 pub mod wgsl;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::thread;
