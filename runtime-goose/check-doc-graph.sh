@@ -37,14 +37,25 @@ for a in false true; do
     done
   done
 done
-for kind in bad-boolean duplicate-name unknown-premise invalid-expression; do
+# Negative tests must actually mutate the fixture; otherwise a no-op sed
+# can accidentally make a supposedly invalid case pass for the wrong reason.
+for kind in bad-boolean duplicate-name unknown-premise invalid-expression \
+            duplicate-premise forward-premise trailing-expression bad-source-value; do
   cp "$fixture" "$scratch/bad.doc"
   case "$kind" in
     bad-boolean) : ;;
     duplicate-name) printf 'source a: bool = false\n' >> "$scratch/bad.doc" ;;
     unknown-premise) sed -i 's/(equal,requested)/(equal,missing)/' "$scratch/bad.doc" ;;
     invalid-expression) sed -i 's/if(equal,requested,false)/if(equal,unknown,false)/' "$scratch/bad.doc" ;;
+    duplicate-premise) sed -i 's/(equal,requested)/(equal,equal)/' "$scratch/bad.doc" ;;
+    forward-premise) sed -i 's/(a,b) = eq(a,b)/(a,granted) = eq(a,granted)/' "$scratch/bad.doc" ;;
+    trailing-expression) sed -i 's/eq(a,b)$/eq(a,b) garbage/' "$scratch/bad.doc" ;;
+    bad-source-value) sed -i 's/source a: bool = false/source a: bool = maybe/' "$scratch/bad.doc" ;;
   esac
+  if [[ "$kind" != bad-boolean ]] && cmp -s "$fixture" "$scratch/bad.doc"; then
+    echo "Negative fixture mutation did not apply: $kind" >&2
+    exit 1
+  fi
   if [[ "$kind" == bad-boolean ]]; then
     if "$native" "$scratch/bad.doc" invalid true > "$logs/goose-graph-negative-$kind.log" 2>&1; then
       echo "Accepted invalid $kind case" >&2; exit 1;
