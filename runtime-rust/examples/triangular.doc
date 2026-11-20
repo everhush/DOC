@@ -1,0 +1,6 @@
+# Accumulate successive positive integers using two forward carry bindings.
+source index: int = 0
+source total: int = 0
+source increment: int = 1
+derive next_index: int (index,increment) = add(index,increment)
+derive next_total: int (total,next_index) = add(total,next_index)
