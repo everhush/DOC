@@ -51,8 +51,7 @@ fn valid_name(s: u8[:]) -> bool {
     if s.len == 0 || s.len > 64 { return false; }
     if s[0] >= '0' && s[0] <= '9' { return false; }
     for c in s { if !ident(c) { return false; } }
-    return s != "true" && s != "false" && s != "add" &&
-           s != "sub" && s != "mul" && s != "eq" && s != "if";
+    return s != "true" && s != "false";
 }
 fn lookup(nodes: State[:], name: u8[:]) -> i64 {
     for i in 0..nodes.len { if nodes[i].name == name { return i; } }
@@ -112,8 +111,7 @@ recursive fn expression(s: u8[:], p: i64, nodes: State[:],
     if word == "false" { return boolean(false), after; }
     let n, is_number = parse_int(word);
     if is_number { return integer(if execute { n } else { 0 }), after; }
-    if word != "if" && word != "eq" &&
-       word != "add" && word != "sub" && word != "mul" {
+    if after >= s.len || s[after] != '(' {
         let id = lookup(nodes,word);
         if id < 0 { fail(); }
         var allowed = false;
@@ -121,7 +119,9 @@ recursive fn expression(s: u8[:], p: i64, nodes: State[:],
         if !allowed { fail(); }
         return if execute { values[id] } else { zero(nodes[id].kind) }, after;
     }
-    let open = expect(s,after,'(');
+    if word != "if" && word != "eq" &&
+       word != "add" && word != "sub" && word != "mul" { fail(); }
+    let open = after + 1;
     let a, next = expression(s,open,nodes,values,premises,execute,depth - 1);
     let comma = expect(s,next,',');
     if word == "if" {
@@ -164,12 +164,12 @@ fn load(source: u8[:], nodes: State[>..]&, values: Value[>..]&,
         if starts_with(line,"source ") {
             let rest = line[7..];
             let colon = find(rest,":");
-            let assign = find(rest," = ");
+            let assign = find(rest,"=");
             if colon <= 0 || assign <= colon { fail(); }
             let name = trim(rest[..colon]);
             if !valid_name(name) || lookup(nodes,name) >= 0 { fail(); }
             let kind = type_name(trim(rest[colon + 1..assign]));
-            let value = parse_value(trim(rest[assign + 3..]),kind);
+            let value = parse_value(trim(rest[assign + 1..]),kind);
             nodes.push(State {
                 name: name, expression: "", premise: [0;16],
                 count: 0, kind: kind, derived: false,
@@ -180,12 +180,15 @@ fn load(source: u8[:], nodes: State[>..]&, values: Value[>..]&,
             let rest = line[7..];
             let colon = find(rest,":");
             let open = find(rest,"(");
-            let close = find(rest,") = ");
-            if colon <= 0 || open <= colon || close < open { fail(); }
+            let assign = find(rest,"=");
+            if colon <= 0 || open <= colon || assign <= open { fail(); }
+            let signature = trim_end(rest[..assign]);
+            if signature[signature.len - 1] != ')' { fail(); }
+            let close = signature.len - 1;
             let name = trim(rest[..colon]);
             if !valid_name(name) || lookup(nodes,name) >= 0 { fail(); }
             let kind = type_name(trim(rest[colon + 1..open]));
-            let body = trim(rest[close + 4..]);
+            let body = trim(rest[assign + 1..]);
             if body.len == 0 || body.len > 512 { fail(); }
             var node = State {
                 name: name, expression: body, premise: [0;16],
