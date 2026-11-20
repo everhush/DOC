@@ -248,17 +248,62 @@ pub struct Stats {
 #[derive(Debug)]
 pub struct Runtime {
     pub graph:Graph,values:Vec<Option<Value>>,active:Vec<bool>,
-    pub cutoff:Cutoff,pub workers:usize,pub stats:Stats,
+    pub cutoff:Cutoff,pub workers:usize,pub stats:Stats,pub generation:u64,
 }
 impl Runtime {
     pub fn new(graph:Graph,workers:usize,cutoff:Cutoff)->Self{
         let values=graph.states.iter().map(|s|s.initial).collect();
         let active=graph.states.iter().map(|s|s.definition.is_some()).collect();
-        Self{graph,values,active,cutoff,workers:workers.max(1),stats:Stats::default()}
+        Self{graph,values,active,cutoff,workers:workers.max(1),stats:Stats::default(),generation:0}
     }
     pub fn value(&self,id:StateId)->Option<Value>{self.values.get(id).copied().flatten()}
     pub fn snapshot(&self)->Vec<Option<Value>>{self.values.clone()}
     pub fn stable(&self)->bool{!self.active.iter().any(|v|*v)}
+
+    /// Conservatively replace a stable immutable graph generation.
+    ///
+    /// Only source facts with the same name, source role and type are carried.
+    /// All derived values are rebuilt under the candidate's definitions; thus
+    /// semantic-key equivalence is never guessed. Candidate stabilization is
+    /// private, and a failing candidate leaves this generation untouched.
+    ///
+    /// This finite, owned-runtime operation does not implement asynchronous
+    /// reader pinning, graph-version reuse, or distributed generation fences.
+    pub fn replace_graph(&mut self,mut candidate:Graph)->Result<()>{
+        if !self.stable(){
+            return Err("replace_graph requires a stable current graph".into());
+        }
+        let next=self.generation.checked_add(1).ok_or("graph generation overflow")?;
+        for state in &mut candidate.states {
+            if state.definition.is_some(){continue;}
+            if let Some(old_id)=self.graph.id(&state.name){
+                let old=&self.graph.states[old_id];
+                if old.definition.is_none() && old.kind==state.kind {
+                    state.initial=Some(self.values[old_id].ok_or("missing source fact")?);
+                }
+            }
+        }
+        let mut pending=Runtime::new(candidate,self.workers,self.cutoff);
+        pending.stabilize()?;
+        self.graph=pending.graph;
+        self.values=pending.values;
+        self.active=pending.active;
+        self.stats=pending.stats;
+        self.generation=next;
+        Ok(())
+    }
+    /// A stale scheduler token is rejected without inspecting or publishing work.
+    pub fn step_for_generation(&mut self,generation:u64,selected:&[StateId])->Result<()>{
+        if generation!=self.generation{
+            return Err("stale graph generation".into());
+        }
+        self.step(selected)
+    }
+    /// Owned scalar snapshots remain valid across later source/graph changes.
+    pub fn snapshot_for_generation(&self,generation:u64)->Option<Vec<Option<Value>>>{
+        if generation==self.generation{Some(self.snapshot())}else{None}
+    }
+
     pub fn update(&mut self,changes:&[(StateId,Value)])->Result<()>{
         let mut ids=HashSet::new();
         for &(id,v) in changes{
