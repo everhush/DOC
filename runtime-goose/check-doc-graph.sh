@@ -56,4 +56,5 @@ for kind in bad-boolean duplicate-name unknown-premise invalid-expression; do
   fi
   grep -Fx DOC_GOOSE_GRAPH_ERROR "$logs/goose-graph-negative-$kind.log"
 done
+bash runtime-goose/check-doc-named.sh "$native" "$rust" "$logs"
 echo DOC_GOOSE_GRAPH_CONFORMANCE_PASS | tee -a "$logs/goose-graph-differential.log"
