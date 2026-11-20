@@ -1,5 +1,5 @@
 // Native Goose prototype: finite Boolean dependency DAG and exact-cutoff repair.
-// Uses a valid topological declaration order and singleton ready-frontier steps.
+// Uses topological declarations, dependency-minimal ready frontiers and batch publication.
 // No recurrence, arbitrary types, concurrent execution, or physical GC claims.
 import std;
 import os;
@@ -86,21 +86,58 @@ fn evaluate(nodes: Node[:], values: bool[:], id: i64) -> bool {
     if !ok || skip(s, end) != s.len { fail(); }
     return result;
 }
-// Singleton ready-frontier steps are legal under the finite DOC relation.
+// Evaluate every dependency-minimal ready node privately against one settled
+// pre-valuation, then publish the full frontier. Serial evaluation is a valid
+// schedule here; independent worker execution remains a later implementation.
 fn stabilize(nodes: Node[:], values: bool[:], active: bool[:]) -> i64 {
     var evaluations = 0;
-    for i in 0..nodes.len {
-        if !active[i] { continue; }
-        if !nodes[i].derived { fail(); }
-        let candidate = evaluate(nodes, values, i);
-        active[i] = false;
-        evaluations++;
-        if candidate != values[i] {
-            values[i] = candidate;
-            for j in i + 1..nodes.len {
-                if nodes[j].derived && uses(nodes[j], i) { active[j] = true; }
+    loop {
+        // Because declarations are topological, predecessor ancestry is known
+        // before inspecting a node, including active transitive ancestors whose
+        // immediate children are presently inactive.
+        var blocked: bool[>..] = [];
+        var frontier: i64[>..] = [];
+        for i in 0..nodes.len {
+            var has_active_ancestor = false;
+            if nodes[i].derived {
+                for k in 0..nodes[i].count {
+                    let premise = nodes[i].premise[k];
+                    if active[premise] || blocked[premise] {
+                        has_active_ancestor = true;
+                    }
+                }
+            }
+            blocked.push(has_active_ancestor);
+            if active[i] && !has_active_ancestor {
+                if !nodes[i].derived { fail(); }
+                frontier.push(i);
             }
         }
+        if frontier.len == 0 {
+            // Do not silently report stability if an illegal active state
+            // or dependency cycle somehow escaped validation.
+            for v in active { if v { fail(); } }
+            break;
+        }
+        var candidates: bool[>..] = [];
+        for id in frontier {
+            candidates.push(evaluate(nodes, values, id));
+        }
+        // All candidates succeeded; no new logical value was published above.
+        for k in 0..frontier.len {
+            let id = frontier[k];
+            let candidate = candidates[k];
+            active[id] = false;
+            if candidate != values[id] {
+                values[id] = candidate;
+                for j in id + 1..nodes.len {
+                    if nodes[j].derived && uses(nodes[j], id) {
+                        active[j] = true;
+                    }
+                }
+            }
+        }
+        evaluations += frontier.len;
     }
     return evaluations;
 }
