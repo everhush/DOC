@@ -1,0 +1,8 @@
+# Three Boolean sources, independent ready peers, and shared descendants.
+source a: bool = false
+source b: bool = false
+source c: bool = true
+derive eq_ab: bool (a,b) = eq(a,b)
+derive eq_bc: bool (b,c) = eq(b,c)
+derive both: bool (eq_ab,eq_bc) = if(eq_ab,eq_bc,false)
+derive chosen: bool (both,c) = if(c,both,if(both,false,true))

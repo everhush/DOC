@@ -215,31 +215,88 @@ fn argument_boolean(i: i64) -> bool {
 fn output(nodes: Node[:], values: bool[:]) {
     for i in 0..nodes.len { print(nodes[i].name, ": ", values[i]); }
 }
+
+struct Assignment { id: i64, value: bool, second: bool }
+// Validate every named assignment and all duplicate update targets before
+// publishing anything. The same Boolean source declarations run under Rust.
+fn run_named(nodes: Node[:], values: bool[:], active: bool[:]) {
+    var assignments: Assignment[>..] = [];
+    var second = false;
+    for i in 2..arg_count() {
+        var raw: u8[>..] = [];
+        arg(i, raw);
+        if raw == "--next" {
+            if second { fail(); }
+            second = true;
+            continue;
+        }
+        let eq = find(raw, "=");
+        if eq <= 0 { fail(); }
+        let name = trim(raw[..eq]);
+        let value = trim(raw[eq + 1..]);
+        let id = lookup(nodes, name);
+        if id < 0 || nodes[id].derived ||
+           (value != "true" && value != "false") { fail(); }
+        for prior in assignments {
+            if prior.id == id && prior.second == second { fail(); }
+        }
+        assignments.push(Assignment {
+            id: id, value: value == "true", second: second,
+        });
+    }
+    for entry in assignments {
+        if !entry.second {
+            update(nodes, values, active, nodes[entry.id].name, entry.value);
+        }
+    }
+    let first = stabilize(nodes, values, active);
+    output(nodes, values);
+    print("DOC_GOOSE_EVALUATIONS=", first);
+    if second {
+        for entry in assignments {
+            if entry.second {
+                update(nodes, values, active, nodes[entry.id].name, entry.value);
+            }
+        }
+        let count = stabilize(nodes, values, active);
+        print("DOC_GOOSE_NEXT");
+        output(nodes, values);
+        print("DOC_GOOSE_EVALUATIONS=", count);
+    }
+}
+
 fn main() {
-    if arg_count() != 4 && arg_count() != 6 { fail(); }
+    if arg_count() < 2 { fail(); }
     var path: u8[>..] = [];
     arg(1, path);
-    let a = argument_boolean(2);
-    let b = argument_boolean(3);
     var raw: u8[>..] = [];
     if !read_file(path, raw) { fail(); }
     var nodes: Node[>..] = [];
     var values: bool[>..] = [];
     var active: bool[>..] = [];
     load(raw, nodes, values, active);
-    update(nodes, values, active, "a", a);
-    update(nodes, values, active, "b", b);
-    let first = stabilize(nodes, values, active);
-    output(nodes, values);
-    print("DOC_GOOSE_EVALUATIONS=", first);
-    if arg_count() == 6 {
-        let next_a = argument_boolean(4);
-        let next_b = argument_boolean(5);
-        update(nodes, values, active, "a", next_a);
-        update(nodes, values, active, "b", next_b);
-        let second = stabilize(nodes, values, active);
-        print("DOC_GOOSE_NEXT");
+    var mode: u8[>..] = [];
+    if arg_count() > 2 { arg(2, mode); }
+    if (arg_count() == 4 || arg_count() == 6) &&
+       (mode == "true" || mode == "false") {
+        let a = argument_boolean(2);
+        let b = argument_boolean(3);
+        update(nodes, values, active, "a", a);
+        update(nodes, values, active, "b", b);
+        let first = stabilize(nodes, values, active);
         output(nodes, values);
-        print("DOC_GOOSE_EVALUATIONS=", second);
+        print("DOC_GOOSE_EVALUATIONS=", first);
+        if arg_count() == 6 {
+            let next_a = argument_boolean(4);
+            let next_b = argument_boolean(5);
+            update(nodes, values, active, "a", next_a);
+            update(nodes, values, active, "b", next_b);
+            let count = stabilize(nodes, values, active);
+            print("DOC_GOOSE_NEXT");
+            output(nodes, values);
+            print("DOC_GOOSE_EVALUATIONS=", count);
+        }
+    } else {
+        run_named(nodes, values, active);
     }
 }
