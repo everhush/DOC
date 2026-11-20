@@ -1,0 +1,6 @@
+# Two independent ready definitions then one dependent join.
+source a: bool = false
+source b: bool = false
+derive left: bool (a,b) = if(a,b,false)
+derive right: bool (a,b) = eq(a,b)
+derive joined: bool (left,right) = if(left,right,false)
