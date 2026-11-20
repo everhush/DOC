@@ -89,4 +89,41 @@ test "$goose_syntax" = "$expected_syntax"
 test "$rust_syntax" = "$expected_syntax"
 printf '%s\n' "$goose_syntax" | tee "$logs/goose-typed-shared-syntax.log"
 
+# Export the independently lowered shader and independently evaluated CPU oracle.
+mkdir -p "$logs/goose-webgpu"
+boolean_fixture=runtime-rust/examples/boolean_conditional.doc
+shader="$logs/goose-webgpu/conditional.wgsl"
+"$native" "$boolean_fixture" --emit-wgsl chosen "$shader"
+test -s "$shader"
+for target in sum equal; do
+    if "$native" "$fixture" --emit-wgsl "$target" "$tmp/rejected.wgsl" > "$logs/goose-typed-wgsl-rejection-$target.log" 2>&1; then
+        echo "Goose lowered an unsupported definition: $target" >&2
+        exit 1
+    fi
+    grep -Fx DOC_TYPED_ERROR "$logs/goose-typed-wgsl-rejection-$target.log"
+    test ! -e "$tmp/rejected.wgsl"
+done
+declare -A oracle_word
+for a in false true; do
+    for b in false true; do
+        result=$("$native" "$boolean_fixture" "a=$a" "b=$b" | grep '^chosen: ')
+        case "$result" in
+            'chosen: true') oracle_word[$a,$b]=1 ;;
+            'chosen: false') oracle_word[$a,$b]=0 ;;
+            *) exit 1 ;;
+        esac
+    done
+done
+{
+    printf 'DOC_WEBGPU_COMPUTE_PASS: ['
+    for ((lane = 0; lane < 130; lane++)); do
+        a=false b=false
+        if ((lane % 3 == 0)); then a=true; fi
+        if ((lane % 5 < 2)); then b=true; fi
+        if ((lane > 0)); then printf ', '; fi
+        printf '%s' "${oracle_word[$a,$b]}"
+    done
+    printf ']\n'
+} > "$logs/goose-webgpu/expected.txt"
+
 echo DOC_TYPED_FINITE_PASS | tee -a "$logs/goose-typed-differential.log"

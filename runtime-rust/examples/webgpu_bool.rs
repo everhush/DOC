@@ -31,7 +31,12 @@ async fn run() -> Result<(), Box<dyn Error>> {
     let source = include_str!("boolean_conditional.doc");
     let graph = Graph::parse(source)?;
     let target = graph.id("chosen").ok_or("missing derived target")?;
-    let shader_source = wgsl::lower_bool_derived(&graph, target)?;
+    let args: Vec<_> = std::env::args_os().skip(1).collect();
+    let shader_source = match args.as_slice() {
+        [] => wgsl::lower_bool_derived(&graph, target)?,
+        [flag, path] if flag == "--shader" => std::fs::read_to_string(path)?,
+        _ => return Err("usage: webgpu_bool [--shader WGSL_FILE]".into()),
+    };
 
     // Exercise multiple workgroups and the out-of-range tail guard.
     // Inputs are deterministic canonical Boolean words, not a hardcoded result.
