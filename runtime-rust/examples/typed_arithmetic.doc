@@ -1,0 +1,10 @@
+# One shared DOC program: typed integer arithmetic, conditions and graph repair
+source a: int = 2
+source b: int = 3
+source gate: bool = true
+derive sum: int (a,b) = add(a,b)
+derive delta: int (a,b) = sub(a,b)
+derive product: int (sum,delta) = mul(sum,delta)
+derive equal: bool (delta) = eq(delta,0)
+derive chosen: int (gate,product,delta) = if(gate,product,delta)
+derive confirm: bool (gate,equal) = if(gate,equal,false)
