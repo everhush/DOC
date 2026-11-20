@@ -269,10 +269,13 @@ impl Runtime {
     ///
     /// This finite, owned-runtime operation does not implement asynchronous
     /// reader pinning, graph-version reuse, or distributed generation fences.
-    pub fn replace_graph(&mut self,mut candidate:Graph)->Result<()>{
+    pub fn replace_graph(&mut self,candidate:Graph)->Result<()>{
         if !self.stable(){
             return Err("replace_graph requires a stable current graph".into());
         }
+        // A caller can mutate public Graph fields after construction. Revalidate
+        // the complete candidate and rebuild its topology before any state carry.
+        let mut candidate=Graph::new(candidate.states)?;
         let next=self.generation.checked_add(1).ok_or("graph generation overflow")?;
         for state in &mut candidate.states {
             if state.definition.is_some(){continue;}
