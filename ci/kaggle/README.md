@@ -22,3 +22,5 @@ Run the policy tests locally, without consuming quota:
 `python3 -m unittest discover -s ci/kaggle -p 'test_*.py' -v`
 
 Evidence is retained in GitHub artifacts (`doc-kaggle-summary.json`, raw GPU parity logs, quota preflight). See [Kaggle CLI kernel docs](https://github.com/Kaggle/kaggle-cli/blob/main/docs/kernels.md), [Kaggle CLI quota](https://github.com/Kaggle/kaggle-cli/blob/main/CHANGELOG.md), and [Kaggle authentication](https://github.com/Kaggle/kaggle-cli/blob/main/skills/references/auth.md).
+
+The dispatcher reads the owner from `kaggle config view` for modern raw tokens when `DOC_KAGGLE_USERNAME` is not set; if Kaggle cannot resolve it, set the variable. Workflow reruns are refused to avoid duplicate GPU spend. Result verification checks the archived native 77/42 pass markers, NVIDIA hardware-adapter information, exact source SHA and selected quota-limited accelerator.

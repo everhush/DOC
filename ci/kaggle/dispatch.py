@@ -103,8 +103,17 @@ def auth_environment(secret, directory, username_hint):
             json.dump({"username": obj["username"], "key": obj["key"]}, f)
     else:
         env["KAGGLE_API_TOKEN"] = secret
+        if not username:
+            # The official Kaggle CLI can resolve the authenticated account
+            # from a modern raw API token. Never print config output or token.
+            p = subprocess.run(["kaggle", "config", "view"], env=env,
+                capture_output=True, text=True, timeout=25)
+            if p.returncode == 0:
+                match = re.search(r"(?mi)^\\s*-?\\s*username:\\s*([a-z0-9_-]+)\\s*$", p.stdout)
+                if match:
+                    username = match.group(1).lower()
     if not re.fullmatch(r"[a-z0-9_-]{2,60}", username):
-        raise ValueError("Raw Kaggle API token requires repository variable DOC_KAGGLE_USERNAME")
+        raise ValueError("Kaggle token owner could not be resolved; set DOC_KAGGLE_USERNAME")
     return env, username
 
 def kaggle(command, env, timeout=60):
@@ -172,6 +181,7 @@ def verify_result(folder, spec):
     result = json.loads((folder / "doc-kaggle-summary.json").read_text())
     expected = {"sha": spec["sha"], "run_id": spec["run_id"],
                 "result": "pass", "backend": "vulkan", "hardware": True,
+                "accelerator": spec["accelerator"], "max_gpu_minutes": spec["minutes"],
                 "goose_sdl3_checks": 77, "dual_backend_episodes": 42}
     for key, value in expected.items():
         if result.get(key) != value:
@@ -181,11 +191,22 @@ def verify_result(folder, spec):
         with tarfile.open(archive_path, "r:gz") as archive:
             members = {entry.name for entry in archive.getmembers() if entry.isfile()}
             required = {
-                "report/native-gpu-equivalence.log",
-                "goose/goose-sdl3/doc-goose-sdl3-summary.log",
+                "report/native-gpu-equivalence.log":
+                    "DOC_RUST_WGPU_GOOSE_SDL3_PARITY_PASS: 42 observed GPU episodes",
+                "goose/goose-sdl3/doc-goose-sdl3-summary.log":
+                    "DOC_GOOSE_SDL3_NATIVE_PARITY_PASS: 77 checks",
+                "physical-vulkan.log": "PHYSICAL_DEVICE_TYPE_DISCRETE_GPU",
+                "nvidia-smi.log": "GPU",
             }
-            if not required.issubset(members):
+            if not required.keys() <= members:
                 raise AssertionError("Incomplete raw physical-GPU evidence archive")
+            for name, expected_text in required.items():
+                stream = archive.extractfile(name)
+                if stream is None:
+                    raise AssertionError("Missing GPU evidence: " + name)
+                observed = stream.read(262144).decode("utf-8", errors="replace")
+                if expected_text not in observed:
+                    raise AssertionError("GPU evidence disagrees with result: " + name)
     except (OSError, tarfile.TarError) as error:
         raise AssertionError("Missing or invalid raw physical-GPU evidence archive") from error
     return result
@@ -208,6 +229,10 @@ def main():
         "minutes": args.minutes, "accelerator": args.accelerator}
     if not re.fullmatch(r"[a-f0-9]{40}", spec["sha"]) or not re.fullmatch(r"[0-9]{1,20}", spec["run_id"]) or not re.fullmatch(r"[1-9][0-9]{0,3}", spec["attempt"]):
         raise ValueError("Missing exact trusted GitHub SHA/run provenance")
+    if spec["attempt"] != "1" and not args.dry_run:
+        # A GitHub rerun is not a free Kaggle retry: a prior notebook may
+        # still be running and it could consume a second quota allocation.
+        raise RuntimeError("Refusing Kaggle dispatch from a workflow rerun")
     out = Path(args.output)
     out.mkdir(parents=True, exist_ok=True)
     if args.dry_run:
