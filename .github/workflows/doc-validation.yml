@@ -93,7 +93,7 @@ jobs:
 
   webgpu-compute:
     name: Native Rust wgpu DOC compute (Mesa Vulkan, no Goose bridge)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 35
     needs: rust
     steps:
@@ -203,6 +203,10 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p validation-logs/gpu-binaries
+          test "$(getconf GNU_LIBC_VERSION)" = 'glibc 2.39' || {
+            echo 'Kaggle native GPU binary ABI must be built on glibc 2.39' >&2
+            exit 1
+          }
           install -m 755 runtime-rust/target/release/examples/webgpu_bool \
             validation-logs/gpu-binaries/webgpu_bool
           install -m 755 runtime-rust/target/release/examples/webgpu_integer_eq \
@@ -303,7 +307,7 @@ jobs:
 
   goose-sdl3-compute:
     name: Native Goose SDL3 GPU compute, direct device and DOC oracle
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 55
     steps:
       - uses: actions/checkout@v4
@@ -390,6 +394,10 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p validation-logs/gpu-platform-bin
+          test "$(getconf GNU_LIBC_VERSION)" = 'glibc 2.39' || {
+            echo 'Goose SDL3 Kaggle native GPU bundle ABI must be glibc 2.39' >&2
+            exit 1
+          }
           for cmd in Xvfb xvfb-run xauth; do
             install -m 755 "$(command -v "$cmd")" \
               "validation-logs/gpu-platform-bin/$cmd"
