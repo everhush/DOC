@@ -10,7 +10,7 @@ for i in range(128):
     op=i%3
     expected[f"p{i:03}"]=(False,True) if op==0 else (
         (True,False) if op==1 else (True,True))
-expected["folded"]=(False,True)
+expected["folded"]=(False,False)
 def parse(stdout):
     epochs=[]
     for block in stdout.split("DOC_TYPED_EVALUATIONS=")[:2]:
