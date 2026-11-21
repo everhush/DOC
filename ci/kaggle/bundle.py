@@ -139,12 +139,23 @@ def create_private_dataset(folder, owner,run_id,attempt,env):
          env=env,capture_output=True,text=True,timeout=180)
     if p.returncode:
         raise RuntimeError("Kaggle private native GPU binary dataset upload failed")
+    # A freshly uploaded private dataset can exist before the status API
+    # exposes its metadata. Do not turn the first 404/403 into an immediate
+    # submission attempt; keep GPU quota at zero until readiness is proven.
     deadline=time.monotonic()+150
+    status_errors=0
+    polls=0
     while time.monotonic()<deadline:
+        polls+=1
         status=subprocess.run(["kaggle","datasets","status",dataset,
             "--format","json"],env=env,capture_output=True,text=True,timeout=25)
         if status.returncode:
-            raise RuntimeError("Kaggle private binary dataset status unavailable")
+            status_errors+=1
+            # No CLI stderr is emitted: it may contain account metadata.
+            # Errors may be transient 404 while Kaggle processes the upload,
+            # or permanent authorization failures requiring a token scope.
+            time.sleep(8)
+            continue
         try:
             state=json.loads(status.stdout)
             if isinstance(state,dict):
@@ -157,7 +168,11 @@ def create_private_dataset(folder, owner,run_id,attempt,env):
         if any(word in state for word in ("ERROR","FAIL","CANCEL")):
             raise RuntimeError("Kaggle private GPU binary dataset failed processing")
         time.sleep(8)
-    raise RuntimeError("Kaggle private GPU dataset did not become ready before deadline")
+    raise RuntimeError(
+        "Kaggle private GPU dataset readiness could not be verified without "
+        "starting a GPU session (polls="+str(polls)+", api_errors="+
+        str(status_errors)+"). Check dataset read/status API token scope, "
+        "dataset owner and processing status; no GPU kernel was submitted")
 
 def prepare_native_gpu_dataset(repo, token, spec, checkout, workdir, kaggle_env, owner):
     run_id=find_native_run(repo,token,spec["sha"],

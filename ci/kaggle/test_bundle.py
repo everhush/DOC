@@ -99,6 +99,24 @@ class NativeGpuBundle(unittest.TestCase):
             self.assertEqual(invoke.call_args_list[0].args[0][:3],
                              ["kaggle","datasets","create"])
 
+    def test_delayed_private_dataset_status_retries_without_gpu(self):
+        class Completed:
+            def __init__(self,rc,output=""):
+                self.returncode=rc
+                self.stdout=output
+                self.stderr=""
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            (root/"doc-gpu-bundle.tar.gz").write_bytes(b"test")
+            with patch.object(bundle.subprocess,"run",side_effect=[
+                Completed(0),Completed(1),Completed(0,'{"status":"COMPLETE"}')
+            ]) as invoke, patch.object(bundle.time,"sleep",return_value=None):
+                value=bundle.create_private_dataset(root,"owner","77","1",{})
+            self.assertEqual(value,"owner/doc-gpu-77-1-bundle")
+            self.assertEqual(invoke.call_count,3)
+            self.assertEqual(invoke.call_args_list[1].args[0][:3],
+                             ["kaggle","datasets","status"])
+
     def test_no_dataset_upload_after_api_failure(self):
         with tempfile.TemporaryDirectory() as td:
             with patch.object(bundle.subprocess,"run",return_value=
