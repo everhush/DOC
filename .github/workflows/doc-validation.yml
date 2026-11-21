@@ -70,7 +70,7 @@ jobs:
           ldd validation-logs/release/bin/doc-rust > validation-logs/rust-dynamic-dependencies.txt 2>&1 || true
           tar -czf validation-logs/doc-rust-linux-x86_64.tar.gz \
             -C validation-logs/release bin/doc-rust \
-            -C . LICENSE runtime-rust/examples/repair.doc
+            -C "$GITHUB_WORKSPACE" LICENSE runtime-rust/examples/repair.doc
           scratch=$(mktemp -d)
           trap 'rm -rf -- "$scratch"' EXIT
           tar -xzf validation-logs/doc-rust-linux-x86_64.tar.gz -C "$scratch"
@@ -342,7 +342,7 @@ jobs:
           ldd validation-logs/release/bin/doc-goose > validation-logs/goose-dynamic-dependencies.txt 2>&1 || true
           tar -czf validation-logs/doc-goose-linux-x86_64.tar.gz \
             -C validation-logs/release bin/doc-goose \
-            -C . LICENSE runtime-rust/examples/repair.doc
+            -C "$GITHUB_WORKSPACE" LICENSE runtime-rust/examples/repair.doc
           scratch=$(mktemp -d)
           trap 'rm -rf -- "$scratch"' EXIT
           tar -xzf validation-logs/doc-goose-linux-x86_64.tar.gz -C "$scratch"
