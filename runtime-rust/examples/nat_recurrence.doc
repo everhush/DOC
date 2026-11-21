@@ -2,4 +2,4 @@
 source counter: nat = 99999999999999999999999999999999999999999999999999
 derive next: nat (counter) = add(counter,nat(1))
 derive previous: nat (counter) = if(eq(counter,nat(0)),nat(0),sub(counter,nat(1)))
-derive halt: bool (counter) = eq(counter,nat(10000000000000000000000000000000000000000000000002))
+derive halt: bool (counter) = eq(counter,nat(100000000000000000000000000000000000000000000000002))

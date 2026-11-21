@@ -21,7 +21,7 @@ fn unbounded_nat_is_carried_by_original_doc_recurrence() {
     let g=Graph::parse(
         "source a: nat = 99999999999999999999999999999999999999999999999999\n\
          derive next: nat (a) = add(a,nat(1))\n\
-         derive stop: bool (a) = eq(a,nat(10000000000000000000000000000000000000000000000002))\n"
+         derive stop: bool (a) = eq(a,nat(100000000000000000000000000000000000000000000000002))\n"
     ).unwrap();
     let a=g.id("a").unwrap();
     let next=g.id("next").unwrap();
@@ -30,7 +30,7 @@ fn unbounded_nat_is_carried_by_original_doc_recurrence() {
     assert!(rec.advance_until(stop,4).unwrap());
     assert_eq!(rec.epoch(),3);
     assert_eq!(rec.value(a).unwrap().to_string(),
-              "10000000000000000000000000000000000000000000000002");
+              "100000000000000000000000000000000000000000000000002");
 }
 #[test]
 fn nat_underflow_does_not_publish_failed_candidate() {
