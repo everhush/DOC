@@ -1,0 +1,8 @@
+# Safe constant-size typed source churn: natural, immutable list and UTF-8 text.
+source counter: nat = 0
+source list: ints = [1,2,3,4]
+source label: text = "a"
+derive next_counter: nat (counter) = if(eq(counter,nat(0)),nat(1),nat(0))
+derive next_list: ints (list) = if(eq(len(list),4),tail(list),append(list,7))
+derive next_label: text (label) = if(eq(label,text("a")),text("b"),text("a"))
+derive flag: bool (counter) = eq(counter,nat(1))
