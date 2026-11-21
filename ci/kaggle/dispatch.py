@@ -132,13 +132,13 @@ def gpu_session_attempted(log):
     A completed preflight failure with no notebook-dispatch marker does not
     spend GPU time and cannot use up the GPU-session weekly allocation.
     """
-    if re.search(r"(?m)^\\d{4}-\\d{2}-\\d{2}T[^\\n]*Z DOC_KAGGLE_DISPATCH: notebook=", log):
+    if re.search(r"(?m)^\d{4}-\d{2}-\d{2}T[^\n]*Z DOC_KAGGLE_DISPATCH: notebook=", log):
         return True
-    if re.search(r"(?m)^\\d{4}-\\d{2}-\\d{2}T[^\\n]*Z DOC_KAGGLE_PHYSICAL_GPU_PARITY_PASS:", log):
+    if re.search(r"(?m)^\d{4}-\d{2}-\d{2}T[^\n]*Z DOC_KAGGLE_PHYSICAL_GPU_PARITY_PASS:", log):
         return True
-    if re.search(r"(?m)^\\d{4}-\\d{2}-\\d{2}T[^\\n]*Z DOC_KAGGLE_QUOTA_SKIP:", log):
+    if re.search(r"(?m)^\d{4}-\d{2}-\d{2}T[^\n]*Z DOC_KAGGLE_QUOTA_SKIP:", log):
         return False
-    if re.search(r"(?m)^\\d{4}-\\d{2}-\\d{2}T[^\\n]*Z DOC_KAGGLE_DISPATCH_FAILURE:", log):
+    if re.search(r"(?m)^\d{4}-\d{2}-\d{2}T[^\n]*Z DOC_KAGGLE_DISPATCH_FAILURE:", log):
         return False
     return True
 
