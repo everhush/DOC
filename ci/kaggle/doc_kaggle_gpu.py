@@ -39,13 +39,30 @@ def run(name, argv, cwd=None, env=None, max_seconds=None, path=None):
     if remaining <= 1:
         raise RuntimeError("Exceeded Kaggle bounded GPU session")
     before = time.perf_counter()
-    proc = subprocess.run([str(x) for x in argv], cwd=cwd,
-        env=env or ENV, capture_output=True, text=True, errors="replace",
-        timeout=min(max_seconds or remaining, remaining), check=False)
-    seconds = round(time.perf_counter() - before, 4)
     destination = LOGS / (path or (name + ".log"))
     destination.parent.mkdir(parents=True, exist_ok=True)
-    destination.write_text(proc.stdout + "\n" + proc.stderr)
+    argv = [str(x) for x in argv]
+    try:
+        proc = subprocess.run(argv, cwd=cwd, env=env or ENV,
+            capture_output=True, text=True, errors="replace",
+            timeout=min(max_seconds or remaining, remaining), check=False)
+    except subprocess.TimeoutExpired as error:
+        # Do not discard the diagnostic output for the interrupted step:
+        # the first Kaggle T4 attempt was blocked on apt-get update and its
+        # 260-second timeout otherwise left no actionable apt diagnostics.
+        def output(value):
+            if isinstance(value, bytes):
+                return value.decode("utf-8", errors="replace")
+            return value or ""
+        diagnostic = (output(error.stdout) + "\n" + output(error.stderr))[-262144:]
+        destination.write_text(diagnostic)
+        seconds = round(time.perf_counter() - before, 4)
+        METRICS.append({"step": name, "wall_seconds": seconds,
+                        "exit_code": "timeout"})
+        raise RuntimeError("Kaggle bootstrap " + name +
+                           " timed out after " + str(round(seconds)) + "s") from error
+    seconds = round(time.perf_counter() - before, 4)
+    destination.write_text((proc.stdout + "\n" + proc.stderr)[-262144:])
     METRICS.append({"step": name, "wall_seconds": seconds, "exit_code": proc.returncode})
     if proc.returncode:
         raise RuntimeError(name + " failed: " + (proc.stdout + proc.stderr)[-1200:])
@@ -93,9 +110,25 @@ def preflight_hardware():
         raise RuntimeError("INFRA_BLOCKED: no physical Vulkan adapter for SDL3/wgpu")
     print("DOC_KAGGLE_PHYSICAL_VULKAN_FOUND")
 
+def installed_packages(packages):
+    # Kaggle notebook images include many development libraries already.
+    # Avoid gratuitous apt-get update: its default Ubuntu mirror stalled
+    # for 260 seconds in real hardware attempt 44950662134.
+    missing = []
+    for package in packages:
+        completed = subprocess.run(
+            ["dpkg-query", "-W", "-f=${Status}", package],
+            capture_output=True, text=True, errors="replace", timeout=8)
+        if completed.returncode or completed.stdout.strip() != "install ok installed":
+            missing.append(package)
+    return missing
+
 def install_dependencies():
-    apt = ["apt-get"] if os.geteuid() == 0 else ["sudo", "-n", "apt-get"]
-    run("apt-update", [*apt, "update", "-qq"], max_seconds=260)
+    # Preflight GPU first to avoid spending minutes of quota apt-installing
+    # non-GPU Kaggle containers. A CUDA-visible GPU does not yet prove Vulkan.
+    output = run("nvidia-smi", ["nvidia-smi", "-L"], max_seconds=15)
+    if "GPU" not in output:
+        raise RuntimeError("INFRA_BLOCKED: Kaggle did not attach NVIDIA CUDA hardware")
     packages = [
         "cmake", "ninja-build", "pkg-config", "git", "curl", "ca-certificates",
         "build-essential", "libx11-dev", "libxext-dev", "libxrandr-dev",
@@ -104,7 +137,40 @@ def install_dependencies():
         "libx11-xcb-dev", "libxtst-dev", "libxdamage-dev",
         "libxshmfence-dev", "libxrender-dev", "libasound2-dev",
         "xvfb", "xauth", "libvulkan-dev", "libvulkan1", "vulkan-tools"]
-    run("apt-graphics", [*apt, "install", "-y", "-qq", *packages], max_seconds=460)
+    missing = installed_packages(packages)
+    (LOGS/"kaggle-packages-required.json").write_text(
+        json.dumps({"requested":packages,"missing":missing},indent=2)+"\n")
+    apt = ["apt-get"] if os.geteuid() == 0 else ["sudo", "-n", "apt-get"]
+    options = [
+        "-o", "Acquire::Retries=0",
+        "-o", "Acquire::http::Timeout=12",
+        "-o", "Acquire::https::Timeout=12",
+        "-o", "Acquire::ForceIPv4=true",
+        "-o", "Dpkg::Use-Pty=0"]
+    if missing:
+        # Use the image's existing APT metadata first. Update only when the
+        # first install attempt fails and cap ALL attempted network work.
+        def install():
+            return run("apt-install-missing",[
+                *apt,*options,"install","-y","-qq","--no-install-recommends",
+                *missing],max_seconds=105)
+        try:
+            install()
+        except (RuntimeError,subprocess.TimeoutExpired):
+            try:
+                run("apt-update-bounded",[*apt,*options,"update","-qq"],
+                    max_seconds=50)
+                install()
+            except (RuntimeError,subprocess.TimeoutExpired) as error:
+                raise RuntimeError(
+                    "INFRA_BLOCKED: Kaggle APT bootstrap failed under bounded "
+                    "network timeouts; see retained apt diagnostics") from error
+        unresolved=installed_packages(missing)
+        if unresolved:
+            raise RuntimeError("INFRA_BLOCKED: missing native SDL3/Vulkan build dependencies: "+
+                               ",".join(unresolved))
+    else:
+        print("DOC_KAGGLE_APT_CACHE_HIT: required build libraries already installed")
     if not shutil.which("cargo"):
         install = ROOT / "rustup-init.sh"
         run("rustup-fetch", ["curl", "-fsSL", "https://sh.rustup.rs", "-o", install], max_seconds=90)
