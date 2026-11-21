@@ -1,0 +1,60 @@
+name: DOC Kaggle private dataset readiness diagnostic (CPU only)
+on:
+  push:
+    branches: [master]
+    paths: ['.github/workflows/doc-kaggle-dataset-diagnose.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  status-only:
+    name: Kaggle dataset API diagnostics without GPU allocation
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 15ce13abb0afa49f00d5184721d0166e5d5e5013
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install Kaggle API CLI
+        run: python3 -m pip install --disable-pip-version-check 'kaggle>=2.2.1,<3'
+      - name: Diagnose private dataset API without starting GPU notebook
+        env:
+          KAGGLE_DOC_1: ${{ secrets.KAGGLE_DOC_1 }}
+          DOC_KAGGLE_USERNAME: ${{ vars.DOC_KAGGLE_USERNAME }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import importlib.util,json,os,pathlib,subprocess,tempfile,time
+          module="ci/kaggle/dispatch.py"
+          spec=importlib.util.spec_from_file_location("doc_dispatch",module)
+          dispatcher=importlib.util.module_from_spec(spec);spec.loader.exec_module(dispatcher)
+          with tempfile.TemporaryDirectory(prefix="kaggle-auth-") as temp:
+              env,username=dispatcher.auth_environment(
+                  os.environ.get("KAGGLE_DOC_1",""),
+                  pathlib.Path(temp)/"config",
+                  os.environ.get("DOC_KAGGLE_USERNAME",""))
+              ref=username+"/doc-gpu-44953036963-1-bundle"
+              cmds=[
+                 ["kaggle","datasets","status",ref,"--format","json"],
+                 ["kaggle","datasets","status",ref],
+                 ["kaggle","datasets","files",ref,"-v"],
+                 ["kaggle","datasets","list","--mine","--search","doc-gpu-44953036963","-v"],
+              ]
+              for i,cmd in enumerate(cmds):
+                  try:
+                      p=subprocess.run(cmd,env=env,capture_output=True,text=True,timeout=35)
+                      # Never dump CLI stderr; Kaggle errors may expose account details.
+                      output=p.stdout.replace(username,"ACCOUNT")
+                      output=output.replace(ref,"DATASET")
+                      # There are no keys or tokens in successful status/list output,
+                      # but only retain the minimal response shape.
+                      print("DOC_KAGGLE_DATASET_DIAG: probe=",i,"status=",p.returncode,
+                            "preview=",output[:320].replace("\n"," ") if p.returncode==0 else "unavailable")
+                  except subprocess.TimeoutExpired:
+                      print("DOC_KAGGLE_DATASET_DIAG: probe=",i,"timeout")
+              print("DOC_KAGGLE_DATASET_DIAGNOSTIC_COMPLETED_WITHOUT_GPU")
+          PY
