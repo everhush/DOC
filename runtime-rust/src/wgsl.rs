@@ -183,9 +183,10 @@ mod tests {
     }
 
     #[test]
-    fn rejects_unsupported_integer_and_effectively_partial_computations() {
-        let source = "source a: int = 1\nsource b: int = 2\nderive equal: bool (a,b) = eq(a,b)\n";
+    fn rejects_unsupported_integer_arithmetic_while_allowing_safe_equality() {
+        let source = "source a: int = 1\nsource b: int = 2\nderive equal: bool (a,b) = eq(a,b)\nderive unsafe: bool (a,b) = eq(add(a,1),b)\n";
         let graph = Graph::parse(source).unwrap();
-        assert!(lower_bool_derived(&graph, graph.id("equal").unwrap()).is_err());
+        assert!(lower_bool_derived(&graph, graph.id("equal").unwrap()).is_ok());
+        assert!(lower_bool_derived(&graph, graph.id("unsafe").unwrap()).is_err());
     }
 }
