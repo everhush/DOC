@@ -3,6 +3,7 @@ import datetime as dt
 import importlib.util
 import json
 import tempfile
+import tarfile
 from pathlib import Path
 import unittest
 
@@ -73,7 +74,13 @@ class KaggleDispatchPolicy(unittest.TestCase):
             compile((folder/"doc_kaggle_gpu.py").read_text(),"<notebook>","exec")
             out=Path(temp)/"remote"
             out.mkdir()
-            (out/"doc-kaggle-logs.tar.gz").write_bytes(b"x")
+            with tarfile.open(out/"doc-kaggle-logs.tar.gz","w:gz") as archive:
+                for name in ("report/native-gpu-equivalence.log",
+                             "goose/goose-sdl3/doc-goose-sdl3-summary.log"):
+                    path=Path(temp)/name
+                    path.parent.mkdir(parents=True,exist_ok=True)
+                    path.write_text("DOC oracle evidence")
+                    archive.add(path,arcname=name)
             result={"sha":"b"*40,"run_id":"123","result":"pass",
                     "hardware":True,"backend":"vulkan",
                     "goose_sdl3_checks":77,"dual_backend_episodes":42}
@@ -83,6 +90,9 @@ class KaggleDispatchPolicy(unittest.TestCase):
             result["sha"]="a"*40
             (out/"doc-kaggle-summary.json").write_text(json.dumps(result))
             self.assertEqual(module.verify_result(out,fields),result)
+            (out/"doc-kaggle-logs.tar.gz").write_bytes(b"x")
+            with self.assertRaises(AssertionError):
+                module.verify_result(out,fields)
 
 if __name__=="__main__":
     unittest.main()
