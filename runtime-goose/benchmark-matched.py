@@ -76,6 +76,21 @@ runs = {
         [],
         "incremented: -22",
     ),
+    "dynamic_immutable_list": (
+        "runtime-rust/examples/list_fold.doc",
+        ["remaining=[5,-3,9,0]"],
+        "next_total: 5",
+    ),
+    "doc_graph_traversal": (
+        "runtime-rust/examples/graph_walk.doc",
+        ["--until=halt","--max-epochs=10","node=next_node","hops=next_hops"],
+        "DOC_RECURRENCE_HALT: 2",
+    ),
+    "wide_ready_frontier": (
+        "runtime-rust/examples/parallel_frontier.doc",
+        [],
+        "p127: false",
+    ),
 }
 binaries = {"rust": rust, "goose": goose}
 sha = os.environ.get("GITHUB_SHA", "local-unversioned")
