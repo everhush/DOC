@@ -275,6 +275,49 @@ impl Graph {
         Ok(Self{states,users,topo,names})
     }
     pub fn id(&self,name:&str)->Option<StateId>{self.names.get(name).copied()}
+    /// Resolve explicit compile-time imports of pure function-only DOC
+    /// modules. All modules run through this same native Rust DOC frontend.
+    /// Imported files may not contain sources, derivations or further imports:
+    /// this prevents hidden effects, source injection and import cycles.
+    pub fn parse_file(file:&str)->Result<Self>{
+        use std::path::Path;
+        let source=std::fs::read_to_string(file)
+            .map_err(|e|format!("cannot read DOC file {file}: {e}"))?;
+        let base=Path::new(file).parent().unwrap_or(Path::new("."));
+        let mut assembled=String::new();
+        let mut modules=0usize;
+        for original in source.lines(){
+            let line=original.split('#').next().unwrap_or("").trim();
+            if let Some(path)=line.strip_prefix("import "){
+                let path=path.trim();
+                if path.is_empty() || path.split_whitespace().count()!=1 ||
+                   !path.ends_with(".doc") || Path::new(path).is_absolute(){
+                    return Err("DOC module import requires one relative .doc path".into());
+                }
+                modules+=1;
+                if modules>64{return Err("DOC module import limit exceeded".into());}
+                let module=base.join(path);
+                let body=std::fs::read_to_string(&module)
+                    .map_err(|e|format!("DOC module {}: {e}",module.display()))?;
+                if body.len()>65_536{return Err("DOC module exceeds 64KiB".into());}
+                for declaration in body.lines(){
+                    let trimmed=declaration.split('#').next().unwrap_or("").trim();
+                    if !trimmed.is_empty() && !trimmed.starts_with("fn "){
+                        return Err(format!("DOC module {} may only declare pure functions",
+                            module.display()));
+                    }
+                }
+                assembled.push_str(&body);
+                assembled.push('\n');
+            }else{
+                assembled.push_str(original);
+                assembled.push('\n');
+            }
+            if assembled.len()>1_048_576{return Err("DOC file exceeds parse limit".into());}
+        }
+        Self::parse(&assembled)
+    }
+
     pub fn parse(src:&str)->Result<Self>{
         let mut states=Vec::new();
         let mut names=HashMap::new();
