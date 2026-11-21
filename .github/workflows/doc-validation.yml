@@ -128,6 +128,37 @@ jobs:
           fi
           grep -F 'DOC WebGPU validation failure:' validation-logs/doc-invalid-staged.log
           if grep -q '^DOC_WEBGPU_COMPUTE_PASS:' validation-logs/doc-invalid-staged.log; then exit 1; fi
+      - name: Source-update GPU repair and explicit CPU fallback boundary tests
+        run: |
+          set -euo pipefail
+          cargo build --release --manifest-path runtime-rust/Cargo.toml --features webgpu --example webgpu_bool
+          executable=runtime-rust/target/release/examples/webgpu_bool
+          for lanes in 1 63 64 65 127 128 129 130 256; do
+            DOC_GPU_LANES=$lanes "$executable" --repair > "validation-logs/doc-gpu-repair-$lanes.log" 2>&1
+            grep -Fx 'DOC_WEBGPU_EPISODE: 0' "validation-logs/doc-gpu-repair-$lanes.log"
+            grep -Fx 'DOC_WEBGPU_EPISODE: 1' "validation-logs/doc-gpu-repair-$lanes.log"
+            test "$(grep -c '^DOC_WEBGPU_COMPUTE_PASS:' "validation-logs/doc-gpu-repair-$lanes.log")" = 2
+          done
+          DOC_GPU_LANES=65 "$executable" --repair-shader validation-logs/goose-webgpu/conditional.wgsl \
+            > validation-logs/doc-goose-gpu-repair.log 2>&1
+          test "$(grep -c '^DOC_WEBGPU_COMPUTE_PASS:' validation-logs/doc-goose-gpu-repair.log)" = 2
+          DOC_GPU_LANES=129 "$executable" --staged-shaders-repair \
+            validation-logs/goose-webgpu/stage-1.wgsl \
+            validation-logs/goose-webgpu/stage-2.wgsl \
+            > validation-logs/doc-goose-staged-repair.log 2>&1
+          test "$(grep -c '^DOC_WEBGPU_COMPUTE_PASS:' validation-logs/doc-goose-staged-repair.log)" = 2
+          DOC_GPU_EXECUTION=cpu DOC_GPU_LANES=65 "$executable" --staged-repair \
+            > validation-logs/doc-cpu-fallback.log 2>&1
+          test "$(grep -c '^DOC_CPU_FALLBACK_PASS:' validation-logs/doc-cpu-fallback.log)" = 2
+          if grep -q '^DOC_WEBGPU_COMPUTE_PASS:' validation-logs/doc-cpu-fallback.log; then exit 1; fi
+          for invalid in 0 4097 abc; do
+            if DOC_GPU_LANES=$invalid "$executable" \
+              > "validation-logs/doc-invalid-lanes-$invalid.log" 2>&1; then
+              echo "Accepted invalid lane count $invalid" >&2
+              exit 1
+            fi
+          done
+          echo DOC_WEBGPU_REPAIR_AND_CPU_FALLBACK_PASS
       - name: Preserve WebGPU adapter and correctness evidence
         if: always()
         uses: actions/upload-artifact@v4
