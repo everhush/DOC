@@ -27,7 +27,7 @@ impl Value {
             let source=s.trim();
             let literal=source.strip_prefix('"').and_then(|s|s.strip_suffix('"'))
                 .ok_or("text source requires a quoted UTF-8 value")?;
-            if literal.len()>16384 || literal.contains(['\n','\r','"','\\']) {
+            if literal.len()>16384 || literal.chars().any(|ch|matches!(ch,'\n'|'\r'|'"'|'\\')) {
                 return Err("unsupported text source literal/control sequence".into());
             }
             return Ok(Self::Text(literal.to_string()));
@@ -559,7 +559,7 @@ impl Graph {
                 if raw.len()>8_192{return Err("DOC read effect exceeds 8KiB".into());}
                 let typed=if kind==Type::Text {
                     let data=raw.trim_end_matches(['\r','\n']);
-                    if data.len()>16384 || data.contains(['\r','\n','"','\\']) {
+                    if data.len()>16384 || data.chars().any(|ch|matches!(ch,'\r'|'\n'|'"'|'\\')) {
                         return Err("DOC text effect exceeds simple literal contract".into());
                     }
                     Value::Text(data.into())

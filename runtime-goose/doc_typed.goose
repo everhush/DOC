@@ -12,6 +12,48 @@ var nat_pool: u8[>..];
 // Each immutable int collection is an offset/length into this independently
 // managed Goose pool. No C allocator, mutable DOC alias or raw pointer escapes.
 var ints_pool: i64[>..];
+// Offset-backed immutable UTF-8 text, with bounded storage and raw byte length.
+var text_pool:u8[>..];
+fn text_zero()->Value {
+    return Value {kind:5,number:0,flag:false,start:0,length:0};
+}
+fn text_store(raw:u8[:])->Value {
+    if raw.len>16384 {fail();}
+    if raw.len==0 {return text_zero();}
+    for c in raw {if c=='"' || c=='\\' || c=='\n' || c=='\r' {fail();}}
+    let start=text_pool.len;
+    text_pool.append(raw);
+    return Value {kind:5,number:0,flag:false,start:start,length:raw.len};
+}
+fn text_bytes(v:Value)->u8[>..] {
+    if v.kind!=5 {fail();}
+    var out:u8[>..]=[];
+    for i in 0..v.length {out.push(text_pool[v.start+i]);}
+    return out;
+}
+fn text_equal(a:Value,b:Value)->bool {
+    if a.length!=b.length {return false;}
+    for i in 0..a.length {
+        if text_pool[a.start+i]!=text_pool[b.start+i] {return false;}
+    }
+    return true;
+}
+fn text_concat(a:Value,b:Value)->Value {
+    if a.kind!=5 || b.kind!=5 || a.length+b.length>16384 {fail();}
+    var out:u8[>..]=[];
+    for i in 0..a.length {out.push(text_pool[a.start+i]);}
+    for i in 0..b.length {out.push(text_pool[b.start+i]);}
+    return text_store(out);
+}
+fn text_starts_with(a:Value,prefix:Value)->bool {
+    if a.kind!=5 || prefix.kind!=5 {fail();}
+    if prefix.length>a.length {return false;}
+    for i in 0..prefix.length {
+        if text_pool[a.start+i]!=text_pool[prefix.start+i] {return false;}
+    }
+    return true;
+}
+
 struct Value { kind: i64, number: i64, flag: bool, start: i64, length: i64 }
 struct State {
     name: u8[..64],
@@ -206,7 +248,8 @@ fn maybe_text(v:Value) -> u8[>..] {
 fn zero(k: i64) -> Value {
     return if k == 0 { boolean(false) } else if k == 1 { integer(0) }
            else if k == 2 { nat_zero() }
-           else if k == 3 { ints_zero() } else { maybe_none() };
+           else if k == 3 { ints_zero() }
+           else if k == 4 { maybe_none() } else { text_zero() };
 }
 fn equal(a: Value, b: Value) -> bool {
     if a.kind != b.kind { return false; }
@@ -214,6 +257,7 @@ fn equal(a: Value, b: Value) -> bool {
     if a.kind == 1 { return a.number == b.number; }
     if a.kind == 2 { return nat_compare(a,b) == 0; }
     if a.kind == 3 { return ints_equal(a,b); }
+    if a.kind == 5 { return text_equal(a,b); }
     return a.flag == b.flag && (!a.flag || a.number == b.number);
 }
 fn type_name(t: u8[:]) -> i64 {
@@ -222,6 +266,7 @@ fn type_name(t: u8[:]) -> i64 {
     if t == "nat" { return 2; }
     if t == "ints" { return 3; }
     if t == "maybe_int" { return 4; }
+    if t == "text" { return 5; }
     fail();
     return -1;
 }
@@ -236,6 +281,10 @@ fn parse_value(raw: u8[:], kind: i64) -> Value {
         return nat_parse(raw);
     } else if kind == 3 {
         return ints_parse(raw);
+    } else if kind == 5 {
+        if raw.len>=2 && raw[0]=='"' && raw[raw.len-1]=='"' {
+            return text_store(raw[1..raw.len-1]);
+        }
     } else if kind == 4 {
         if raw == "none" {return maybe_none();}
         if raw.len >= 7 && starts_with(raw,"some(") &&
@@ -315,6 +364,20 @@ recursive fn expression(s: u8[:], p: i64, nodes: State[:],
     if word == "false" { return boolean(false), after; }
     let n, is_number = parse_int(word);
     if is_number { return integer(if execute { n } else { 0 }), after; }
+    if word == "text" {
+        let begin=expect(s,after,'(');
+        let quote=skip(s,begin);
+        if quote>=s.len || s[quote]!='"' {fail();}
+        var last=quote+1;
+        while last<s.len && s[last]!='"' {
+            if s[last]=='\n' || s[last]=='\r' || s[last]=='\\' {fail();}
+            last++;
+        }
+        if last>=s.len {fail();}
+        let close=expect(s,last+1,')');
+        let content=text_store(s[quote+1..last]);
+        return if execute {content} else {text_zero()},close;
+    }
     if word == "nat" {
         let begin = expect(s,after,'(');
         var end_lit = begin;
@@ -342,7 +405,8 @@ recursive fn expression(s: u8[:], p: i64, nodes: State[:],
        word != "append" && word != "get" &&
        word != "len" && word != "tail" &&
        word != "some" && word != "try_get" &&
-       word != "unwrap_or" { fail(); }
+       word != "unwrap_or" &&
+       word != "concat" && word != "starts_with" { fail(); }
     let open = after + 1;
     let a, next = expression(s,open,nodes,values,premises,execute,depth - 1);
     if word == "some" {
@@ -351,10 +415,10 @@ recursive fn expression(s: u8[:], p: i64, nodes: State[:],
         return if execute {maybe_some(a.number)} else {maybe_none()},close;
     }
     if word == "len" || word == "tail" {
-        if a.kind != 3 { fail(); }
-        let close = expect(s,next,')');
-        if !execute { return zero(if word=="len" { 1 } else { 3 }),close; }
-        if word == "len" { return integer(a.length),close; }
+        if (a.kind!=3 && a.kind!=5) || (word=="tail" && a.kind!=3) {fail();}
+        let close=expect(s,next,')');
+        if !execute {return zero(if word=="len" {1}else{3}),close;}
+        if word=="len" {return integer(a.length),close;}
         return ints_tail(a),close;
     }
     let comma = expect(s,next,',');
@@ -407,6 +471,12 @@ recursive fn expression(s: u8[:], p: i64, nodes: State[:],
         if a.kind != 4 || b.kind != 1 { fail(); }
         return integer(if execute && a.flag { a.number } else { b.number }),close;
     }
+    if word=="concat" || word=="starts_with" {
+        if a.kind!=5 || b.kind!=5 {fail();}
+        if !execute {return zero(if word=="concat" {5}else{0}),close;}
+        if word=="concat" {return text_concat(a,b),close;}
+        return boolean(text_starts_with(a,b)),close;
+    }
     if a.kind != b.kind || (a.kind != 1 && a.kind != 2) { fail(); }
     if !execute { return zero(a.kind), close; }
     if a.kind == 2 {
@@ -448,6 +518,8 @@ fn function_reserved(name: u8[:]) -> bool {
            name == "len" || name == "tail" ||
            name == "none" || name == "some" ||
            name == "try_get" || name == "unwrap_or" ||
+           name == "text" || name == "concat" ||
+           name == "starts_with" ||
            name == "source" || name == "derive";
 }
 // Iterative expansion is required by Goose's strict scope checks: no
@@ -687,7 +759,8 @@ fn load(source: u8[:], nodes: State[>..]&, values: Value[>..]&,
             if file_path.len > 512 { fail(); }
             var text: u8[>..] = [];
             if !read_file(file_path,text) || text.len > 8192 { fail(); }
-            let value = parse_value(trim(text),kind);
+            let value=if kind==5 {text_store(trim(text))}
+                else{parse_value(trim(text),kind)};
             nodes.push(State {
                 name: name, expression: "", premise: [0;16],
                 count: 0, kind: kind, derived: false,
@@ -976,8 +1049,10 @@ fn show(nodes: State[:], values: Value[:]) {
             print(nodes[i].name, ": ", nat_text(values[i]));
         } else if values[i].kind == 3 {
             print(nodes[i].name, ": ", ints_printable(values[i]));
-        } else {
+        } else if values[i].kind==4 {
             print(nodes[i].name, ": ", maybe_text(values[i]));
+        } else {
+            print(nodes[i].name, ": ", text_bytes(values[i]));
         }
     }
 }
@@ -1169,6 +1244,14 @@ fn relocate_ints(value: Value, fresh: i64[>..]&) -> Value {
     }
     return moved;
 }
+// Safe compaction of all committed text roots.
+fn relocate_text(value:Value,fresh:u8[>..]&)->Value{
+    if value.kind!=5 || value.length==0 {return value;}
+    var moved=value;
+    moved.start=fresh.len;
+    for i in 0..value.length {fresh.push(text_pool[value.start+i]);}
+    return moved;
+}
 fn compact_nat_roots(values: Value[:], defaults: Value[:],
                      facts: EpochFact[:]) {
     var fresh: u8[>..] = [];
@@ -1185,6 +1268,12 @@ fn compact_nat_roots(values: Value[:], defaults: Value[:],
     for &fact in facts { fact.value = relocate_ints(fact.value,fresh_ints); }
     ints_pool.resize(0,0);
     ints_pool.append(fresh_ints);
+    var fresh_text:u8[>..]=[];
+    for &value in values {value=relocate_text(value,fresh_text);}
+    for &value in defaults {value=relocate_text(value,fresh_text);}
+    for &fact in facts {fact.value=relocate_text(fact.value,fresh_text);}
+    text_pool.resize(0,0);
+    text_pool.append(fresh_text);
 }
 
 fn run_recurrence(nodes: State[:], values: Value[:], active: bool[:],
@@ -1382,8 +1471,10 @@ fn main() {
                 contents.append(nat_text(result));
             } else if result.kind==3 {
                 contents.append(ints_printable(result));
-            } else {
+            } else if result.kind==4 {
                 contents.append(maybe_text(result));
+            } else {
+                contents.append(text_bytes(result));
             }
             contents.push('\n');
             if !write_file_atomic(output_path,contents) { fail(); }
@@ -1436,8 +1527,10 @@ fn main() {
                 print(nodes[target].name, ": ", nat_text(values[target]));
             } else if values[target].kind == 3 {
                 print(nodes[target].name, ": ", ints_printable(values[target]));
-            } else {
+            } else if values[target].kind==4 {
                 print(nodes[target].name, ": ", maybe_text(values[target]));
+            } else {
+                print(nodes[target].name, ": ", text_bytes(values[target]));
             }
             return;
         }
