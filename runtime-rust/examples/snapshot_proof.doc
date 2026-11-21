@@ -1,0 +1,6 @@
+# Goose snapshot-root pinning proof: nat + ints + scalar pure evaluation.
+source n: nat = 99999999999999999999999999999999999999999999999999
+source items: ints = [2,4,6]
+derive next: nat (n) = add(n,nat(1))
+derive count: int (items) = len(items)
+derive first: int (items) = get(items,0)
