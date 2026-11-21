@@ -210,6 +210,34 @@ jobs:
           fi
           echo DOC_WEBGPU_DEPENDENT_REDUCTION_PASS
           echo DOC_WEBGPU_REPAIR_AND_CPU_FALLBACK_PASS
+      - name: Signed i64 DOC equality on portable i32 WebGPU with real dispatch
+        run: |
+          set -euo pipefail
+          cargo test --release --manifest-path runtime-rust/Cargo.toml --features webgpu --example webgpu_integer_eq
+          cargo build --release --manifest-path runtime-rust/Cargo.toml --features webgpu --example webgpu_integer_eq
+          executable=runtime-rust/target/release/examples/webgpu_integer_eq
+          for lanes in 1 2 63 64 65 129 257 1024; do
+            DOC_GPU_LANES=$lanes "$executable"               > "validation-logs/signed-rust-$lanes.log" 2>&1
+            DOC_GPU_LANES=$lanes "$executable"               --shader validation-logs/goose-webgpu/integer-equality.wgsl               > "validation-logs/signed-goose-$lanes.log" 2>&1
+            for origin in rust goose; do
+              log="validation-logs/signed-$origin-$lanes.log"
+              test "$(grep -c '^DOC_SIGNED_WEBGPU_COMPUTE_PASS:' "$log")" = 2
+              grep -F 'DOC_SIGNED_WEBGPU_ADAPTER:' "$log"
+            done
+            diff -u               <(grep '^DOC_SIGNED_WEBGPU_COMPUTE_PASS:' "validation-logs/signed-rust-$lanes.log")               <(grep '^DOC_SIGNED_WEBGPU_COMPUTE_PASS:' "validation-logs/signed-goose-$lanes.log")
+          done
+          if DOC_GPU_INJECT_INT_OUT_OF_RANGE=1 "$executable"             > validation-logs/signed-out-of-range.log 2>&1; then
+            echo 'WebGPU accepted out-of-range DOC i64' >&2
+            exit 1
+          fi
+          grep -F 'outside i32 WebGPU eligibility range' validation-logs/signed-out-of-range.log
+          if grep -q '^DOC_SIGNED_WEBGPU_COMPUTE_PASS:' validation-logs/signed-out-of-range.log; then
+            exit 1
+          fi
+          DOC_GPU_EXECUTION=cpu "$executable"             > validation-logs/signed-cpu-only.log 2>&1
+          test "$(grep -c '^DOC_SIGNED_CPU_ONLY_PASS:' validation-logs/signed-cpu-only.log)" = 2
+          if grep -q '^DOC_SIGNED_WEBGPU_COMPUTE_PASS:' validation-logs/signed-cpu-only.log; then exit 1; fi
+          echo DOC_SIGNED_WEBGPU_DIFFERENTIAL_PASS
       - name: Preserve WebGPU adapter and correctness evidence
         if: always()
         uses: actions/upload-artifact@v4
