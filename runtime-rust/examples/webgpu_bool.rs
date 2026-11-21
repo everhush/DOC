@@ -72,6 +72,19 @@ async fn run() -> Result<(), Box<dyn Error>> {
     if !["gpu", "auto", "cpu"].contains(&execution.as_str()) {
         return Err("DOC_GPU_EXECUTION must be gpu, auto, or cpu".into());
     }
+    let require_hardware=std::env::var("DOC_GPU_REQUIRE_HARDWARE")
+        .unwrap_or_else(|_| "0".into());
+    if !["0","1"].contains(&require_hardware.as_str()) {
+        return Err("DOC_GPU_REQUIRE_HARDWARE must be 0 or 1".into());
+    }
+    if require_hardware=="1" && execution!="gpu" {
+        return Err("hardware validation requires strict GPU execution".into());
+    }
+    let fault_episode=std::env::var("DOC_GPU_INJECT_FAILURE_EPISODE")
+        .ok().map(|s|s.parse::<usize>()).transpose()?;
+    if fault_episode.is_some_and(|n|n>=if repair {2}else{1}) {
+        return Err("injected failure episode outside requested source updates".into());
+    }
 
     // Keep independent DOC CPU runtimes alive across BOTH source revisions.
     // This exercises actual incremental source repair rather than rebuilding
@@ -115,7 +128,9 @@ async fn run() -> Result<(), Box<dyn Error>> {
             ..Default::default()
         });
         instance.request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: wgpu::PowerPreference::LowPower,
+            power_preference: if require_hardware=="1" {
+                wgpu::PowerPreference::HighPerformance
+            }else{wgpu::PowerPreference::LowPower},
             ..Default::default()
         }).await
     };
@@ -129,6 +144,10 @@ async fn run() -> Result<(), Box<dyn Error>> {
         return Ok(());
     };
     let info = adapter.get_info();
+    if require_hardware=="1" && !matches!(info.device_type,
+        wgpu::DeviceType::IntegratedGpu | wgpu::DeviceType::DiscreteGpu) {
+        return Err("DOC hardware-GPU gate rejected a software/unknown adapter".into());
+    }
     println!("WebGPU adapter: {} ({:?}, {:?})", info.name, info.device_type, info.backend);
     println!("DOC_WEBGPU_ADAPTER: vendor={} device={} type={:?} backend={:?} driver={}",
         info.vendor, info.device, info.device_type, info.backend, info.driver);
@@ -228,6 +247,14 @@ async fn run() -> Result<(), Box<dyn Error>> {
             0, &readback, 0, nbytes,
         );
         let host_setup_ms = gpu_started.elapsed().as_secs_f64() * 1000.0;
+        // Simulate an asynchronous device failure AFTER private candidate
+        // encoding and BEFORE submission/publication. This is fault injection
+        // only; it is not a claim that the physical adapter was actually lost.
+        if fault_episode == Some(episode) {
+            return Err(format!(
+                "DOC_WEBGPU_INJECTED_FAILURE: episode={episode}: no candidate published"
+            ).into());
+        }
         queue.submit(Some(encoder.finish()));
         if let Some(error) = device.pop_error_scope().await {
             return Err(format!("DOC WebGPU validation failure: episode={episode}: {error}").into());

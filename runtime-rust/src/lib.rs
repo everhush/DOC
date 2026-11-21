@@ -241,6 +241,14 @@ impl Parser<'_>{
 }
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
 pub enum Cutoff { Exact, Conservative }
+/// An external/WebGPU result is admissible only for this exact source episode
+/// and immutable graph generation. This token authorizes checking, not a
+/// bypass of the ordinary DOC frontier publication rule.
+#[derive(Clone,Copy,Debug,PartialEq,Eq)]
+pub struct ObservationToken {
+    pub graph_generation:u64,
+    pub source_epoch:u64,
+}
 #[derive(Clone,Copy,Debug,Default,PartialEq,Eq)]
 pub struct Stats {
     pub frontiers:u64,pub evaluations:u64,pub publications:u64,
@@ -250,16 +258,28 @@ pub struct Stats {
 pub struct Runtime {
     pub graph:Graph,values:Vec<Option<Value>>,active:Vec<bool>,
     pub cutoff:Cutoff,pub workers:usize,pub stats:Stats,pub generation:u64,
+    pub source_epoch:u64,
 }
 impl Runtime {
     pub fn new(graph:Graph,workers:usize,cutoff:Cutoff)->Self{
         let values=graph.states.iter().map(|s|s.initial).collect();
         let active=graph.states.iter().map(|s|s.definition.is_some()).collect();
-        Self{graph,values,active,cutoff,workers:workers.max(1),stats:Stats::default(),generation:0}
+        Self{graph,values,active,cutoff,workers:workers.max(1),stats:Stats::default(),generation:0,source_epoch:0}
     }
     pub fn value(&self,id:StateId)->Option<Value>{self.values.get(id).copied().flatten()}
     pub fn snapshot(&self)->Vec<Option<Value>>{self.values.clone()}
     pub fn stable(&self)->bool{!self.active.iter().any(|v|*v)}
+    pub fn observation_token(&self)->ObservationToken{
+        ObservationToken{graph_generation:self.generation,source_epoch:self.source_epoch}
+    }
+    /// Reject a device/worker result from an obsolete source or graph
+    /// generation before it can participate in any DOC logical publication.
+    pub fn validate_observation_token(&self,token:ObservationToken)->Result<()>{
+        if token.graph_generation!=self.generation || token.source_epoch!=self.source_epoch{
+            Err("stale DOC observation token".into())
+        }else{Ok(())}
+    }
+
 
     /// Conservatively replace a stable immutable graph generation.
     ///
@@ -278,6 +298,7 @@ impl Runtime {
         // the complete candidate and rebuild its topology before any state carry.
         let mut candidate=Graph::new(candidate.states)?;
         let next=self.generation.checked_add(1).ok_or("graph generation overflow")?;
+        let source_next=self.source_epoch.checked_add(1).ok_or("source epoch overflow")?;
         for state in &mut candidate.states {
             if state.definition.is_some(){continue;}
             if let Some(old_id)=self.graph.id(&state.name){
@@ -294,6 +315,7 @@ impl Runtime {
         self.active=pending.active;
         self.stats=pending.stats;
         self.generation=next;
+        self.source_epoch=source_next;
         Ok(())
     }
     /// A stale scheduler token is rejected without inspecting or publishing work.
@@ -316,11 +338,19 @@ impl Runtime {
             if s.kind!=v.kind(){return Err("source update type mismatch".into());}
             if !ids.insert(id){return Err("duplicate source assignment".into());}
         }
+        // One atomic source batch advances exactly one source epoch, not
+        // one epoch per updated state. Validate epoch overflow before writes.
+        let changed=changes.iter().any(|&(id,v)|
+            self.cutoff!=Cutoff::Exact || self.values[id]!=Some(v));
+        let next=if changed {
+            self.source_epoch.checked_add(1).ok_or("source epoch overflow")?
+        }else{self.source_epoch};
         for &(id,v) in changes{
             if self.cutoff==Cutoff::Exact && self.values[id]==Some(v){continue;}
             self.values[id]=Some(v);self.stats.updates+=1;
             for &u in &self.graph.users[id]{self.active[u]=true;}
         }
+        self.source_epoch=next;
         Ok(())
     }
     /// Materialize only the ancestor-closed finite subgraph necessary for
