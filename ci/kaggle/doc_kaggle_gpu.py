@@ -66,7 +66,7 @@ def preflight_hardware():
         version = run("nvidia-driver-version", [
             "nvidia-smi", "--query-gpu=driver_version",
             "--format=csv,noheader"], max_seconds=15).strip().splitlines()[0]
-        match = re.fullmatch(r"(\\d{3})\\.\\d+(?:\\.\\d+)*", version)
+        match = re.fullmatch(r"(\d{3})\.\d+(?:\.\d+)*", version)
         if not match:
             raise RuntimeError("INFRA_BLOCKED: unrecognized NVIDIA kernel driver version")
         major = match.group(1)
