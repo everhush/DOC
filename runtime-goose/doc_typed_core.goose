@@ -868,22 +868,31 @@ fn update(nodes: State[:], values: Value[:], active: bool[:],
 // typed queues. The main DOC worker remains the ONLY publisher. Restrict
 // worker jobs to total pure Boolean expressions: no memory-pool use and no
 // potentially overflowing arithmetic in a worker's native fail-stop path.
-struct BoolJob {
+struct ScalarJob {
     position: i64,
     node: State,
     premises: State[16],
     inputs: Value[16],
 }
-struct BoolReply { position: i64, value: bool }
-fn boolean_worker_eligible(nodes: State[:], frontier: i64[:]) -> bool {
+// A Value with kind 0 (bool) or 1 (int) is self-contained and cannot
+// reference any thread-local digit, list, or UTF-8 allocation arena.
+struct ScalarReply { position: i64, value: Value }
+fn scalar_worker_eligible(nodes: State[:], frontier: i64[:]) -> bool {
     for id in frontier {
-        if !nodes[id].derived || nodes[id].kind != 0 { return false; }
+        if !nodes[id].derived ||
+           (nodes[id].kind != 0 && nodes[id].kind != 1) {
+            return false;
+        }
         let body = nodes[id].expression[..];
+        // Conservative scalar-only admission. Pool-backed literals and
+        // operations may not execute on workers holding only scalar inputs.
         if find(body,"nat")>=0 || find(body,"empty")>=0 ||
            find(body,"append")>=0 || find(body,"get")>=0 ||
            find(body,"len")>=0 || find(body,"tail")>=0 ||
-           find(body,"add")>=0 || find(body,"sub")>=0 ||
-           find(body,"mul")>=0 { return false; }
+           find(body,"some")>=0 || find(body,"none")>=0 ||
+           find(body,"concat")>=0 || find(body,"starts_with")>=0 ||
+           find(body,"try_get")>=0 || find(body,"unwrap_or")>=0 ||
+           find(body,"text")>=0 { return false; }
         // Only immediate int/bool scalar inputs are sent to isolated
         // workers. Nat/ints handles reference parent thread-owned pools and
         // MUST NOT cross queues without an explicit owning deep copy.
@@ -894,9 +903,9 @@ fn boolean_worker_eligible(nodes: State[:], frontier: i64[:]) -> bool {
     }
     return true;
 }
-thread_fn boolean_worker() {
+thread_fn scalar_worker() {
     loop {
-        let job = qget<BoolJob>();
+        let job = qget<ScalarJob>();
         if job.position < 0 { break; }
         var local_nodes: State[>..] = [];
         var local_values: Value[>..] = [];
@@ -909,8 +918,9 @@ thread_fn boolean_worker() {
         local_nodes.push(derived);
         local_values.push(boolean(false));
         let result = inspect(local_nodes,local_values,derived.count,true);
-        if result.kind != 0 { fail(); }
-        qput(BoolReply { position: job.position, value: result.flag });
+        if result.kind != derived.kind ||
+           (result.kind != 0 && result.kind != 1) { fail(); }
+        qput(ScalarReply { position: job.position, value: result });
     }
 }
 fn evaluate_ready_frontier(nodes: State[:], values: Value[:],
@@ -924,7 +934,7 @@ fn evaluate_ready_frontier(nodes: State[:], values: Value[:],
         workers = requested;
     }
     if workers <= 1 || frontier.len < 64 ||
-       !boolean_worker_eligible(nodes,frontier) {
+       !scalar_worker_eligible(nodes,frontier) {
         for id in frontier { candidates.push(inspect(nodes,values,id,true)); }
         return candidates;
     }
@@ -936,7 +946,7 @@ fn evaluate_ready_frontier(nodes: State[:], values: Value[:],
     };
     for position in 0..frontier.len {
         let id=frontier[position];
-        var task = BoolJob {
+        var task = ScalarJob {
             position: position,
             node: nodes[id],
             premises: [blank;16],
@@ -950,21 +960,23 @@ fn evaluate_ready_frontier(nodes: State[:], values: Value[:],
         qput(task);
     }
     for i in 0..workers {
-        qput(BoolJob {
+        qput(ScalarJob {
             position: -1, node: blank, premises: [blank;16],
             inputs: [boolean(false);16],
         });
     }
     var ids: i64[>..] = [];
-    for i in 0..workers { ids.push(thread_spawn(boolean_worker)); }
+    for i in 0..workers { ids.push(thread_spawn(scalar_worker)); }
     var seen: bool[>..] = [];
     seen.resize(frontier.len,false);
     for i in 0..frontier.len {
-        let reply = qget<BoolReply>();
+        let reply = qget<ScalarReply>();
         if reply.position < 0 || reply.position >= frontier.len ||
            seen[reply.position] { fail(); }
         seen[reply.position] = true;
-        candidates[reply.position]=boolean(reply.value);
+        let expected_kind=nodes[frontier[reply.position]].kind;
+        if reply.value.kind != expected_kind { fail(); }
+        candidates[reply.position]=reply.value;
     }
     for id in ids { thread_wait(id); }
     var message: u8[>..] = [];
