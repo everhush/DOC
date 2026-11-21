@@ -66,6 +66,27 @@ for episode,a in enumerate((3,7)):
     out=parse(p.stdout)[0]
     assert out==expected(a,5),(episode,out)
     checks+=1
+# A failing integer candidate must never publish part of a 128-task
+# frontier, including when multiple real worker threads are active.
+bad=root/"mixed-scalar-overflow.doc"
+bad.write_text(
+    "source a: int = 9223372036854775807\n"
+    "source b: int = 1\n"
+    + "".join(
+        f"derive p{i:03}: int (a,b) = "
+        + ("add(a,b)" if i==127 else "sub(a,b)") + "\n"
+        for i in range(128))
+)
+for name,binary in (("goose",goose),("rust",rust)):
+    for n in (1,2,4,8):
+        env={**os.environ, "DOC_GOOSE_WORKERS":str(n)}
+        process=subprocess.run([binary,str(bad)],env=env,
+            capture_output=True,text=True,timeout=25)
+        if process.returncode==0:
+            raise AssertionError(f"{name}/{n} unexpectedly accepted overflowing frontier")
+        if any(line.startswith("p000:") for line in process.stdout.splitlines()):
+            raise AssertionError(f"{name}/{n} published a partial failing frontier")
+        checks+=1
 print(f"DOC_GOOSE_MIXED_SCALAR_PARALLEL_PASS: {checks} worker and oracle checks")
 (root/"goose-mixed-workers.log").write_text(
     f"DOC_GOOSE_MIXED_SCALAR_PARALLEL_PASS: {checks}\n")
