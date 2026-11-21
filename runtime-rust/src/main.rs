@@ -31,12 +31,46 @@ fn run() -> Result<(), String> {
         } else {
             (first_value.parse::<u64>().map_err(|_| "invalid epoch limit")?, None)
         };
+        // Source facts are independent of carry and are scoped to their
+        // requested successor epoch. Validate the whole request before output.
         let mut carry = Vec::new();
+        let mut facts = std::collections::BTreeMap::<u64, Vec<(usize, Value)>>::new();
         for binding in args {
-            let (source, previous) = binding.split_once('=').ok_or("expected source=previous")?;
-            let source = graph.id(source).ok_or("unknown carry source")?;
-            let previous = graph.id(previous).ok_or("unknown carry state")?;
-            carry.push((source, previous));
+            if let Some(rest) = binding.strip_prefix("--fact=") {
+                let (epoch_text, assignment) = rest.split_once(':')
+                    .ok_or("epoch fact requires --fact=EPOCH:name=value")?;
+                let epoch = epoch_text.parse::<u64>()
+                    .map_err(|_| "invalid fact epoch")?;
+                if epoch == 0 || epoch > end_epoch {
+                    return Err("epoch fact must target a requested successor epoch".into());
+                }
+                let (name, text) = assignment.split_once('=')
+                    .ok_or("epoch fact requires name=value")?;
+                let source = graph.id(name).ok_or("unknown epoch fact source")?;
+                if graph.states[source].definition.is_some() {
+                    return Err("epoch fact cannot target a derived state".into());
+                }
+                let value = Value::parse(text)?;
+                if value.kind() != graph.states[source].kind {
+                    return Err("epoch fact type mismatch".into());
+                }
+                let target = facts.entry(epoch).or_default();
+                if target.iter().any(|(id, _)| *id == source) {
+                    return Err("duplicate source fact in one epoch".into());
+                }
+                target.push((source, value));
+            } else {
+                let (source, previous) = binding.split_once('=')
+                    .ok_or("expected source=previous or --fact=EPOCH:name=value")?;
+                let source = graph.id(source).ok_or("unknown carry source")?;
+                let previous = graph.id(previous).ok_or("unknown carry state")?;
+                carry.push((source, previous));
+            }
+        }
+        for assignments in facts.values() {
+            if assignments.iter().any(|(id, _)| carry.iter().any(|(source, _)| source == id)) {
+                return Err("epoch fact conflicts with a carried source".into());
+            }
         }
         let halt = if let Some(name) = &halt_name {
             let id = graph.id(name).ok_or("unknown recurrent halt state")?;
@@ -70,7 +104,9 @@ fn run() -> Result<(), String> {
                 }
                 return Ok(());
             }
-            recurrence.advance(&[])?;
+            let next = recurrence.epoch().checked_add(1).ok_or("epoch index exhausted")?;
+            let requested = facts.get(&next).map(Vec::as_slice).unwrap_or(&[]);
+            recurrence.advance(requested)?;
         }
     }
     let mut rt = Runtime::new(graph, workers, Cutoff::Exact);

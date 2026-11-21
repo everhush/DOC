@@ -59,4 +59,59 @@ for exe in "$goose" "$rust"; do
     grep -Fx 'DOC_RECURRENCE_HALT: 0' "$scratch/zero.log"
     if grep -q '^epoch: 1$' "$scratch/zero.log"; then exit 1; fi
 done
+
+# Epoch-scoped external facts are not recurrence carry and reset to defaults.
+facts_source=runtime-rust/examples/recurrence_facts.doc
+"$goose" "$facts_source" --through=4 cursor=successor \
+    --fact=1:delta=2 --fact=2:delta=3 --fact=3:delta=4 \
+    > "$logs/recurrence-facts-goose.log"
+for workers in 1 2 4; do
+    DOC_WORKERS=$workers "$rust" "$facts_source" --through=4 cursor=successor \
+        --fact=1:delta=2 --fact=2:delta=3 --fact=3:delta=4 \
+        > "$logs/recurrence-facts-rust-$workers.log"
+    diff -u "$logs/recurrence-facts-goose.log" "$logs/recurrence-facts-rust-$workers.log"
+done
+{
+    for epoch in 0 1 2 3 4; do
+        case "$epoch" in
+            0) cursor=0 delta=1 successor=1 halt=false ;;
+            1) cursor=1 delta=2 successor=3 halt=false ;;
+            2) cursor=3 delta=3 successor=6 halt=false ;;
+            3) cursor=6 delta=4 successor=10 halt=true ;;
+            4) cursor=10 delta=1 successor=11 halt=false ;;
+        esac
+        printf 'epoch: %s\ncursor: %s\ndelta: %s\nsuccessor: %s\nhalt: %s\n' \
+            "$epoch" "$cursor" "$delta" "$successor" "$halt"
+    done
+} > "$logs/recurrence-facts-oracle.log"
+diff -u "$logs/recurrence-facts-oracle.log" "$logs/recurrence-facts-goose.log"
+for exe in "$goose" "$rust"; do
+    "$exe" "$facts_source" --until=halt --max-epochs=9 cursor=successor \
+        --fact=1:delta=2 --fact=2:delta=3 --fact=3:delta=4 \
+        > "$scratch/fact-halt.log"
+    grep -Fx 'DOC_RECURRENCE_HALT: 3' "$scratch/fact-halt.log"
+    if grep -q '^epoch: 4
+ "$scratch/fact-halt.log"; then
+        echo 'Epoch fact demand did not halt before later epoch' >&2; exit 1
+    fi
+    for bad in \
+        '--through=4 cursor=successor --fact=0:delta=2' \
+        '--through=4 cursor=successor --fact=5:delta=2' \
+        '--through=4 cursor=successor --fact=1:missing=2' \
+        '--through=4 cursor=successor --fact=1:delta=invalid' \
+        '--through=4 cursor=successor --fact=1:delta=true' \
+        '--through=4 cursor=successor --fact=1:successor=3' \
+        '--through=4 cursor=successor --fact=1:cursor=2' \
+        '--through=4 cursor=successor --fact=1:delta=2 --fact=1:delta=2'; do
+        set -- $bad
+        if "$exe" "$facts_source" "$@" > "$scratch/bad-facts.log" 2>&1; then
+            echo "Accepted invalid epoch fact: $bad" >&2; exit 1
+        fi
+        if grep -q '^epoch:' "$scratch/bad-facts.log"; then
+            echo "Invalid epoch fact produced output: $bad" >&2; exit 1
+        fi
+    done
+done
+echo DOC_RECURRENCE_EPOCH_FACTS_PASS
+
 echo DOC_RECURRENCE_HALT_POLICY_PASS | tee -a "$logs/recurrence-halt-policy.log"

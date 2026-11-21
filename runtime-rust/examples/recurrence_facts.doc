@@ -1,0 +1,5 @@
+# Explicit epoch-local facts override defaults only in their requested epoch.
+source cursor: int = 0
+source delta: int = 1
+derive successor: int (cursor,delta) = add(cursor,delta)
+derive halt: bool (cursor) = eq(cursor,6)
