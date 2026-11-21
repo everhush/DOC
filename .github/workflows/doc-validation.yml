@@ -32,6 +32,12 @@ jobs:
           workspaces: runtime-rust
       - name: Enforce native Rust and Goose runtime source policy
         run: bash runtime-goose/check-native-sources.sh
+      - name: Shell syntax-check all DOC validation harnesses before compiling Goose
+        run: |
+          set -euo pipefail
+          for script in runtime-goose/*.sh runtime-rust/*.sh; do
+            bash -n "$script"
+          done
       - name: Native compile, tests and WGSL parse/validation
         run: |
           set -o pipefail
