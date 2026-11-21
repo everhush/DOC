@@ -11,16 +11,25 @@ pub type StateId = usize;
 pub type Result<T> = std::result::Result<T,String>;
 
 #[derive(Clone,Debug,PartialEq,Eq)]
-pub enum Value { Int(i64), Bool(bool), Nat(String), Ints(Vec<i64>) }
+pub enum Value { Int(i64), Bool(bool), Nat(String), Ints(Vec<i64>), MaybeInt(Option<i64>) }
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
-pub enum Type { Int, Bool, Nat, Ints }
+pub enum Type { Int, Bool, Nat, Ints, MaybeInt }
 impl Value {
     pub fn kind(&self)->Type {
         match self {Self::Int(_)=>Type::Int,Self::Bool(_)=>Type::Bool,
-            Self::Nat(_)=>Type::Nat,Self::Ints(_)=>Type::Ints}
+            Self::Nat(_)=>Type::Nat,Self::Ints(_)=>Type::Ints,
+            Self::MaybeInt(_)=>Type::MaybeInt}
     }
     pub fn parse_for_type(s:&str,kind:Type)->Result<Self>{
         if kind==Type::Nat {return Ok(Self::Nat(nat::canonical(s.trim())?));}
+        if kind==Type::MaybeInt {
+            let raw=s.trim();
+            if raw=="none" {return Ok(Self::MaybeInt(None));}
+            let contents=raw.strip_prefix("some(").and_then(|s|s.strip_suffix(')'))
+                .ok_or("maybe_int requires none or some(i64)")?;
+            return Ok(Self::MaybeInt(Some(contents.trim().parse::<i64>()
+                .map_err(|_|"invalid maybe_int payload")?)));
+        }
         if kind==Type::Ints {
             let raw=s.trim();
             let body=raw.strip_prefix('[').and_then(|r|r.strip_suffix(']'))
@@ -49,13 +58,16 @@ impl Value {
     }
 }
 impl Type { pub fn parse(s:&str)->Result<Self>{
-    match s.trim() {"int"=>Ok(Self::Int),"bool"=>Ok(Self::Bool),"nat"=>Ok(Self::Nat),"ints"=>Ok(Self::Ints),_=>Err(format!("invalid type: {s}"))}
+    match s.trim() {"int"=>Ok(Self::Int),"bool"=>Ok(Self::Bool),"nat"=>Ok(Self::Nat),"ints"=>Ok(Self::Ints),"maybe_int"=>Ok(Self::MaybeInt),
+        _=>Err(format!("invalid type: {s}"))}
 }}
 impl std::fmt::Display for Value {
     fn fmt(&self,f:&mut std::fmt::Formatter<'_>)->std::fmt::Result {
         match self {
             Self::Int(x)=>write!(f,"{x}"),Self::Bool(x)=>write!(f,"{x}"),
             Self::Nat(x)=>write!(f,"{x}"),
+            Self::MaybeInt(None)=>write!(f,"none"),
+            Self::MaybeInt(Some(n))=>write!(f,"some({n})"),
             Self::Ints(xs)=>{
                 write!(f,"[")?;
                 for (idx,x) in xs.iter().enumerate(){
@@ -75,6 +87,8 @@ pub enum Expr {
     Lt(Box<Self>,Box<Self>), Le(Box<Self>,Box<Self>),
     Empty, Append(Box<Self>,Box<Self>),
     Length(Box<Self>), Get(Box<Self>,Box<Self>), Tail(Box<Self>),
+    NoInt, SomeInt(Box<Self>), TryGet(Box<Self>,Box<Self>),
+    UnwrapOr(Box<Self>,Box<Self>),
     If(Box<Self>,Box<Self>,Box<Self>),
 }
 impl Expr {
@@ -84,6 +98,21 @@ impl Expr {
             Lit(v)=>Ok(v.kind()),
             Arg(i)=>args.get(*i).copied().ok_or_else(||"missing formal parameter".into()),
             Empty=>Ok(Type::Ints),
+            NoInt=>Ok(Type::MaybeInt),
+            SomeInt(value)=>{
+                if value.kind(args)?==Type::Int {Ok(Type::MaybeInt)}
+                else{Err("some requires int".into())}
+            }
+            TryGet(list,index)=>{
+                if list.kind(args)?==Type::Ints && index.kind(args)?==Type::Int{
+                    Ok(Type::MaybeInt)
+                }else{Err("try_get requires (ints,int)".into())}
+            }
+            UnwrapOr(value,default)=>{
+                if value.kind(args)?==Type::MaybeInt &&
+                   default.kind(args)?==Type::Int {Ok(Type::Int)}
+                else{Err("unwrap_or requires (maybe_int,int)".into())}
+            }
             Append(list,value)=>{
                 if list.kind(args)?==Type::Ints && value.kind(args)?==Type::Int {
                     Ok(Type::Ints)
@@ -132,6 +161,22 @@ impl Expr {
             Lit(v)=>Ok(v.clone()),
             Arg(i)=>args.get(*i).cloned().ok_or_else(||"missing parameter".into()),
             Empty=>Ok(Value::Ints(Vec::new())),
+            NoInt=>Ok(Value::MaybeInt(None)),
+            SomeInt(e)=>match e.eval(args)?{
+                Value::Int(n)=>Ok(Value::MaybeInt(Some(n))),
+                _=>Err("some requires int".into())
+            },
+            TryGet(list,index)=>match (list.eval(args)?,index.eval(args)?) {
+                (Value::Ints(xs),Value::Int(i))=>
+                    Ok(Value::MaybeInt(usize::try_from(i).ok()
+                        .and_then(|offset|xs.get(offset).copied()))),
+                _=>Err("try_get requires ints collection and int index".into())
+            },
+            UnwrapOr(value,default)=>match(value.eval(args)?,default.eval(args)?) {
+                (Value::MaybeInt(Some(n)),Value::Int(_))=>Ok(Value::Int(n)),
+                (Value::MaybeInt(None),Value::Int(default))=>Ok(Value::Int(default)),
+                _=>Err("unwrap_or requires maybe_int and int".into())
+            },
             Append(list,value)=>match (list.eval(args)?,value.eval(args)?) {
                 (Value::Ints(mut xs),Value::Int(x))=>{
                     if xs.len()>=4096 {return Err("DOC ints collection capacity exceeded".into());}
@@ -230,6 +275,7 @@ fn valid_user_ident(s:&str)->bool {
 fn reserved_user_ident(s:&str)->bool {
     matches!(s,"add"|"sub"|"mul"|"eq"|"if"|"lt"|"le"|"nat"|
         "empty"|"append"|"get"|"len"|"tail"|
+        "none"|"some"|"try_get"|"unwrap_or"|
         "true"|"false"|"source"|"derive"|"fn")
 }
 fn replace_function_formals(body:&str,params:&[String],args:&[String])->String {
@@ -569,9 +615,14 @@ impl Parser<'_>{
                 self.eat(")")?;
                 return Ok(Expr::Lit(Value::Nat(nat::canonical(&digits)?)));
             }
-            if token=="empty" {
+            if token=="empty" || token=="none" {
                 self.eat(")")?;
-                return Ok(Expr::Empty);
+                return Ok(if token=="empty"{Expr::Empty}else{Expr::NoInt});
+            }
+            if token=="some" {
+                let value=Box::new(self.expr()?);
+                self.eat(")")?;
+                return Ok(Expr::SomeInt(value));
             }
             if token=="len" || token=="tail"{
                 let argument=Box::new(self.expr()?);
@@ -591,6 +642,8 @@ impl Parser<'_>{
                     "mul"=>Expr::Mul(a,b),"eq"=>Expr::Eq(a,b),
                     "lt"=>Expr::Lt(a,b),"le"=>Expr::Le(a,b),
                     "append"=>Expr::Append(a,b),"get"=>Expr::Get(a,b),
+                    "try_get"=>Expr::TryGet(a,b),
+                    "unwrap_or"=>Expr::UnwrapOr(a,b),
                     _=>return Err(format!("unknown operator {token}"))
                 }
             };
