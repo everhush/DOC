@@ -382,6 +382,42 @@ fn confined_doc_path(base:&std::path::Path,raw:&str)->Result<std::path::PathBuf>
     }
     Ok(file)
 }
+/// Explicit fallible, after-stabilization filesystem output effect.
+/// This does NOT roll back externally visible effects and is not a claim of
+/// exactly-once delivery. Temp-file + same-directory rename avoids half files.
+pub fn write_doc_output(
+    doc_file:&str,relative:&str,value:&Value
+)->Result<()>{
+    use std::{fs,io::Write,path::Path};
+    if !safe_doc_relative_path(relative){
+        return Err("DOC output path must be a confined relative path".into());
+    }
+    let base=Path::new(doc_file).parent().unwrap_or(Path::new("."));
+    let root=fs::canonicalize(base)
+        .map_err(|e|format!("DOC output base unavailable: {e}"))?;
+    let requested=base.join(relative);
+    let parent=requested.parent().ok_or("DOC output has no directory")?;
+    let dir=fs::canonicalize(parent)
+        .map_err(|e|format!("DOC output directory unavailable: {e}"))?;
+    if !dir.starts_with(&root){return Err("DOC output escapes source directory".into());}
+    let name=requested.file_name().ok_or("missing DOC output name")?;
+    let output=dir.join(name);
+    let temporary=dir.join(format!(
+        ".doc-write-{}-{}.tmp",std::process::id(),name.to_string_lossy()
+    ));
+    let mut file=fs::OpenOptions::new().write(true).create_new(true)
+        .open(&temporary).map_err(|e|format!("DOC temporary write: {e}"))?;
+    let result=(||->Result<()>{
+        write!(file,"{value}\n").map_err(|e|format!("DOC write: {e}"))?;
+        file.sync_all().map_err(|e|format!("DOC sync: {e}"))?;
+        drop(file);
+        fs::rename(&temporary,&output).map_err(|e|format!("DOC rename: {e}"))?;
+        Ok(())
+    })();
+    if result.is_err(){let _=fs::remove_file(&temporary);}
+    result
+}
+
 impl Graph {
     pub fn new(states:Vec<State>)->Result<Self>{
         let n=states.len();

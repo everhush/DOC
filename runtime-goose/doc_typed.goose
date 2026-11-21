@@ -1351,6 +1351,41 @@ fn main() {
     if arg_count() >= 3 {
         var mode: u8[>..] = [];
         arg(2,mode);
+        if starts_with(mode,"--emit=") {
+            if arg_count()!=3 { fail(); }
+            let target_spec=mode[7..];
+            let colon=find(target_spec,":");
+            if colon <= 0 { fail(); }
+            let id=lookup(nodes,target_spec[..colon]);
+            let relative=target_spec[colon+1..];
+            if id < 0 || !safe_doc_path(relative) { fail(); }
+            var prefix=0;
+            for i in 0..path.len {
+                if path[i]=='/' { prefix=i+1; }
+            }
+            var output_path:u8[>..]=[];
+            output_path.append(path[..prefix]);
+            output_path.append(relative);
+            if output_path.len > 512 { fail(); }
+            let _ready=stabilize(nodes,values,active);
+            var contents:u8[>..]=[];
+            let result=values[id];
+            if result.kind==0 {
+                contents.append(if result.flag { "true" } else { "false" });
+            } else if result.kind==1 {
+                format_int(contents,result.number,10,0,' ');
+            } else if result.kind==2 {
+                contents.append(nat_text(result));
+            } else if result.kind==3 {
+                contents.append(ints_printable(result));
+            } else {
+                contents.append(maybe_text(result));
+            }
+            contents.push('\n');
+            if !write_file_atomic(output_path,contents) { fail(); }
+            print("DOC_EFFECT_WRITE_PASS: ",nodes[id].name);
+            return;
+        }
         if mode=="--snapshot-proof" {
             if arg_count()!=3 { fail(); }
             snapshot_proof(nodes,values,active);
