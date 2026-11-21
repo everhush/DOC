@@ -35,6 +35,36 @@ fn bool_expr(expr: &Expr, formals: &[Type]) -> Result<String> {
     }
 }
 
+/// A DOC signed integer is i64, while portable WGSL provides i32. This
+/// lowering is *only* observationally equivalent for host-validated i32
+/// inputs. It emits equality, never narrowing/overflowing arithmetic.
+fn signed_i32_operand(expr: &Expr, formal: &[Type]) -> Result<String> {
+    match expr {
+        Expr::Arg(i) if formal.get(*i) == Some(&Type::Int) => Ok(format!("a{i}")),
+        Expr::Lit(crate::Value::Int(value)) => {
+            let value = i32::try_from(*value)
+                .map_err(|_| "DOC i64 literal is outside portable WGSL i32 range")?;
+            Ok(format!("{value}i"))
+        }
+        _ => Err("WGSL i32 equality permits only signed i32 premises and constants".into()),
+    }
+}
+
+fn signed_i32_equality(expr: &Expr, formal: &[Type]) -> Result<String> {
+    match expr {
+        Expr::Eq(lhs, rhs)
+            if lhs.kind(formal)? == Type::Int && rhs.kind(formal)? == Type::Int =>
+        {
+            Ok(format!(
+                "({} == {})",
+                signed_i32_operand(lhs, formal)?,
+                signed_i32_operand(rhs, formal)?
+            ))
+        }
+        _ => Err("WGSL signed-integer eligibility requires pure equality without arithmetic".into()),
+    }
+}
+
 /// Emit a typed WebGPU compute shader from an actual DOC derived definition.
 ///
 /// Host input buffers must contain canonical boolean u32 words (only 0 or 1).
@@ -58,10 +88,19 @@ pub fn lower_bool_derived(graph: &Graph, state_id: StateId) -> Result<String> {
         .map(|&id| graph.states.get(id).map(|s| s.kind).ok_or("unknown DOC premise".into()))
         .collect();
     let types = types?;
-    if types.iter().any(|&kind| kind != Type::Bool) {
-        return Err("WGSL lowering currently supports boolean premises only".into());
+    // Signed i64 comparisons are eligible only under a separate host
+    // precondition that every input fits i32. Never silently narrow a DOC
+    // integer, or perform a potentially partial DOC i64 operation on WGSL.
+    let signed_inputs = !types.is_empty() && types.iter().all(|&kind| kind == Type::Int);
+    let bool_inputs = types.iter().all(|&kind| kind == Type::Bool);
+    if !signed_inputs && !bool_inputs {
+        return Err("WGSL lowering excludes mixed, natural, and unsupported premise types".into());
     }
-    let computation = bool_expr(&definition.expr, &types)?;
+    let computation = if signed_inputs {
+        signed_i32_equality(&definition.expr, &types)?
+    } else {
+        bool_expr(&definition.expr, &types)?
+    };
     let mut wgsl = String::from("struct Storage { data: array<u32>, }\n");
     for index in 0..types.len() {
         wgsl.push_str(&format!(
@@ -79,9 +118,15 @@ pub fn lower_bool_derived(graph: &Graph, state_id: StateId) -> Result<String> {
         // A malformed host binding must not cause an out-of-bounds premise read.
         // The host must still reject length mismatches rather than publish a
         // partially written candidate buffer.
-        wgsl.push_str(&format!(
-            "  if (idx >= arrayLength(&input_{index}.data)) {{ return; }}\n  let a{index}: bool = input_{index}.data[idx] != 0u;\n"
-        ));
+        if signed_inputs {
+            wgsl.push_str(&format!(
+                "  if (idx >= arrayLength(&input_{index}.data)) {{ return; }}\n  let a{index}: i32 = bitcast<i32>(input_{index}.data[idx]);\n"
+            ));
+        } else {
+            wgsl.push_str(&format!(
+                "  if (idx >= arrayLength(&input_{index}.data)) {{ return; }}\n  let a{index}: bool = input_{index}.data[idx] != 0u;\n"
+            ));
+        }
     }
     wgsl.push_str(&format!(
         "  let value: bool = {computation};\n  result.data[idx] = select(0u, 1u, value);\n}}\n"
