@@ -388,9 +388,11 @@ fn emit_shader(nodes: State[:], target: u8[:], path: u8[:]) {
 
 struct Carry { source: i64, previous: i64 }
 
-fn run_recurrence(nodes: State[:], values: Value[:], active: bool[:], limit: i64) {
+fn run_recurrence(nodes: State[:], values: Value[:], active: bool[:],
+                  limit: i64, halt: i64, first_binding_arg: i64) {
     var carry: Carry[>..] = [];
-    for i in 3..arg_count() {
+    if halt >= 0 && (halt >= nodes.len || nodes[halt].kind != 0) { fail(); }
+    for i in first_binding_arg..arg_count() {
         var raw: u8[>..] = [];
         arg(i,raw);
         let assign = find(raw,"=");
@@ -411,7 +413,14 @@ fn run_recurrence(nodes: State[:], values: Value[:], active: bool[:], limit: i64
     loop {
         print("epoch: ",epoch);
         show(nodes,values);
-        if epoch == limit { return; }
+        if halt >= 0 && values[halt].flag {
+            print("DOC_RECURRENCE_HALT: ", epoch);
+            return;
+        }
+        if epoch == limit {
+            if halt >= 0 { fail(); }
+            return;
+        }
         for i in 0..nodes.len {
             candidate[i] = defaults[i];
             active[i] = nodes[i].derived;
@@ -439,7 +448,18 @@ fn main() {
         if starts_with(mode,"--through=") {
             let limit, ok = parse_int(mode[10..]);
             if !ok || limit < 0 { fail(); }
-            run_recurrence(nodes,values,active,limit);
+            run_recurrence(nodes,values,active,limit,-1,3);
+            return;
+        }
+        if starts_with(mode,"--until=") {
+            if arg_count() < 4 { fail(); }
+            var raw_cap: u8[>..] = [];
+            arg(3,raw_cap);
+            if !starts_with(raw_cap,"--max-epochs=") { fail(); }
+            let cap, ok = parse_int(raw_cap[13..]);
+            let halt = lookup(nodes,mode[8..]);
+            if !ok || cap < 0 || halt < 0 || nodes[halt].kind != 0 { fail(); }
+            run_recurrence(nodes,values,active,cap,halt,4);
             return;
         }
         if mode == "--emit-wgsl" {
