@@ -6,8 +6,9 @@ DOC is a persistent dependency-graph computation model for typed, reactive incre
 
 Build one small, expressive, general-purpose **DOC language** with **two independent runtimes**:
 
-- `runtime-rust/` — Rust implementation; current finite int/bool kernel is preliminary and has **not passed native compilation or integration validation**.
-- Goose implementation — **not yet present**; required to implement the same DOC language and conformance suite independently.
+- runtime-rust/ — independently authored native Rust DOC runtime and Rust wgpu GPU host.
+- runtime-goose/doc_typed.goose — independent native Goose DOC runtime (Goose, NOT Go).
+- runtime-goose/doc_sdl3_gpu.goose — Goose-owned GPU compute via the upstream Goose gfx SDL3 package, replacing the removed Goose WGSL generator and Rust-hosted Goose GPU bridge.
 
 Neither backend is production-ready. The finite acyclic core alone is **not** Turing-complete. The manuscript's claimed universality explicitly requires separate demand-driven unbounded *versioned recurrence*, unbounded values and adequate branching, with finite requested-prefix execution. Ordinary programs also need explicit effects, diagnostics, functions, data, packages and safe physical lifetime management.
 
@@ -30,6 +31,29 @@ Neither backend is production-ready. The finite acyclic core alone is **not** Tu
 3. Pure deterministic finite computations retain DOC's typed graph, validated source batches, ready frontiers, same-pre-state private evaluation, immutable atomic publication and sound equality cutoff. Do not infer general-purpose external effects from the finite theorem.
 4. Support the paper's qualified demand/recurrence, graph-version, protected observation/reclamation, and bounded placed-realization properties under their separate assumptions.
 5. Memory safety, automatic lifetime, explicit effect boundaries, and safe-by-default Rust/Goose code; unsafe exceptions require an independently tested narrow justification.
-6. Real local compilation, executed conformance tests, practical programs and reproduced performance evidence are release gates. No benchmark results or production compliance are claimed before measurement. GitHub Actions are not used.
+6. Real local compilation, executed conformance tests, practical programs and reproduced performance evidence are release gates. No benchmark results or production compliance are claimed without measurements. GitHub Actions are used only in the SECONDARY development repository, not on the primary research repository.
 
-For the preliminary Rust kernel, consult `runtime-rust/README.md`. It must not be treated as a usable general-purpose DOC distribution yet.
+For Rust DOC architecture consult runtime-rust/README.md; for native Goose SDL3 GPU architecture consult runtime-goose/README.md. Neither should yet be called a general-purpose production distribution.
+
+## Development graphics architecture (no dual-host Goose GPU fallback)
+
+Rust and Goose execute the same DOC source semantics independently. Rust
+retains wgpu. Goose exclusively uses SDL3's GPU API, through the upstream
+Goose gfx package, for graphics and supported pure GPU compute. The legacy
+Goose WGSL generator, shader-export CLI, and the Goose-to-Rust-wgpu GPU
+host bridge have been removed. The two GPU paths are NOT interchangeable
+at the implementation level; parity is a TEST requirement, not a shared
+backend implementation.
+
+Goose's built-in embed_shader compiles static GLSL compute kernels at
+compile time into backend code for Vulkan (SPIR-V), Metal (MSL), and
+Direct3D 12 (HLSL). SDL3 does not currently provide a WebGPU backend.
+SDL3 and the upstream Goose gfx package contain third-party C code; all
+DOC-authored Goose runtime and GPU orchestration source remains native
+Goose, without locally maintained C or C++ runtime components or shims.
+
+Device dispatch, GPU result publication, SDL3 resource lifetime and
+real-adapter tests are tracked separately from CPU semantics. Mesa
+software Vulkan proves backend execution correctness only; physically
+accelerated Vulkan/Metal/D3D12 still require separate hardware tests.
+See runtime-goose/README.md and the active secondary CI workflow.
