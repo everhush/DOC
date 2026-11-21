@@ -4,6 +4,7 @@
 //! not hardware acceleration or CPU/GPU speedup.
 use doc_runtime::{wgsl, Cutoff, Graph, Runtime, Value};
 use std::error::Error;
+use std::time::Instant;
 use wgpu::util::DeviceExt;
 
 fn bytes(data: &[u32]) -> Vec<u8> {
@@ -83,6 +84,7 @@ async fn run() -> Result<(), Box<dyn Error>> {
     let episodes = if repair { 2 } else { 1 };
     let mut cases = Vec::with_capacity(episodes);
     for episode in 0..episodes {
+        let cpu_started = Instant::now();
         let a: Vec<u32> = (0..lane_count)
             .map(|i| u32::from(if episode == 0 { i % 3 == 0 } else { i % 7 < 3 }))
             .collect();
@@ -100,6 +102,8 @@ async fn run() -> Result<(), Box<dyn Error>> {
             expected.push(u32::from(cpu[index].value(target) == Some(Value::Bool(true))));
         }
         cases.push((a, b, expected));
+        println!("DOC_CPU_REFERENCE_MS: episode={episode} lanes={lane_count} elapsed_ms={:.3}",
+            cpu_started.elapsed().as_secs_f64() * 1000.0);
     }
 
     // The forced CPU path does not even initialize a GPU backend.
@@ -126,6 +130,8 @@ async fn run() -> Result<(), Box<dyn Error>> {
     };
     let info = adapter.get_info();
     println!("WebGPU adapter: {} ({:?}, {:?})", info.name, info.device_type, info.backend);
+    println!("DOC_WEBGPU_ADAPTER: vendor={} device={} type={:?} backend={:?} driver={}",
+        info.vendor, info.device, info.device_type, info.backend, info.driver);
     let (device, queue) = match adapter
         .request_device(&wgpu::DeviceDescriptor::default(), None)
         .await
@@ -143,6 +149,9 @@ async fn run() -> Result<(), Box<dyn Error>> {
     let nbytes = u64::try_from(lane_count)?
         .checked_mul(4).ok_or("DOC GPU buffer size overflow")?;
     let limits = device.limits();
+    println!("DOC_WEBGPU_LIMITS: max_storage_binding={} max_workgroups_per_dimension={} max_bind_groups={}",
+        limits.max_storage_buffer_binding_size, limits.max_compute_workgroups_per_dimension,
+        limits.max_bind_groups);
     if nbytes > u64::from(limits.max_storage_buffer_binding_size) {
         return Err("DOC GPU batch exceeds storage buffer binding limit".into());
     }
@@ -151,6 +160,7 @@ async fn run() -> Result<(), Box<dyn Error>> {
         return Err("DOC GPU batch exceeds workgroup dispatch limit".into());
     }
     for (episode, (a, b, expected)) in cases.into_iter().enumerate() {
+        let gpu_started = Instant::now();
         // All buffers are private to this source revision. Never rebind the
         // prior episode's output as a candidate for the newer source epoch.
         let buffer_a = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -217,6 +227,7 @@ async fn run() -> Result<(), Box<dyn Error>> {
             output_buffers.last().ok_or("missing output buffer")?,
             0, &readback, 0, nbytes,
         );
+        let host_setup_ms = gpu_started.elapsed().as_secs_f64() * 1000.0;
         queue.submit(Some(encoder.finish()));
         if let Some(error) = device.pop_error_scope().await {
             return Err(format!("DOC WebGPU validation failure at episode {episode}: {error}").into());
@@ -242,6 +253,8 @@ async fn run() -> Result<(), Box<dyn Error>> {
             ).into());
         }
         // Only successful complete readback and CPU equivalence are observable.
+        println!("DOC_WEBGPU_HOST_TIMING: episode={episode} lanes={lane_count} setup_ms={host_setup_ms:.3} total_ms={:.3}",
+            gpu_started.elapsed().as_secs_f64() * 1000.0);
         if repair { println!("DOC_WEBGPU_EPISODE: {episode}"); }
         println!("DOC_WEBGPU_COMPUTE_PASS: {got:?}");
     }
