@@ -105,7 +105,7 @@ fn simultaneous_writers_with_same_token_cannot_both_commit() {
     let token=engine.read().unwrap().token;
     let barrier=Arc::new(Barrier::new(3));
     let (left,right)=std::thread::scope(|scope|{
-        let workers=(0..2).map(|n|{
+        let mut workers=(0..2).map(|n|{
             let rt=engine.clone();
             let ready=barrier.clone();
             scope.spawn(move||{
@@ -114,7 +114,9 @@ fn simultaneous_writers_with_same_token_cannot_both_commit() {
             })
         }).collect::<Vec<_>>();
         barrier.wait();
-        (workers[0].join().unwrap(),workers[1].join().unwrap())
+        let right=workers.pop().unwrap().join().unwrap();
+        let left=workers.pop().unwrap().join().unwrap();
+        (left,right)
     });
     assert_eq!(usize::from(left.is_ok())+usize::from(right.is_ok()),1);
     let new_token=engine.read().unwrap().token;
