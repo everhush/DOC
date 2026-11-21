@@ -5,11 +5,14 @@ This Python file is a test controller, not a DOC runtime. Rust GPU execution
 is owned by Rust wgpu; Goose GPU execution is owned by Goose SDL3 gfx.
 Neither is dispatched through the other. No secrets are uploaded here.
 """
+import csv
 import datetime as dt
 import json
 import os
 from pathlib import Path
 import re
+import random
+import statistics
 import shutil
 import subprocess
 import tarfile
@@ -171,6 +174,96 @@ def test_physical_gpu(repo, goose_gpu, rust_signed, rust_bool):
         raise RuntimeError("Rust wgpu versus Goose SDL3 GPU result parity mismatch")
     return 77, 42
 
+def benchmark_hardware_gpu(repo, goose_gpu, rust_signed):
+    """Matched subprocess GPU timings; NOT isolated kernel-time comparisons."""
+    if DEADLINE - time.monotonic() < 240:
+        print("DOC_KAGGLE_GPU_BENCHMARK_SKIPPED: session reserve <240s")
+        return {"status": "skipped_time_budget", "samples": 0}
+    source_results = LOGS / "report/native-gpu-equivalence.csv"
+    with source_results.open(newline="") as handle:
+        reference = {
+            (row["operation"], int(row["epoch"])): int(row["equal_or_true_count"])
+            for row in csv.DictReader(handle) if int(row["lanes"]) == 1024
+        }
+    if len(reference) != 6:
+        raise RuntimeError("Missing six oracle-verified hardware reference counts")
+    cases = {
+        "eq": ("runtime-rust/examples/integer_equality.doc", []),
+        "lt": ("runtime-rust/examples/integer_ordering.doc", ["--lt"]),
+        "le": ("runtime-rust/examples/integer_ordering.doc", ["--le"]),
+    }
+    rust_pattern = re.compile(
+        r"^DOC_SIGNED_WEBGPU_COMPUTE_PASS: epoch=([01]) lanes=1024 equals=(\d+)$",
+        re.M)
+    goose_pattern = re.compile(
+        r"^DOC_GOOSE_SDL3_GPU_PASS: op=(eq|lt|le) epoch=([01]) lanes=1024 "
+        r"count=(\d+) backend=vulkan$", re.M)
+    def execute(mode, runtime, repetition):
+        source, flags = cases[mode]
+        if runtime == "rust":
+            cmd = [rust_signed, *flags]
+            env = {**ENV, "DOC_GPU_LANES": "1024"}
+        else:
+            cmd = ["xvfb-run", "-a", goose_gpu, source, mode, "1024"]
+            env = ENV
+        output = run("gpu-bench-{}-{}-{}".format(mode,runtime,repetition),
+                     cmd, cwd=repo, env=env, max_seconds=60,
+                     path="benchmark/{}-{}-{}.log".format(mode,runtime,repetition))
+        if runtime == "rust":
+            observed = {int(epoch):int(count)
+                        for epoch,count in rust_pattern.findall(output)}
+        else:
+            observed = {int(epoch):int(count)
+                        for op,epoch,count in goose_pattern.findall(output)
+                        if op == mode}
+        if observed != {epoch:reference[(mode,epoch)] for epoch in (0,1)}:
+            raise RuntimeError("Hardware benchmark returned wrong DOC source values")
+        return METRICS[-1]["wall_seconds"] * 1000
+    for mode in cases:
+        for runtime in ("rust","goose"):
+            for i in range(2):
+                execute(mode,runtime,"warmup"+str(i))
+    samples=[]
+    order=[(mode,runtime,index) for mode in cases
+           for runtime in ("rust","goose") for index in range(9)]
+    random.Random(0xD0C).shuffle(order)
+    for mode,runtime,index in order:
+        if DEADLINE - time.monotonic() < 90:
+            print("DOC_KAGGLE_GPU_BENCHMARK_TRUNCATED: deadline reserve")
+            return {"status":"skipped_time_budget","samples":len(samples)}
+        elapsed=execute(mode,runtime,index)
+        samples.append({"mode":mode,"runtime":runtime,"sample":index,
+                        "end_to_end_cli_ms":round(elapsed,4)})
+    output=LOGS/"hardware-gpu-benchmark.csv"
+    with output.open("w",newline="") as fp:
+        writer=csv.DictWriter(fp,fieldnames=list(samples[0]))
+        writer.writeheader()
+        writer.writerows(samples)
+    results={}
+    for mode in cases:
+        for runtime in ("rust","goose"):
+            values=sorted(v["end_to_end_cli_ms"] for v in samples
+                          if v["mode"]==mode and v["runtime"]==runtime)
+            results[mode+"/"+runtime]={
+                "count":len(values),
+                "median_ms":round(statistics.median(values),4),
+                "p95_ms":values[-1],
+                "max_ms":values[-1],
+            }
+    result={
+        "status":"pass", "samples":len(samples), "seed":0xD0C,
+        "method":"9 randomized-interleaved CLI process samples per runtime and "
+                 "operator; 2 warmups each; includes device initialization, "
+                 "pipeline creation, upload, dispatch, readback and subprocess "
+                 "startup; Xvfb on Goose, no kernel-only speedup claims",
+        "reference":"report/native-gpu-equivalence.csv",
+        "results":results,
+    }
+    (LOGS/"hardware-gpu-benchmark-summary.json").write_text(
+        json.dumps(result,indent=2,sort_keys=True)+"\n")
+    print("DOC_KAGGLE_HARDWARE_BENCHMARK_PASS:",len(samples),"raw matched samples")
+    return result
+
 def save(summary):
     (ROOT / "doc-kaggle-summary.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n")
     with tarfile.open(ROOT / "doc-kaggle-logs.tar.gz", "w:gz") as archive:
@@ -195,6 +288,13 @@ def main():
         summary.update({
             "result": "pass", "hardware": True, "backend": "vulkan",
             "goose_sdl3_checks": n_goose, "dual_backend_episodes": n_dual})
+        try:
+            summary["hardware_benchmark"] = benchmark_hardware_gpu(repo, goose, signed)
+        except Exception as benchmark_error:
+            # Correct physical GPU parity remains a valid completed result,
+            # even if optional timing evidence fails. Record the limitation.
+            summary["hardware_benchmark"] = {
+                "status":"failed", "error":str(benchmark_error)[-350:]}
         print(f"DOC_KAGGLE_NATIVE_PHYSICAL_GPU_PASS: {n_dual} paired GPU observations")
     except Exception as err:
         summary["failure"] = str(err)[-1300:]
