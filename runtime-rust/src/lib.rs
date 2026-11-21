@@ -323,6 +323,38 @@ impl Runtime {
         }
         Ok(())
     }
+    /// Materialize only the ancestor-closed finite subgraph necessary for
+    /// `requested`. Unrelated active definitions remain pending, so even
+    /// a failing unrelated computation cannot poison a demanded observation.
+    /// The selected tasks are ordinary legal finite DOC frontier subsets.
+    pub fn stabilize_requested(&mut self, requested: &[StateId]) -> Result<()> {
+        if requested.is_empty() {
+            return Err("demand requires at least one requested state".into());
+        }
+        let mut needed = vec![false; self.graph.states.len()];
+        let mut queue = Vec::from(requested);
+        while let Some(id) = queue.pop() {
+            let state = self.graph.states.get(id).ok_or("invalid demand target")?;
+            if needed[id] { continue; }
+            needed[id] = true;
+            if let Some(definition) = &state.definition {
+                queue.extend_from_slice(&definition.premises);
+            }
+        }
+        loop {
+            let selected: Vec<_> = self.ready().into_iter()
+                .filter(|id| needed[*id])
+                .collect();
+            if selected.is_empty() { break; }
+            self.step(&selected)?;
+        }
+        if needed.iter().enumerate().any(|(id, selected)|
+            *selected && (self.active[id] || self.value(id).is_none())) {
+            return Err("demanded subgraph failed to reach stability".into());
+        }
+        Ok(())
+    }
+
     /// Finds the active antichain of states lacking active strict ancestors.
     pub fn ready(&self)->Vec<StateId>{
         let mut has_active_ancestor=vec![false;self.graph.states.len()];
