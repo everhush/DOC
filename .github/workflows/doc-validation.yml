@@ -429,3 +429,72 @@ jobs:
           path: validation-logs/
           retention-days: 14
           if-no-files-found: warn
+
+  portable-native:
+    name: Native Rust and Goose DOC portability (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: runtime-rust
+      - name: Native Rust build and all-target tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          cargo test --release --manifest-path runtime-rust/Cargo.toml --all-targets
+          cargo build --release --manifest-path runtime-rust/Cargo.toml --bin doc
+          binary=runtime-rust/target/release/doc
+          if [ "$RUNNER_OS" = Windows ]; then binary="$binary.exe"; fi
+          "$binary" runtime-rust/examples/repair.doc a=4 b=1 > rust-portable.log
+          grep -Fx 'chosen: 10' rust-portable.log
+          echo DOC_PORTABLE_NATIVE_RUST_PASS
+      - name: Restore pinned native Goose compiler toolchain
+        id: goose-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ${{ github.workspace }}/upstream-goose
+            ${{ github.workspace }}/upstream-build
+          key: native-goose-${{ matrix.os }}-9412b80f52d833c4697cffdbbf1f4eeb5195cd41-v2
+      - name: Build pinned native Goose toolchain
+        if: steps.goose-cache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git init upstream-goose
+          git -C upstream-goose fetch --depth 1 https://github.com/aardappel/goose.git 9412b80f52d833c4697cffdbbf1f4eeb5195cd41
+          git -C upstream-goose checkout --detach FETCH_HEAD
+          cmake -S upstream-goose -B upstream-build -DCMAKE_BUILD_TYPE=Release
+          cmake --build upstream-build --config Release --parallel 2
+      - name: Native Goose typed interpreter smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          goose=upstream-build/goose
+          if [ "$RUNNER_OS" = Windows ]; then goose=upstream-build/Release/goose.exe; fi
+          test -x "$goose"
+          "$goose" check runtime-goose/doc_typed.goose
+          mkdir -p portable
+          artifact=portable/doc-goose
+          if [ "$RUNNER_OS" = Windows ]; then artifact="$artifact.exe"; fi
+          "$goose" build runtime-goose/doc_typed.goose --offline -o "$artifact"
+          "$artifact" runtime-rust/examples/repair.doc a=4 b=1 > portable/goose-smoke.log
+          grep -Fx 'chosen: 10' portable/goose-smoke.log
+          echo DOC_PORTABLE_NATIVE_DUAL_RUNTIME_PASS
+      - name: Preserve native portability evidence and binaries
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: doc-portable-${{ matrix.os }}
+          path: |
+            portable/
+            rust-portable.log
+          if-no-files-found: warn
+          retention-days: 14
