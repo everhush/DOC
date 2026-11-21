@@ -34,7 +34,6 @@ tests={
     "dot":"effect a: int = read(\"./bad-bool.txt\")",
     "drive":"effect a: int = read(\"C:/Windows/secret.txt\")",
     "bad-bool":"effect a: bool = read(\"bad-bool.txt\")",
-    "oversize":"effect a: nat = read(\"too-many.txt\")",
 }
 (root/"bad-bool.txt").write_text("yes\n")
 (root/"too-many.txt").write_text("9"*8193+"\n")
@@ -48,5 +47,29 @@ for name,decl in tests.items():
         if "answer:" in child.stdout:
             raise AssertionError(f"{binary} published result after effect failure")
         cases+=1
+# The former 8192-byte effect limit is gone. A large natural input must
+# materialize *exactly* and arbitrary-precision addition must agree between
+# Rust and Goose; an overlarge input is not an invalid effect.
+large=root/"effect-long-nat.doc"
+large.write_text(
+    'effect a: nat = read("too-many.txt")\n'
+    'derive incremented: nat (a) = add(a,nat(1))\n'
+    'derive valid: bool (a) = eq(a,a)\n')
+for binary in (rust,goose):
+    p=subprocess.run([binary,str(large)],capture_output=True,
+                     text=True,timeout=30)
+    if p.returncode:
+        raise AssertionError(
+            f"{binary} failed a large valid natural-file effect: {p.stderr}")
+    found={}
+    for line in p.stdout.splitlines():
+        if line.startswith(("a: ","incremented: ","valid: ")):
+            name,value=line.split(": ",1)
+            found[name]=value
+    expected={"a":"9"*8193,"incremented":"1"+"0"*8193,"valid":"true"}
+    if found!=expected:
+        raise AssertionError(f"{binary} corrupted or truncated long natural")
+    cases+=1
+
 print(f"DOC_NATIVE_TYPED_READ_EFFECT_PASS: {cases} independent source-effect checks")
 (root/"doc-typed-effect.log").write_text(f"DOC_NATIVE_TYPED_READ_EFFECT_PASS: {cases}\n")
