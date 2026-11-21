@@ -519,11 +519,54 @@ recursive fn shader_expr(s: u8[:], p: i64, nodes: State[:], premises: i64[:],
     out.append(");\n");
     return expect(s,third_end,')');
 }
+// The only eligible signed-DOC-i64 GPU operation is equality between two
+// host-validated i32 premises. A CPU/transport boundary must reject every
+// source outside the i32 range; arbitrary i64 arithmetic remains CPU-only.
+fn emit_signed_equality(nodes: State[:], node: State, path: u8[:]) {
+    if node.count != 2 { fail(); }
+    let lhs = node.premise[0];
+    let rhs = node.premise[1];
+    if nodes[lhs].kind != 1 || nodes[rhs].kind != 1 { fail(); }
+    let raw = trim(node.expression[..]);
+    if raw.len < 6 || !starts_with(raw, "eq(") ||
+       raw[raw.len - 1] != ')' { fail(); }
+    let operands = raw[3..raw.len - 1];
+    let comma = find(operands,",");
+    if comma <= 0 { fail(); }
+    let a = trim(operands[..comma]);
+    let b = trim(operands[comma + 1..]);
+    // Reject nested/partial arithmetic and unknown identifiers. Equality is
+    // symmetric, but premises retain their authored order in the bindings.
+    let forwards = a == nodes[lhs].name && b == nodes[rhs].name;
+    let reversed = a == nodes[rhs].name && b == nodes[lhs].name;
+    if !forwards && !reversed { fail(); }
+    var out: u8[>..] = [];
+    out.append("struct Storage { data: array<u32>, }\n");
+    out.append("@group(0) @binding(0) var<storage, read> input_0: Storage;\n");
+    out.append("@group(0) @binding(1) var<storage, read> input_1: Storage;\n");
+    out.append("@group(0) @binding(2) var<storage, read_write> result: Storage;\n");
+    out.append("@compute @workgroup_size(64)\n");
+    out.append("fn main(@builtin(global_invocation_id) gid: vec3<u32>) {\n");
+    out.append("  let idx: u32 = gid.x;\n");
+    out.append("  if (idx >= arrayLength(&result.data)) { return; }\n");
+    out.append("  if (idx >= arrayLength(&input_0.data)) { return; }\n");
+    out.append("  if (idx >= arrayLength(&input_1.data)) { return; }\n");
+    out.append("  let a0: i32 = bitcast<i32>(input_0.data[idx]);\n");
+    out.append("  let a1: i32 = bitcast<i32>(input_1.data[idx]);\n");
+    out.append("  result.data[idx] = select(0u, 1u, a0 == a1);\n}\n");
+    if !write_file_atomic(path,out) { fail(); }
+}
+
 fn emit_shader(nodes: State[:], target: u8[:], path: u8[:]) {
     let id = lookup(nodes,target);
     if id < 0 { fail(); }
     let node = nodes[id];
     if !node.derived || node.kind != 0 || node.count > 4 { fail(); }
+    if node.count == 2 && nodes[node.premise[0]].kind == 1 &&
+       nodes[node.premise[1]].kind == 1 {
+        emit_signed_equality(nodes,node,path);
+        return;
+    }
     let premises = node.premise[..node.count];
     var out: u8[>..] = [];
     out.append("struct Storage { data: array<u32>, }\n");
