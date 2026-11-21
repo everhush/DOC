@@ -157,6 +157,7 @@ fn main() {
     // No CPU "fallback" is allowed to claim an SDL3 GPU pass. Lack of a
     // device is a hard error, not an environment-dependent test skip.
     if !gfx::open_headless(16,16) {
+        print("DOC_GOOSE_SDL3_OPEN_ERROR: ",gfx::error());
         reject("SDL3 GPU unavailable: no silent CPU fallback");
     }
     defer gfx::close();

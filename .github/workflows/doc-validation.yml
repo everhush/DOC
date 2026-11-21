@@ -300,6 +300,9 @@ jobs:
       - name: Real SDL3 GPU compute, dependent stages and independent CPU oracle
         env:
           GOOSE_GFX_HEADLESS: "1"
+          GOOSE_GFX_DEBUG: "0"
+          SDL_VIDEODRIVER: "offscreen"
+          SDL_GPU_DRIVER: "vulkan"
           VK_ICD_FILENAMES: /usr/share/vulkan/icd.d/lvp_icd.x86_64.json
         run: |
           set -euo pipefail
