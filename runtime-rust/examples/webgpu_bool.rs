@@ -102,13 +102,14 @@ async fn run() -> Result<(), Box<dyn Error>> {
         cases.push((a, b, expected));
     }
 
-    let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
-        backends: wgpu::Backends::VULKAN,
-        ..Default::default()
-    });
+    // The forced CPU path does not even initialize a GPU backend.
     let adapter = if execution == "cpu" {
         None
     } else {
+        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
+            backends: wgpu::Backends::VULKAN,
+            ..Default::default()
+        });
         instance.request_adapter(&wgpu::RequestAdapterOptions {
             power_preference: wgpu::PowerPreference::LowPower,
             ..Default::default()
