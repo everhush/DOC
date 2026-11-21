@@ -95,6 +95,19 @@ boolean_fixture=runtime-rust/examples/boolean_conditional.doc
 shader="$logs/goose-webgpu/conditional.wgsl"
 "$native" "$boolean_fixture" --emit-wgsl chosen "$shader"
 test -s "$shader"
+integer_fixture=runtime-rust/examples/integer_equality.doc
+"$native" "$integer_fixture" --emit-wgsl equal "$logs/goose-webgpu/integer-equality.wgsl"
+test -s "$logs/goose-webgpu/integer-equality.wgsl"
+grep -Fq 'bitcast<i32>(input_0.data[idx])' "$logs/goose-webgpu/integer-equality.wgsl"
+grep -Fq 'bitcast<i32>(input_1.data[idx])' "$logs/goose-webgpu/integer-equality.wgsl"
+for invalid in   'source a: int = 1|derive bad: bool (a) = eq(add(a,1),0)'   'source a: nat = 1|derive bad: bool (a) = eq(a,nat(1))'; do
+    printf '%s\n' "$invalid" | tr '|' '\n' > "$tmp/gpu-ineligible.doc"
+    if "$native" "$tmp/gpu-ineligible.doc" --emit-wgsl bad "$tmp/rejected-int.wgsl"       > "$logs/goose-gpu-ineligible.log" 2>&1; then
+        echo "Goose emitted unsafe signed GPU shader" >&2
+        exit 1
+    fi
+    test ! -e "$tmp/rejected-int.wgsl"
+done
 for target in sum equal; do
     if "$native" "$fixture" --emit-wgsl "$target" "$tmp/rejected.wgsl" > "$logs/goose-typed-wgsl-rejection-$target.log" 2>&1; then
         echo "Goose lowered an unsupported definition: $target" >&2
