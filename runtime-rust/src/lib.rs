@@ -27,7 +27,7 @@ impl Value {
             let source=s.trim();
             let literal=source.strip_prefix('"').and_then(|s|s.strip_suffix('"'))
                 .ok_or("text source requires a quoted UTF-8 value")?;
-            if literal.len()>16384 || literal.chars().any(|ch|matches!(ch,'\n'|'\r'|'"'|'\\')) {
+            if literal.chars().any(|ch|matches!(ch,'\n'|'\r'|'"'|'\\')) {
                 return Err("unsupported text source literal/control sequence".into());
             }
             return Ok(Self::Text(literal.to_string()));
@@ -220,7 +220,7 @@ impl Expr {
             },
             Concat(a,b)=>match (a.eval(args)?,b.eval(args)?) {
                 (Value::Text(mut lhs),Value::Text(rhs))=>{
-                    if lhs.len().checked_add(rhs.len()).is_none_or(|n|n>16384){
+                    if lhs.len().checked_add(rhs.len()).is_none(){
                         return Err("DOC text exceeds 16KiB limit".into());
                     }
                     lhs.push_str(&rhs);
@@ -555,7 +555,7 @@ impl Graph {
                 if raw.len()>8_192{return Err("DOC read effect exceeds 8KiB".into());}
                 let typed=if kind==Type::Text {
                     let data=raw.trim_end_matches(['\r','\n']);
-                    if data.len()>16384 || data.chars().any(|ch|matches!(ch,'\r'|'\n'|'"'|'\\')) {
+                    if data.chars().any(|ch|matches!(ch,'\r'|'\n'|'"'|'\\')) {
                         return Err("DOC text effect exceeds simple literal contract".into());
                     }
                     Value::Text(data.into())

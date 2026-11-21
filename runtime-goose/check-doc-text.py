@@ -51,6 +51,36 @@ with tempfile.TemporaryDirectory(prefix="doc_utf8_") as td:
             if (temp/out).read_bytes()!=(prefix+name+"\n").encode("utf-8"):
                 raise AssertionError(f"{binary} DOC byte emission mismatch")
             cases+=2
+
+    # Long UTF-8 values and explicitly admitted file effects are bounded by
+    # real host resources, not the old artificial 8/16KiB DOC limits.
+    large="世界🙂"*2500
+    large_doc=temp/"large-text.doc"
+    large_doc.write_text(
+        f'source payload: text = "{large}"\n'
+        'derive expanded: text (payload) = concat(payload,text("!"))\n'
+        'derive bytes: int (expanded) = len(expanded)\n',
+        encoding="utf-8")
+    large_file=temp/"large-text-input.txt"
+    large_file.write_text(large,encoding="utf-8")
+    effect_doc=temp/"large-text-effect.doc"
+    effect_doc.write_text(
+        'effect payload: text = read("large-text-input.txt")\n'
+        'derive expanded: text (payload) = concat(payload,text("!"))\n'
+        'derive bytes: int (expanded) = len(expanded)\n',
+        encoding="utf-8")
+    for document in (large_doc,effect_doc):
+        for binary in (rust,goose):
+            stdout=run(binary,document).stdout
+            rows={}
+            for line in stdout.splitlines():
+                if line.startswith(("payload: ","expanded: ","bytes: ")):
+                    name,value=line.split(": ",1)
+                    rows[name]=value
+            if rows!={"payload":large,"expanded":large+"!",
+                      "bytes":str(len((large+"!").encode("utf-8")))}:
+                raise AssertionError(f"{binary} large UTF-8 DOC mismatch")
+            cases+=1
     rec="runtime-rust/examples/text_recurrence.doc"
     for epochs in (0,1,2,3,20,60):
         for binary in (rust,goose):
