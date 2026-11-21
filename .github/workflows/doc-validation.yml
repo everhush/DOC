@@ -344,6 +344,29 @@ jobs:
             2>&1 | tee validation-logs/hardware-repair.log
           test "$(grep -c '^DOC_WEBGPU_COMPUTE_PASS:' validation-logs/hardware-repair.log)" = 2
           grep -E 'DOC_WEBGPU_ADAPTER:.*type=(IntegratedGpu|DiscreteGpu)' validation-logs/hardware-repair.log
+      - name: Download independent Goose-generated signed WGSL
+        uses: actions/download-artifact@v4
+        with:
+          name: doc-goose-webgpu-input
+          path: validation-logs/goose-webgpu
+      - name: Verify actual physical-GPU DOC signed equality and dependent reduction
+        run: |
+          set -euo pipefail
+          DOC_GPU_LANES=257 cargo run --release --manifest-path runtime-rust/Cargo.toml \
+            --features webgpu --example webgpu_integer_eq \
+            -- --shader validation-logs/goose-webgpu/integer-equality.wgsl \
+            2>&1 | tee validation-logs/hardware-signed-goose.log
+          test "$(grep -c '^DOC_SIGNED_WEBGPU_COMPUTE_PASS:' validation-logs/hardware-signed-goose.log)" = 2
+          grep -E 'DOC_SIGNED_WEBGPU_ADAPTER:.*type=(IntegratedGpu|DiscreteGpu)' \
+            validation-logs/hardware-signed-goose.log
+          DOC_GPU_LANES=256 DOC_GPU_REDUCTION=1 cargo run --release \
+            --manifest-path runtime-rust/Cargo.toml --features webgpu \
+            --example webgpu_bool -- --staged-shaders-repair \
+            validation-logs/goose-webgpu/stage-1.wgsl \
+            validation-logs/goose-webgpu/stage-2.wgsl \
+            2>&1 | tee validation-logs/hardware-goose-reduction.log
+          test "$(grep -c '^DOC_WEBGPU_REDUCTION_PASS:' validation-logs/hardware-goose-reduction.log)" = 2
+          echo DOC_HARDWARE_SIGNED_AND_REDUCTION_PASS
       - name: Preserve physical GPU evidence even on failures
         if: always()
         uses: actions/upload-artifact@v4
