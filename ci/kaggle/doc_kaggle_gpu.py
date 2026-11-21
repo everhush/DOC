@@ -240,6 +240,13 @@ def test_physical_gpu(repo, goose_gpu, rust_signed, rust_bool):
         raise RuntimeError("Rust wgpu versus Goose SDL3 GPU result parity mismatch")
     return 77, 42
 
+def nearest_rank_p95(values):
+    """95th percentile (nearest-rank) of nonempty measured samples."""
+    if not values:
+        raise ValueError("p95 requires at least one sample")
+    ordered = sorted(values)
+    return ordered[(95 * len(ordered) + 99) // 100 - 1]
+
 def benchmark_hardware_gpu(repo, goose_gpu, rust_signed):
     """Matched subprocess GPU timings; NOT isolated kernel-time comparisons."""
     if DEADLINE - time.monotonic() < 240:
@@ -313,7 +320,7 @@ def benchmark_hardware_gpu(repo, goose_gpu, rust_signed):
             results[mode+"/"+runtime]={
                 "count":len(values),
                 "median_ms":round(statistics.median(values),4),
-                "p95_ms":values[-1],
+                "p95_ms":nearest_rank_p95(values),
                 "max_ms":values[-1],
             }
     result={
