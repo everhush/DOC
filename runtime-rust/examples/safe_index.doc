@@ -1,0 +1,9 @@
+# A safe, directly authored DOC fallible indexed lookup.
+source xs: ints = [4,-5,9]
+source index: int = 1
+source prior: maybe_int = none
+derive looked: maybe_int (xs,index) = try_get(xs,index)
+derive value: int (looked) = unwrap_or(looked,42)
+derive absent: bool (looked) = eq(looked,none())
+derive preferred: maybe_int (prior,looked) = if(eq(prior,none()),looked,prior)
+derive actual: int (preferred) = unwrap_or(preferred,-1)
