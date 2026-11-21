@@ -1,0 +1,92 @@
+name: DOC Kaggle physical GPU parity (quota gated)
+
+# A separate Kaggle notebook is the hardware GPU runner. The regular workflow
+# still validates CPU behavior and Mesa software Vulkan without using quota.
+# Automatic Kaggle consumption is OFF unless DOC_KAGGLE_AUTORUN=true.
+on:
+  workflow_dispatch:
+    inputs:
+      accelerator:
+        description: Kaggle physical GPU type (account availability varies)
+        type: choice
+        required: true
+        default: NvidiaTeslaT4
+        options:
+          - NvidiaTeslaT4
+          - NvidiaL4
+      minutes:
+        description: Max remote GPU runtime including native builds
+        type: choice
+        required: true
+        default: '30'
+        options:
+          - '15'
+          - '20'
+          - '30'
+  workflow_run:
+    workflows: ['DOC dual-runtime validation']
+    types: [completed]
+    branches: [feat/webgpu-dual-runtime-ci]
+
+permissions:
+  contents: read
+  actions: read
+
+# Do not cancel the GitHub controller once it launches a remote notebook:
+# Kaggle sessions may continue consuming quota after GitHub cancellation.
+concurrency:
+  group: doc-kaggle-physical-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  physical-doc-parity:
+    name: Kaggle Rust wgpu vs Goose SDL3 physical GPU
+    if: >-
+      ${{
+        (github.event_name == 'workflow_dispatch' &&
+         github.ref_name == 'feat/webgpu-dual-runtime-ci') ||
+        (github.event_name == 'workflow_run' &&
+         vars.DOC_KAGGLE_AUTORUN == 'true' &&
+         github.event.workflow_run.conclusion == 'success' &&
+         github.event.workflow_run.event == 'push' &&
+         github.event.workflow_run.head_repository.full_name == github.repository &&
+         github.event.workflow_run.head_branch == 'feat/webgpu-dual-runtime-ci')
+      }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 65
+    steps:
+      - name: Check out the exact trusted DOC revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: No-GPU quota, credential and evidence unit tests
+        run: python3 -m unittest discover -s ci/kaggle -p 'test_*.py' -v
+      - name: Install official Kaggle CLI
+        run: python3 -m pip install --disable-pip-version-check 'kaggle>=2.2.1,<3' 'six>=1.16'
+      - name: Check actual Kaggle quota, submit private notebook and verify physical GPUs
+        env:
+          # Secret stays in the GHA dispatcher, never in Kaggle notebook code.
+          KAGGLE_DOC_1: ${{ secrets.KAGGLE_DOC_1 }}
+          GITHUB_TOKEN: ${{ github.token }}
+          DOC_KAGGLE_USERNAME: ${{ vars.DOC_KAGGLE_USERNAME }}
+          DOC_TARGET_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+          DOC_KAGGLE_ACCELERATOR: ${{ inputs.accelerator || 'NvidiaTeslaT4' }}
+          DOC_KAGGLE_MINUTES: ${{ inputs.minutes || '30' }}
+        run: |
+          set -euo pipefail
+          python3 ci/kaggle/dispatch.py \
+            --accelerator "$DOC_KAGGLE_ACCELERATOR" \
+            --minutes "$DOC_KAGGLE_MINUTES" \
+            --output kaggle-validation
+      - name: Retain non-secret quota, Vulkan, Goose, Rust and GPU parity logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: doc-kaggle-physical-gpu-${{ github.run_id }}
+          path: kaggle-validation/
+          retention-days: 14
+          if-no-files-found: warn
