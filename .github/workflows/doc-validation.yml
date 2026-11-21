@@ -102,6 +102,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: runtime-rust
+          shared-key: ubuntu2404-glibc239-gpu
       - name: Install Mesa Vulkan for actual Rust WebGPU dispatch
         run: |
           set -euo pipefail
@@ -330,7 +331,7 @@ jobs:
           path: |
             /tmp/doc-sdl3-goose
             /tmp/doc-sdl3-build
-          key: goose-sdl3-gfx-v1-9412b80f52d833c4697cffdbbf1f4eeb5195cd41-v2
+          key: goose-sdl3-gfx-v1-9412b80f52d833c4697cffdbbf1f4eeb5195cd41-v2-glibc239
       - name: Build pinned native Goose with third-party SDL3 gfx
         if: steps.goose-sdl3-cache.outputs.cache-hit != 'true'
         run: |
@@ -350,7 +351,7 @@ jobs:
           path: |
             /tmp/doc-sdl3-goose
             /tmp/doc-sdl3-build
-          key: goose-sdl3-gfx-v1-9412b80f52d833c4697cffdbbf1f4eeb5195cd41-v2
+          key: goose-sdl3-gfx-v1-9412b80f52d833c4697cffdbbf1f4eeb5195cd41-v2-glibc239
       - name: Native Goose SDL3 compiler, module and executable validation
         run: |
           set -euo pipefail
