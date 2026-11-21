@@ -286,20 +286,168 @@ fn inspect(nodes: State[:], values: Value[:], id: i64, execute: bool) -> Value {
     if skip(body,end) != body.len || value.kind != node.kind { fail(); }
     return value;
 }
+// Independent Goose frontend expansion of bounded, pure reusable DOC
+// functions. Expansion happens before existing type-check/evaluation.
+// No separate compiler, FFI call or cross-runtime dependency is involved.
+struct UserFn {
+    name: u8[..64],
+    formals: u8[..256],
+    body: u8[..512],
+    count: i64,
+}
+fn function_index(functions: UserFn[:], name: u8[:]) -> i64 {
+    for i in 0..functions.len {
+        if functions[i].name == name { return i; }
+    }
+    return -1;
+}
+fn function_reserved(name: u8[:]) -> bool {
+    return name == "add" || name == "sub" || name == "mul" ||
+           name == "eq" || name == "lt" || name == "le" ||
+           name == "nat" || name == "if" || name == "fn" ||
+           name == "source" || name == "derive";
+}
+recursive fn expand_function_calls(source: u8[:], functions: UserFn[:],
+                                   depth: i64) -> u8[>..] {
+    if depth > 32 || source.len > 4096 { fail(); }
+    var output: u8[>..] = [];
+    var i = 0;
+    while i < source.len {
+        if (source[i] >= 'a' && source[i] <= 'z') ||
+           (source[i] >= 'A' && source[i] <= 'Z') ||
+           source[i] == '_' {
+            var end = i + 1;
+            while end < source.len && ident(source[end]) { end++; }
+            let word = source[i..end];
+            let target = function_index(functions,word);
+            let open = skip(source,end);
+            if target >= 0 && open < source.len && source[open] == '(' {
+                var arguments: u8[..512][>..] = [];
+                var cursor = open + 1;
+                var begin = cursor;
+                var nested = 0;
+                loop {
+                    if cursor >= source.len { fail(); }
+                    let ch = source[cursor];
+                    if ch == '(' {
+                        nested++;
+                    } else if ch == ')' {
+                        if nested > 0 { nested--; }
+                        else {
+                            if cursor > begin {
+                                let argument = trim(source[begin..cursor]);
+                                if argument.len == 0 { fail(); }
+                                arguments.push(
+                                    expand_function_calls(argument,functions,depth+1));
+                            } else if arguments.len > 0 { fail(); }
+                            cursor++;
+                            break;
+                        }
+                    } else if ch == ',' && nested == 0 {
+                        let argument = trim(source[begin..cursor]);
+                        if argument.len == 0 { fail(); }
+                        arguments.push(
+                            expand_function_calls(argument,functions,depth+1));
+                        begin = cursor+1;
+                    }
+                    cursor++;
+                }
+                let user_function = functions[target];
+                if arguments.len != user_function.count { fail(); }
+                var substituted: u8[>..] = [];
+                let body = user_function.body[..];
+                var p = 0;
+                while p < body.len {
+                    if (body[p] >= 'a' && body[p] <= 'z') ||
+                       (body[p] >= 'A' && body[p] <= 'Z') ||
+                       body[p] == '_' {
+                        var next = p + 1;
+                        while next < body.len && ident(body[next]) { next++; }
+                        let name = body[p..next];
+                        var matched = false;
+                        var idx = 0;
+                        if user_function.count > 0 {
+                            for formal in split(user_function.formals[..],',') {
+                                if trim(formal) == name {
+                                    substituted.append(arguments[idx]);
+                                    matched = true;
+                                    break;
+                                }
+                                idx++;
+                            }
+                        }
+                        if !matched { substituted.append(name); }
+                        p = next;
+                    } else {
+                        substituted.push(body[p]);
+                        p++;
+                    }
+                }
+                output.append(expand_function_calls(substituted,functions,depth+1));
+                i = cursor;
+            } else {
+                output.append(word);
+                i = end;
+            }
+        } else {
+            output.push(source[i]);
+            i++;
+        }
+        if output.len > 512 { fail(); }
+    }
+    return output;
+}
+
 fn load(source: u8[:], nodes: State[>..]&, values: Value[>..]&,
         active: bool[>..]&) {
+    var functions: UserFn[>..] = [];
     for original in split(source,'\n') {
         var n = 0;
         while n < original.len && original[n] != '#' { n++; }
         let line = trim(original[..n]);
         if line.len == 0 { continue; }
-        if starts_with(line,"source ") {
+        if starts_with(line,"fn ") {
+            let rest = line[3..];
+            let assign = find(rest,"=");
+            if assign < 0 || functions.len >= 64 { fail(); }
+            let signature = trim(rest[..assign]);
+            let open = find(signature,"(");
+            if open <= 0 || signature[signature.len - 1] != ')' { fail(); }
+            let name = trim(signature[..open]);
+            if !valid_name(name) || function_reserved(name) ||
+               lookup(nodes,name) >= 0 || function_index(functions,name) >= 0 {
+                fail();
+            }
+            let formals = trim(signature[open+1..signature.len-1]);
+            if formals.len > 256 { fail(); }
+            var count = 0;
+            if formals.len > 0 {
+                for part in split(formals,',') {
+                    let formal = trim(part);
+                    if !valid_name(formal) || function_reserved(formal) ||
+                       count >= 4 { fail(); }
+                    var i = 0;
+                    for previous in split(formals,',') {
+                        if i >= count { break; }
+                        if trim(previous) == formal { fail(); }
+                        i++;
+                    }
+                    count++;
+                }
+            }
+            let body = trim(rest[assign+1..]);
+            if body.len == 0 || body.len > 512 { fail(); }
+            functions.push(UserFn {
+                name: name, formals: formals, body: body, count: count,
+            });
+        } else if starts_with(line,"source ") {
             let rest = line[7..];
             let colon = find(rest,":");
             let assign = find(rest,"=");
             if colon <= 0 || assign <= colon { fail(); }
             let name = trim(rest[..colon]);
-            if !valid_name(name) || lookup(nodes,name) >= 0 { fail(); }
+            if !valid_name(name) || lookup(nodes,name) >= 0 ||
+               function_index(functions,name) >= 0 { fail(); }
             let kind = type_name(trim(rest[colon + 1..assign]));
             let value = parse_value(trim(rest[assign + 1..]),kind);
             nodes.push(State {
@@ -318,12 +466,14 @@ fn load(source: u8[:], nodes: State[>..]&, values: Value[>..]&,
             if signature[signature.len - 1] != ')' { fail(); }
             let close = signature.len - 1;
             let name = trim(rest[..colon]);
-            if !valid_name(name) || lookup(nodes,name) >= 0 { fail(); }
+            if !valid_name(name) || lookup(nodes,name) >= 0 ||
+               function_index(functions,name) >= 0 { fail(); }
             let kind = type_name(trim(rest[colon + 1..open]));
             let body = trim(rest[assign + 1..]);
             if body.len == 0 || body.len > 512 { fail(); }
+            let expanded = expand_function_calls(body,functions,0);
             var node = State {
-                name: name, expression: body, premise: [0;16],
+                name: name, expression: expanded, premise: [0;16],
                 count: 0, kind: kind, derived: true,
             };
             let names = trim(rest[open + 1..close]);
