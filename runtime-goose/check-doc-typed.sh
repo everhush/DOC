@@ -89,69 +89,14 @@ test "$goose_syntax" = "$expected_syntax"
 test "$rust_syntax" = "$expected_syntax"
 printf '%s\n' "$goose_syntax" | tee "$logs/goose-typed-shared-syntax.log"
 
-# Export the independently lowered shader and independently evaluated CPU oracle.
-mkdir -p "$logs/goose-webgpu"
-boolean_fixture=runtime-rust/examples/boolean_conditional.doc
-shader="$logs/goose-webgpu/conditional.wgsl"
-"$native" "$boolean_fixture" --emit-wgsl chosen "$shader"
-test -s "$shader"
-integer_fixture=runtime-rust/examples/integer_equality.doc
-"$native" "$integer_fixture" --emit-wgsl equal "$logs/goose-webgpu/integer-equality.wgsl"
-test -s "$logs/goose-webgpu/integer-equality.wgsl"
-ordered_fixture=runtime-rust/examples/integer_ordering.doc
-"$native" "$ordered_fixture" --emit-wgsl less "$logs/goose-webgpu/integer-less.wgsl"
-"$native" "$ordered_fixture" --emit-wgsl less_or_equal "$logs/goose-webgpu/integer-le.wgsl"
-grep -Fq 'a0 < a1' "$logs/goose-webgpu/integer-less.wgsl"
-grep -Fq 'a0 <= a1' "$logs/goose-webgpu/integer-le.wgsl"
-grep -Fq 'bitcast<i32>(input_0.data[idx])' "$logs/goose-webgpu/integer-equality.wgsl"
-grep -Fq 'bitcast<i32>(input_1.data[idx])' "$logs/goose-webgpu/integer-equality.wgsl"
-for invalid in   'source a: int = 1|derive bad: bool (a) = eq(add(a,1),0)'   'source a: nat = 1|derive bad: bool (a) = eq(a,nat(1))'; do
-    printf '%s\n' "$invalid" | tr '|' '\n' > "$tmp/gpu-ineligible.doc"
-    if "$native" "$tmp/gpu-ineligible.doc" --emit-wgsl bad "$tmp/rejected-int.wgsl"       > "$logs/goose-gpu-ineligible.log" 2>&1; then
-        echo "Goose emitted unsafe signed GPU shader" >&2
-        exit 1
-    fi
-    test ! -e "$tmp/rejected-int.wgsl"
-done
-for target in sum equal; do
-    if "$native" "$fixture" --emit-wgsl "$target" "$tmp/rejected.wgsl" > "$logs/goose-typed-wgsl-rejection-$target.log" 2>&1; then
-        echo "Goose lowered an unsupported definition: $target" >&2
-        exit 1
-    fi
-    grep -Fx DOC_TYPED_ERROR "$logs/goose-typed-wgsl-rejection-$target.log"
-    test ! -e "$tmp/rejected.wgsl"
-done
-write_gpu_oracle() {
-    local source=$1 target=$2 a b lane result
-    declare -A oracle_word
-    for a in false true; do
-        for b in false true; do
-            result=$("$native" "$source" "a=$a" "b=$b" | grep "^$target: ")
-            case "$result" in
-                "$target: true") oracle_word[$a,$b]=1 ;;
-                "$target: false") oracle_word[$a,$b]=0 ;;
-                *) exit 1 ;;
-            esac
-        done
-    done
-    {
-        printf 'DOC_WEBGPU_COMPUTE_PASS: ['
-        for ((lane = 0; lane < 130; lane++)); do
-            a=false b=false
-            if ((lane % 3 == 0)); then a=true; fi
-            if ((lane % 5 < 2)); then b=true; fi
-            if ((lane > 0)); then printf ', '; fi
-            printf '%s' "${oracle_word[$a,$b]}"
-        done
-        printf ']\n'
-    }
-}
-
-write_gpu_oracle "$boolean_fixture" chosen > "$logs/goose-webgpu/expected.txt"
-staged_fixture=runtime-rust/examples/boolean_staged.doc
-"$native" "$staged_fixture" --emit-wgsl chosen "$logs/goose-webgpu/stage-1.wgsl"
-"$native" "$staged_fixture" --emit-wgsl verified "$logs/goose-webgpu/stage-2.wgsl"
-write_gpu_oracle "$staged_fixture" verified > "$logs/goose-webgpu/staged-expected.txt"
+# SDL3 GPU correctness is now covered exclusively by native Goose gfx.
+# The previous Goose WGSL generator and CLI are deliberately unsupported.
+if "$native" runtime-rust/examples/boolean_conditional.doc --emit-wgsl chosen "$tmp/obsolete.wgsl" \
+    > "$logs/goose-removed-wgsl-path.log" 2>&1; then
+    echo "Removed Goose WGSL generator unexpectedly reappeared" >&2
+    exit 1
+fi
+test ! -e "$tmp/obsolete.wgsl"
 
 # Independent native epoch engines, unchanged DOC source and a closed-form oracle.
 triangle=runtime-rust/examples/triangular.doc
