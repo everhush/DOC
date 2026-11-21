@@ -307,61 +307,63 @@ fn function_reserved(name: u8[:]) -> bool {
            name == "nat" || name == "if" || name == "fn" ||
            name == "source" || name == "derive";
 }
-recursive fn expand_function_calls(source: u8[:], functions: UserFn[:],
-                                   depth: i64) -> u8[>..] {
-    if depth > 32 || source.len > 4096 { fail(); }
+// Iterative expansion is required by Goose's strict scope checks: no
+// growable arrays remain live across a recursive call. Each pass lowers the
+// outermost user call; nested calls are expanded in subsequent passes.
+// A nonterminating function cycle is rejected after a bounded number of
+// passes, before source execution or publication.
+fn expand_function_pass(source: u8[:], functions: UserFn[:])
+    -> u8[>..], bool {
     var output: u8[>..] = [];
+    var changed = false;
     var i = 0;
     while i < source.len {
         if (source[i] >= 'a' && source[i] <= 'z') ||
            (source[i] >= 'A' && source[i] <= 'Z') ||
            source[i] == '_' {
-            var end = i + 1;
+            var end = i+1;
             while end < source.len && ident(source[end]) { end++; }
             let word = source[i..end];
             let target = function_index(functions,word);
             let open = skip(source,end);
             if target >= 0 && open < source.len && source[open] == '(' {
                 var arguments: u8[..512][>..] = [];
-                var cursor = open + 1;
+                var cursor = open+1;
                 var begin = cursor;
-                var nested = 0;
+                var nesting = 0;
                 loop {
                     if cursor >= source.len { fail(); }
                     let ch = source[cursor];
                     if ch == '(' {
-                        nested++;
+                        nesting++;
                     } else if ch == ')' {
-                        if nested > 0 { nested--; }
+                        if nesting > 0 { nesting--; }
                         else {
                             if cursor > begin {
                                 let argument = trim(source[begin..cursor]);
                                 if argument.len == 0 { fail(); }
-                                arguments.push(
-                                    expand_function_calls(argument,functions,depth+1));
+                                arguments.push(argument);
                             } else if arguments.len > 0 { fail(); }
                             cursor++;
                             break;
                         }
-                    } else if ch == ',' && nested == 0 {
+                    } else if ch == ',' && nesting == 0 {
                         let argument = trim(source[begin..cursor]);
                         if argument.len == 0 { fail(); }
-                        arguments.push(
-                            expand_function_calls(argument,functions,depth+1));
+                        arguments.push(argument);
                         begin = cursor+1;
                     }
                     cursor++;
                 }
                 let user_function = functions[target];
                 if arguments.len != user_function.count { fail(); }
-                var substituted: u8[>..] = [];
                 let body = user_function.body[..];
                 var p = 0;
                 while p < body.len {
                     if (body[p] >= 'a' && body[p] <= 'z') ||
                        (body[p] >= 'A' && body[p] <= 'Z') ||
                        body[p] == '_' {
-                        var next = p + 1;
+                        var next = p+1;
                         while next < body.len && ident(body[next]) { next++; }
                         let name = body[p..next];
                         var matched = false;
@@ -369,22 +371,22 @@ recursive fn expand_function_calls(source: u8[:], functions: UserFn[:],
                         if user_function.count > 0 {
                             for formal in split(user_function.formals[..],',') {
                                 if trim(formal) == name {
-                                    substituted.append(arguments[idx]);
+                                    output.append(arguments[idx]);
                                     matched = true;
                                     break;
                                 }
                                 idx++;
                             }
                         }
-                        if !matched { substituted.append(name); }
+                        if !matched { output.append(name); }
                         p = next;
                     } else {
-                        substituted.push(body[p]);
+                        output.push(body[p]);
                         p++;
                     }
                 }
-                output.append(expand_function_calls(substituted,functions,depth+1));
                 i = cursor;
+                changed = true;
             } else {
                 output.append(word);
                 i = end;
@@ -395,7 +397,21 @@ recursive fn expand_function_calls(source: u8[:], functions: UserFn[:],
         }
         if output.len > 512 { fail(); }
     }
-    return output;
+    return output, changed;
+}
+fn expand_function_calls(source: u8[:],functions: UserFn[:],
+                         depth: i64) -> u8[>..] {
+    if depth != 0 || source.len > 512 { fail(); }
+    var current: u8[>..] = [];
+    current.append(source);
+    for pass in 0..33 {
+        let next, changed = expand_function_pass(current,functions);
+        if !changed { return next; }
+        current.resize(0,0);
+        current.append(next);
+    }
+    fail();
+    return current;
 }
 
 fn load(source: u8[:], nodes: State[>..]&, values: Value[>..]&,
