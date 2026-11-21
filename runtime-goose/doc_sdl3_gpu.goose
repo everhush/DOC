@@ -11,7 +11,7 @@
 import std;
 import os;
 import gfx;
-import .doc_typed;
+import .doc_typed_core;
 
 struct Params { count: u32, operation: u32, pad 8 }
 
