@@ -56,8 +56,13 @@ class KaggleDispatchPolicy(unittest.TestCase):
             self.assertEqual(env["KAGGLE_API_TOKEN"],"FAKE_TOKEN")
             self.assertFalse((Path(temp)/"kaggle.json").exists())
         with tempfile.TemporaryDirectory() as temp:
-            with self.assertRaises(ValueError):
-                module.auth_environment("FAKE_TOKEN",Path(temp),"")
+            from unittest.mock import patch
+            from subprocess import CompletedProcess
+            fake = CompletedProcess(["kaggle","config","view"],0,
+                "- username: TestOwner\\n", "")
+            with patch.object(module.subprocess,"run",return_value=fake):
+                env,owner=module.auth_environment("FAKE_TOKEN",Path(temp),"")
+            self.assertEqual(owner,"testowner")
     def test_exact_sha_and_no_stale_parity(self):
         fields={"repo":"x0796666-ui/DOC","sha":"a"*40,"run_id":"123",
                 "attempt":"1","minutes":30,"accelerator":"NvidiaTeslaT4"}
@@ -75,14 +80,22 @@ class KaggleDispatchPolicy(unittest.TestCase):
             out=Path(temp)/"remote"
             out.mkdir()
             with tarfile.open(out/"doc-kaggle-logs.tar.gz","w:gz") as archive:
-                for name in ("report/native-gpu-equivalence.log",
-                             "goose/goose-sdl3/doc-goose-sdl3-summary.log"):
+                evidence={
+                    "report/native-gpu-equivalence.log":
+                        "DOC_RUST_WGPU_GOOSE_SDL3_PARITY_PASS: 42 observed GPU episodes",
+                    "goose/goose-sdl3/doc-goose-sdl3-summary.log":
+                        "DOC_GOOSE_SDL3_NATIVE_PARITY_PASS: 77 checks",
+                    "physical-vulkan.log":"deviceType = PHYSICAL_DEVICE_TYPE_DISCRETE_GPU",
+                    "nvidia-smi.log":"GPU 0: Tesla T4",
+                }
+                for name,content in evidence.items():
                     path=Path(temp)/name
                     path.parent.mkdir(parents=True,exist_ok=True)
-                    path.write_text("DOC oracle evidence")
+                    path.write_text(content)
                     archive.add(path,arcname=name)
             result={"sha":"b"*40,"run_id":"123","result":"pass",
                     "hardware":True,"backend":"vulkan",
+                    "accelerator":"NvidiaTeslaT4","max_gpu_minutes":30,
                     "goose_sdl3_checks":77,"dual_backend_episodes":42}
             (out/"doc-kaggle-summary.json").write_text(json.dumps(result))
             with self.assertRaises(AssertionError):
