@@ -125,6 +125,13 @@ fn run_doc_cli() {
             run_recurrence(nodes,values,active,cap,halt,4);
             return;
         }
+        if starts_with(mode,"--replace-pinned=") {
+            if arg_count()!=3 { fail(); }
+            let next_path=mode[17..];
+            if next_path.len==0 || !safe_doc_path(next_path) { fail(); }
+            replace_pinned_proof(nodes,values,active,next_path);
+            return;
+        }
         if starts_with(mode,"--replace=") {
             if arg_count()!=3 { fail(); }
             let next_path=mode[10..];

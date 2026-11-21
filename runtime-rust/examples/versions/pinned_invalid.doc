@@ -1,0 +1,4 @@
+source msg: text = "new-default"
+source items: ints = [0]
+source n: nat = 10
+derive broken: int (items) = get(items,-1)
