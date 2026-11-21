@@ -3,6 +3,7 @@
 pub mod recurrence;
 pub mod wgsl;
 pub mod nat;
+pub mod publication;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::thread;
 
@@ -617,7 +618,7 @@ pub struct Stats {
     pub frontiers:u64,pub evaluations:u64,pub publications:u64,
     pub cutoffs:u64,pub updates:u64
 }
-#[derive(Debug)]
+#[derive(Clone,Debug)]
 pub struct Runtime {
     pub graph:Graph,values:Vec<Option<Value>>,active:Vec<bool>,
     pub cutoff:Cutoff,pub workers:usize,pub stats:Stats,pub generation:u64,
