@@ -1,0 +1,16 @@
+# Four-lane sorting network in DOC: five compare-exchange gates.
+# Same untouched source in independent Rust and Goose runtimes.
+source a: nat = 99999999999999999999
+source b: nat = 12
+source c: nat = 100000000000000000000
+source d: nat = 0
+derive ab_low: nat (a,b) = if(le(a,b),a,b)
+derive ab_high: nat (a,b) = if(le(a,b),b,a)
+derive cd_low: nat (c,d) = if(le(c,d),c,d)
+derive cd_high: nat (c,d) = if(le(c,d),d,c)
+derive first: nat (ab_low,cd_low) = if(le(ab_low,cd_low),ab_low,cd_low)
+derive mid_left: nat (ab_low,cd_low) = if(le(ab_low,cd_low),cd_low,ab_low)
+derive mid_right: nat (ab_high,cd_high) = if(le(ab_high,cd_high),ab_high,cd_high)
+derive fourth: nat (ab_high,cd_high) = if(le(ab_high,cd_high),cd_high,ab_high)
+derive second: nat (mid_left,mid_right) = if(le(mid_left,mid_right),mid_left,mid_right)
+derive third: nat (mid_left,mid_right) = if(le(mid_left,mid_right),mid_right,mid_left)
