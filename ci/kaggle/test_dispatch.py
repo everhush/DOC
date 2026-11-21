@@ -59,7 +59,7 @@ class KaggleDispatchPolicy(unittest.TestCase):
             from unittest.mock import patch
             from subprocess import CompletedProcess
             fake = CompletedProcess(["kaggle","config","view"],0,
-                "- username: TestOwner\\n", "")
+                "- username: TestOwner\n", "")
             with patch.object(module.subprocess,"run",return_value=fake):
                 env,owner=module.auth_environment("FAKE_TOKEN",Path(temp),"")
             self.assertEqual(owner,"testowner")
