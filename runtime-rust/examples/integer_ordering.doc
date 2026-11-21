@@ -1,0 +1,6 @@
+# Signed numeric ordering is pure and eligible on portable WGSL i32
+# only with checked host admission; DOC semantics stay i64.
+source a: int = -1
+source b: int = 1
+derive less: bool (a,b) = lt(a,b)
+derive less_or_equal: bool (a,b) = le(a,b)

@@ -98,6 +98,11 @@ test -s "$shader"
 integer_fixture=runtime-rust/examples/integer_equality.doc
 "$native" "$integer_fixture" --emit-wgsl equal "$logs/goose-webgpu/integer-equality.wgsl"
 test -s "$logs/goose-webgpu/integer-equality.wgsl"
+ordered_fixture=runtime-rust/examples/integer_ordering.doc
+"$native" "$ordered_fixture" --emit-wgsl less "$logs/goose-webgpu/integer-less.wgsl"
+"$native" "$ordered_fixture" --emit-wgsl less_or_equal "$logs/goose-webgpu/integer-le.wgsl"
+grep -Fq 'a0 < a1' "$logs/goose-webgpu/integer-less.wgsl"
+grep -Fq 'a0 <= a1' "$logs/goose-webgpu/integer-le.wgsl"
 grep -Fq 'bitcast<i32>(input_0.data[idx])' "$logs/goose-webgpu/integer-equality.wgsl"
 grep -Fq 'bitcast<i32>(input_1.data[idx])' "$logs/goose-webgpu/integer-equality.wgsl"
 for invalid in   'source a: int = 1|derive bad: bool (a) = eq(add(a,1),0)'   'source a: nat = 1|derive bad: bool (a) = eq(a,nat(1))'; do

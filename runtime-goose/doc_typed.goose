@@ -538,8 +538,11 @@ fn emit_signed_equality(nodes: State[:], node: State, path: u8[:]) {
     let rhs = node.premise[1];
     if nodes[lhs].kind != 1 || nodes[rhs].kind != 1 { fail(); }
     let raw = trim(node.expression[..]);
-    if raw.len < 6 || !starts_with(raw, "eq(") ||
-       raw[raw.len - 1] != ')' { fail(); }
+    if raw.len < 6 || raw[raw.len - 1] != ')' { fail(); }
+    let comparator = if starts_with(raw,"eq(") { "==" }
+        else if starts_with(raw,"lt(") { "<" }
+        else if starts_with(raw,"le(") { "<=" }
+        else { fail(); "==" };
     let operands = raw[3..raw.len - 1];
     let comma = find(operands,",");
     if comma <= 0 { fail(); }
@@ -563,7 +566,12 @@ fn emit_signed_equality(nodes: State[:], node: State, path: u8[:]) {
     out.append("  if (idx >= arrayLength(&input_1.data)) { return; }\n");
     out.append("  let a0: i32 = bitcast<i32>(input_0.data[idx]);\n");
     out.append("  let a1: i32 = bitcast<i32>(input_1.data[idx]);\n");
-    out.append("  result.data[idx] = select(0u, 1u, a0 == a1);\n}\n");
+    out.append("  result.data[idx] = select(0u, 1u, ");
+    if reversed && !forwards { out.append("a1 "); }
+    else { out.append("a0 "); }
+    out.append(comparator);
+    if reversed && !forwards { out.append(" a0);\n}\n"); }
+    else { out.append(" a1);\n}\n"); }
     if !write_file_atomic(path,out) { fail(); }
 }
 
