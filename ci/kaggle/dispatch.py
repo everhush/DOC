@@ -48,7 +48,7 @@ def gpu_remaining_hours(blob):
         raise ValueError("Missing or ambiguous GPU quota: refusing to submit")
     return quota_hours(rows[0]["remaining"])
 
-def github_recent_attempts(data, current_run, now):
+def github_recent_attempts(data, current_run, now, attempted=None):
     runs = data.get("workflow_runs") if isinstance(data, dict) else None
     if not isinstance(runs, list) or len(runs) >= 100:
         raise ValueError("Incomplete workflow-run history: refusing to submit")
@@ -60,8 +60,14 @@ def github_recent_attempts(data, current_run, now):
         created = run.get("created_at")
         if not created:
             raise ValueError("Missing run timestamp")
-        if dt.datetime.fromisoformat(created.replace("Z", "+00:00")) >= since:
-            count += 1
+        timestamp = dt.datetime.fromisoformat(created.replace("Z", "+00:00"))
+        if timestamp < since or run.get("conclusion") == "skipped":
+            continue
+        # workflow_run events exist even when DOC_KAGGLE_AUTORUN=false.
+        # Only real non-skipped GPU jobs may consume the two-run budget.
+        if attempted is not None and not attempted(str(run["id"])):
+            continue
+        count += 1
     return count
 
 def status_from_cli(value):
@@ -120,7 +126,23 @@ def github_attempts(repo, token, current_run):
         "Accept": "application/vnd.github+json",
         "X-GitHub-Api-Version": "2022-11-28"})
     with urllib.request.urlopen(req, timeout=30) as reply:
-        return github_recent_attempts(json.load(reply), current_run, dt.datetime.now(dt.timezone.utc))
+        history = json.load(reply)
+    def attempted(run_id):
+        uri = f"https://api.github.com/repos/{repo}/actions/runs/{run_id}/jobs?per_page=100"
+        jobs_req = urllib.request.Request(uri, headers={
+            "Authorization": "Bearer " + token,
+            "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28"})
+        with urllib.request.urlopen(jobs_req, timeout=30) as response:
+            jobs = json.load(response)
+        entries = jobs.get("jobs")
+        if not isinstance(entries, list) or len(entries) >= 100:
+            raise ValueError("Incomplete historical GPU job status")
+        return any(
+            "Kaggle Rust wgpu vs Goose SDL3 physical GPU" in item.get("name", "")
+            and item.get("conclusion") != "skipped"
+            for item in entries)
+    return github_recent_attempts(history, current_run, dt.datetime.now(dt.timezone.utc), attempted)
 
 def prepare_kernel(folder, template, spec, username):
     folder.mkdir(parents=True, exist_ok=False)
