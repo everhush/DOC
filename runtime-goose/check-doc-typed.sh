@@ -223,7 +223,7 @@ done
 # Version boundary: a successful epoch may precede a failed next generation.
 # This tests observable publication, not physical snapshot retention/reclamation.
 cat > "$tmp/epoch-overflow.doc" <<'DOC'
-source counter: int = 9223372036854775806
+source counter: int = 9223372036854775805
 derive next_counter: int (counter) = add(counter,1)
 DOC
 for bin in "$native" "$rust"; do
@@ -235,7 +235,7 @@ for bin in "$native" "$rust"; do
     fi
     grep -Fx 'epoch: 0' "$logs/epoch-overflow-$label.log" >/dev/null
     grep -Fx 'epoch: 1' "$logs/epoch-overflow-$label.log" >/dev/null
-    grep -Fx 'counter: 9223372036854775807' "$logs/epoch-overflow-$label.log" >/dev/null
+    grep -Fx 'counter: 9223372036854775806' "$logs/epoch-overflow-$label.log" >/dev/null
     if grep -q '^epoch: 2$' "$logs/epoch-overflow-$label.log"; then
         echo "Published failed epoch: $label" >&2
         exit 1
