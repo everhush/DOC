@@ -563,6 +563,33 @@ fn emit_shader(nodes: State[:], target: u8[:], path: u8[:]) {
 struct Carry { source: i64, previous: i64 }
 struct EpochFact { epoch: i64, source: i64, value: Value }
 
+// Compact the Goose digit arena after each completed epoch. These are the
+// only roots of the printed/forward-carry recurrence path: the committed
+// valuation, immutable source defaults and future epoch-local facts.
+// Copy all live digits first; overwrite/release the previous arena only
+// after every root has been relocated. No GC, RC or C runtime is involved.
+// Candidate scratch is reset from defaults before its next use.
+fn relocate_nat(value: Value, fresh: u8[>..]&) -> Value {
+    if value.kind != 2 || value.length == 0 { return value; }
+    var moved = value;
+    moved.start = fresh.len;
+    for i in 0..value.length {
+        fresh.push(nat_pool[value.start + i]);
+    }
+    return moved;
+}
+fn compact_nat_roots(values: Value[:], defaults: Value[:],
+                     facts: EpochFact[:]) {
+    var fresh: u8[>..] = [];
+    for &value in values { value = relocate_nat(value, fresh); }
+    for &value in defaults { value = relocate_nat(value, fresh); }
+    for &fact in facts { fact.value = relocate_nat(fact.value, fresh); }
+    // A Goose growable array lives on its own data stack. Shrinking its
+    // logical extent and copying the packed roots reclaims obsolete digits.
+    nat_pool.resize(0, 0);
+    nat_pool.append(fresh);
+}
+
 fn run_recurrence(nodes: State[:], values: Value[:], active: bool[:],
                   limit: i64, halt: i64, first_binding_arg: i64) {
     var carry: Carry[>..] = [];
@@ -628,6 +655,7 @@ fn run_recurrence(nodes: State[:], values: Value[:], active: bool[:],
         }
         let _checked = stabilize(nodes,candidate,active);
         for i in 0..nodes.len { values[i] = candidate[i]; }
+        compact_nat_roots(values, defaults, facts);
         epoch++;
     }
 }

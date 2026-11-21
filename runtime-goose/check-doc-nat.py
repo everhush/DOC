@@ -45,6 +45,10 @@ def checked(*args,expected=None,negative=False):
 
 Path(logs).mkdir(parents=True,exist_ok=True)
 cases=0
+# Long-running recurrence must preserve results across repeated arena compaction.
+# The retention policy roots only current values, defaults and future facts.
+for epoch in (250, 500):
+    cases+=checked(f"--through={epoch}","counter=next",expected=prefix(epoch))
 for epoch in (0,1,2,3,4,5):
     cases+=checked(f"--through={epoch}","counter=next",expected=prefix(epoch))
 cases+=checked("--until=halt","--max-epochs=8","counter=next",
