@@ -90,8 +90,7 @@ for exe in "$goose" "$rust"; do
         --fact=1:delta=2 --fact=2:delta=3 --fact=3:delta=4 \
         > "$scratch/fact-halt.log"
     grep -Fx 'DOC_RECURRENCE_HALT: 3' "$scratch/fact-halt.log"
-    if grep -q '^epoch: 4
- "$scratch/fact-halt.log"; then
+    if grep -q '^epoch: 4$' "$scratch/fact-halt.log"; then
         echo 'Epoch fact demand did not halt before later epoch' >&2; exit 1
     fi
     for bad in \
