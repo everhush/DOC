@@ -30,3 +30,7 @@ Goose compiler/runtime backend. Do not claim the current Goose build meets that 
 The release artifacts and current tests do not prove WebGPU hardware/browser portability,
 Goose-owned WebGPU device dispatch, complete memory isolation/reconstruction, OS sandboxing,
 all-worker parallel scheduling, or production readiness. These gates remain open.
+
+## Explicit output effects
+
+Use `doc FILE.doc --emit=STATE:relative/output.txt` or `doc-goose` with the same arguments to sample a complete derived/source value and write its canonical textual representation. The write is a separate fallible effect after DOC evaluation, using same-directory temporary-file replacement. It is not exactly-once execution or general transaction rollback. The relative output path must have an existing parent directory. The Rust backend canonicalizes its destination parent; Goose enforces a portable lexical path policy, not a symlink-safe OS sandbox.
