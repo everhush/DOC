@@ -144,6 +144,56 @@ jobs:
           if grep -q '^DOC_WEBGPU_COMPUTE_PASS:' validation-logs/rust-cpu-only.log; then
             echo "Rust CPU fallback falsely claimed GPU dispatch" >&2; exit 1
           fi
+          # Preserve Rust's independent device-failure and frontier-atomicity
+          # regression matrix. No Goose WGSL artifacts are involved.
+          for lanes in 1 63 64 65 127 128 129 130 256; do
+            DOC_GPU_LANES="$lanes" "$bool" --repair \
+              > "validation-logs/rust-repair-$lanes.log" 2>&1
+            grep -Fx 'DOC_WEBGPU_EPISODE: 0' \
+              "validation-logs/rust-repair-$lanes.log"
+            grep -Fx 'DOC_WEBGPU_EPISODE: 1' \
+              "validation-logs/rust-repair-$lanes.log"
+            test "$(grep -c '^DOC_WEBGPU_COMPUTE_PASS:' \
+              "validation-logs/rust-repair-$lanes.log")" = 2
+          done
+          for invalid in 0 4097 abc; do
+            if DOC_GPU_LANES="$invalid" "$bool" \
+              > "validation-logs/rust-invalid-lanes-$invalid.log" 2>&1; then
+              echo "Rust wgpu accepted invalid batch width: $invalid" >&2
+              exit 1
+            fi
+          done
+          # Failed GPU candidates must not be counted as published results;
+          # an auto execution setting does NOT permit fallback after failure.
+          for epoch in 0 1; do
+            if DOC_GPU_EXECUTION=auto DOC_GPU_INJECT_FAILURE_EPISODE="$epoch" \
+              "$bool" --repair \
+              > "validation-logs/rust-fault-epoch-$epoch.log" 2>&1; then
+              echo "Rust wgpu accepted injected device failure" >&2
+              exit 1
+            fi
+            grep -F "DOC_WEBGPU_INJECTED_FAILURE: episode=$epoch" \
+              "validation-logs/rust-fault-epoch-$epoch.log"
+            published=$(grep -c '^DOC_WEBGPU_COMPUTE_PASS:' \
+              "validation-logs/rust-fault-epoch-$epoch.log" || true)
+            test "$published" = "$epoch"
+            if grep -q '^DOC_CPU_FALLBACK_PASS:' \
+                "validation-logs/rust-fault-epoch-$epoch.log"; then
+              echo "Device failure was misclassified as CPU fallback" >&2
+              exit 1
+            fi
+          done
+          if DOC_GPU_REQUIRE_HARDWARE=1 DOC_GPU_EXECUTION=cpu "$bool" \
+            > validation-logs/rust-invalid-hardware-fallback.log 2>&1; then
+            echo "Hardware gate accepted a CPU-only execution" >&2
+            exit 1
+          fi
+          if DOC_GPU_REDUCTION=invalid "$bool" \
+            > validation-logs/rust-invalid-reduction.log 2>&1; then
+            echo "Rust wgpu accepted invalid reduction setting" >&2
+            exit 1
+          fi
+          echo DOC_RUST_WGPU_FAILURE_BOUNDARIES_PASS
           echo DOC_RUST_WGPU_INDEPENDENT_PASS
       - name: Preserve Rust-only wgpu evidence
         if: always()
@@ -323,6 +373,37 @@ jobs:
         with:
           name: doc-goose-sdl3-native-gpu
           path: validation-logs/
+          retention-days: 14
+          if-no-files-found: warn
+
+  dual-native-gpu-parity:
+    name: Independent native Rust wgpu vs Goose SDL3 GPU-result parity
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [webgpu-compute, goose-sdl3-compute]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc-rust-wgpu-validation
+          path: parity-logs/rust
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc-goose-sdl3-native-gpu
+          path: parity-logs/goose
+      - name: Compare two real independent GPU implementations, not shaders
+        run: |
+          set -euo pipefail
+          python3 runtime-goose/check-dual-gpu-parity.py \
+            parity-logs/rust parity-logs/goose parity-logs/report
+          grep -Fx 'DOC_RUST_WGPU_GOOSE_SDL3_PARITY_PASS: 42 observed GPU episodes' \
+            parity-logs/report/native-gpu-equivalence.log
+      - name: Preserve actual GPU-vs-GPU parity evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: doc-rust-wgpu-goose-sdl3-equivalence
+          path: parity-logs/report/
           retention-days: 14
           if-no-files-found: warn
 
