@@ -1,6 +1,6 @@
 //! Forward carry between finite DOC epochs over the existing int/bool domains.
 
-use std::collections::{HashSet, VecDeque};
+use std::collections::{BTreeMap, HashSet, VecDeque};
 
 use crate::{Cutoff, Graph, Result, Runtime, StateId, Value};
 
@@ -15,6 +15,11 @@ pub struct Recurrence {
     epoch: u64,
     retention: usize,
     snapshots: VecDeque<(u64, Vec<Option<Value>>)>,
+    template: Graph,
+    initial_facts: Vec<(StateId,Value)>,
+    // Compact authoritative *fact metadata*, not every epoch valuation.
+    // No metadata entry is needed for epochs using template defaults.
+    fact_log: BTreeMap<u64,Vec<(StateId,Value)>>,
 }
 
 impl Recurrence {
@@ -42,6 +47,8 @@ impl Recurrence {
             return Err("recurrence retention must be at least one epoch".into());
         }
         let template = Graph::new(template.states)?;
+        let original_template=template.clone();
+        let original_facts=initial_facts.to_vec();
         let mut carried_sources = HashSet::new();
         for &(source, previous) in &carry {
             let source_state = template.states.get(source).ok_or("unknown carry source")?;
@@ -65,6 +72,9 @@ impl Recurrence {
             epoch: 0,
             retention,
             snapshots,
+            template:original_template,
+            initial_facts:original_facts,
+            fact_log:BTreeMap::new(),
         })
     }
 
@@ -87,6 +97,30 @@ impl Recurrence {
 
     pub fn retained_epochs(&self) -> Vec<u64> {
         self.snapshots.iter().map(|(epoch, _)| *epoch).collect()
+    }
+
+    /// Reconstruct a logically available, formerly evicted stable epoch from
+    /// its authoritative immutable template, typed forward carry and sparse
+    /// epoch-local fact log. Never resurrect an uncommitted/failed epoch.
+    ///
+    /// The cache uses O(retention * live values) plus O(explicit facts) storage,
+    /// apart from the current graph/template. A reconstruction costs up to
+    /// O(requested_epoch * one-epoch evaluation), including big-number work.
+    /// It returns an owned view and cannot mutate the current publication.
+    pub fn reconstruct_epoch(&self,requested:u64)
+        ->Result<Option<Vec<Option<Value>>>>
+    {
+        if requested>self.epoch {return Ok(None);}
+        if let Some(cached)=self.snapshot_at(requested){return Ok(Some(cached));}
+        let mut replay=Self::new_with_retention(
+            self.template.clone(),self.carry.clone(),
+            &self.initial_facts,self.current.workers,1
+        )?;
+        for epoch in 1..=requested {
+            let facts=self.fact_log.get(&epoch).map(Vec::as_slice).unwrap_or(&[]);
+            replay.advance(facts)?;
+        }
+        Ok(replay.snapshot_at(requested))
     }
 
     /// Demand a finite prefix through the requested epoch (inclusive).
@@ -144,6 +178,9 @@ impl Recurrence {
         candidate.update(&changes)?;
         candidate.stabilize()?;
         let snapshot = candidate.snapshot();
+        // Record only successful explicitly supplied facts; never log a
+        // failed candidate or invent a value for an uncarried source.
+        if !facts.is_empty(){self.fact_log.insert(next,facts.to_vec());}
         self.current = candidate;
         self.epoch = next;
         self.snapshots.push_back((next, snapshot));
