@@ -156,7 +156,7 @@ def prepare_kernel(folder, template, spec, username):
         code.replace("__DOC_KAGGLE_RUN_SPEC__", repr(spec)), encoding="utf-8")
     metadata = {
         "id": username + "/" + slug,
-        "title": "DOC independent native physical GPU parity " + spec["run_id"],
+        "title": slug,  # Keep Kaggle title-derived URL slug consistent with kernel id.
         "code_file": "doc_kaggle_gpu.py",
         "language": "python", "kernel_type": "script",
         "is_private": "true", "enable_gpu": "true", "enable_internet": "true",

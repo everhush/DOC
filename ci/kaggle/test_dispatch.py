@@ -66,6 +66,7 @@ class KaggleDispatchPolicy(unittest.TestCase):
                 Path(__file__).with_name("doc_kaggle_gpu.py"),fields,"tester")
             self.assertEqual(name,"tester/doc-gpu-123-1")
             metadata=json.loads((folder/"kernel-metadata.json").read_text())
+            self.assertEqual(metadata["title"],"doc-gpu-123-1")
             self.assertEqual(metadata["is_private"],"true")
             self.assertEqual(metadata["enable_gpu"],"true")
             self.assertEqual(metadata["enable_internet"],"true")
