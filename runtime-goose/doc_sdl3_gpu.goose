@@ -191,13 +191,13 @@ fn main() {
             if values[target].kind!=0 {
                 reject("DOC CPU target is not Boolean");
             }
-            let first=if values[target].flag { 1u32 } else { 0u32 };
+            let first=if values[target].flag { 1 as u32 } else { 0 as u32 };
             first_expected.push(first);
             if operation=="staged" {
                 if values[verified].kind!=0 {
                     reject("DOC CPU staged target is not Boolean");
                 }
-                final_expected.push(if values[verified].flag {1u32}else{0u32});
+                final_expected.push(if values[verified].flag {1 as u32}else{0 as u32});
             } else {
                 final_expected.push(first);
             }
@@ -232,7 +232,7 @@ fn main() {
             gfx::bind(compare_pipeline);
             gfx::bind_storage_buffer(gfx::COMPUTE,0,first_buffer);
             gfx::bind_storage_buffer(gfx::COMPUTE,1,input_b);
-            gfx::uniforms(gfx::COMPUTE,0,Params {count:lanes as! u32,operation:0u32});
+            gfx::uniforms(gfx::COMPUTE,0,Params {count:lanes as! u32,operation:0 as u32});
             gfx::dispatch((lanes+63)/64,1,1);
             gfx::end_compute();
             final_buffer=second_buffer;
@@ -249,7 +249,7 @@ fn main() {
         }
         gfx::bind(count_pipeline);
         gfx::bind_storage_buffer(gfx::COMPUTE,0,final_buffer);
-        gfx::uniforms(gfx::COMPUTE,0,Params {count:lanes as! u32,operation:0u32});
+        gfx::uniforms(gfx::COMPUTE,0,Params {count:lanes as! u32,operation:0 as u32});
         gfx::dispatch(1,1,1);
         gfx::end_compute();
         var count:u32[>..]=[];
