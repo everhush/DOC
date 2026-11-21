@@ -455,6 +455,7 @@ fn declare_user_function(rest: u8[:],functions: UserFn[>..]&,
 fn load(source: u8[:], nodes: State[>..]&, values: Value[>..]&,
         active: bool[>..]&, origin: u8[:]) {
     var functions: UserFn[>..] = [];
+    var effects = 0;
     for original in split(source,'\n') {
         var n = 0;
         while n < original.len && original[n] != '#' { n++; }
@@ -492,7 +493,49 @@ fn load(source: u8[:], nodes: State[>..]&, values: Value[>..]&,
                 declare_user_function(declaration[3..],functions,nodes);
             }
         } else if starts_with(line,"fn ") {
-            declare_user_function(line[3..],functions,nodes);        } else if starts_with(line,"source ") {
+            declare_user_function(line[3..],functions,nodes);        } else if starts_with(line,"effect ") {
+            // Filesystem I/O is an explicitly declared, sampled source
+            // boundary, never an operation inside a pure ready frontier.
+            effects++;
+            if effects > 64 { fail(); }
+            let rest = line[7..];
+            let colon = find(rest,":");
+            let assign = find(rest,"=");
+            if colon <= 0 || assign <= colon { fail(); }
+            let name = trim(rest[..colon]);
+            if !valid_name(name) || lookup(nodes,name) >= 0 ||
+               function_index(functions,name) >= 0 { fail(); }
+            let kind = type_name(trim(rest[colon+1..assign]));
+            let command = trim(rest[assign+1..]);
+            if command.len < 8 || !starts_with(command,"read(") ||
+               command[command.len-1] != ')' { fail(); }
+            let quoted = trim(command[5..command.len-1]);
+            if quoted.len < 3 || quoted[0] != '"' ||
+               quoted[quoted.len-1] != '"' { fail(); }
+            let relative = quoted[1..quoted.len-1];
+            if relative.len == 0 || relative[0] == '/' { fail(); }
+            for c in relative {
+                if c == '"' || c == ' ' || c == '\r' ||
+                   c == '\t' || c == '\n' { fail(); }
+            }
+            var prefix = 0;
+            for i in 0..origin.len {
+                if origin[i] == '/' { prefix = i+1; }
+            }
+            var file_path: u8[>..] = [];
+            file_path.append(origin[..prefix]);
+            file_path.append(relative);
+            if file_path.len > 512 { fail(); }
+            var text: u8[>..] = [];
+            if !read_file(file_path,text) || text.len > 8192 { fail(); }
+            let value = parse_value(trim(text),kind);
+            nodes.push(State {
+                name: name, expression: "", premise: [0;16],
+                count: 0, kind: kind, derived: false,
+            });
+            values.push(value);
+            active.push(false);
+        } else if starts_with(line,"source ") {
             let rest = line[7..];
             let colon = find(rest,":");
             let assign = find(rest,"=");
