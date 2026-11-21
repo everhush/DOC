@@ -336,7 +336,12 @@ impl Graph {
                         premises.push(id);
                     }
                 }
-                let expanded=expand_function_calls(body,&functions,0)?;
+                // Preserve the original finite-core nesting diagnostic for
+                // programs not using user functions. Expanded functions have
+                // a separate bounded-size policy shared with native Goose.
+                let expanded=if functions.is_empty() {
+                    body.to_string()
+                }else{expand_function_calls(body,&functions,0)?};
                 let tokens=lex(&expanded)?;
                 let mut parser=Parser{tokens:&tokens,pos:0,args:&args,depth:0};
                 let expr=parser.expr()?;
