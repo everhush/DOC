@@ -9,6 +9,9 @@ import os;
 // offsets rather than raw pointers; an offset stays valid after pool growth.
 // Physical compaction/reclamation across protected readers is a separate gate.
 var nat_pool: u8[>..];
+// Each immutable int collection is an offset/length into this independently
+// managed Goose pool. No C allocator, mutable DOC alias or raw pointer escapes.
+var ints_pool: i64[>..];
 struct Value { kind: i64, number: i64, flag: bool, start: i64, length: i64 }
 struct State {
     name: u8[..64],
@@ -121,19 +124,81 @@ fn nat_mul(a: Value, b: Value) -> Value {
 
 fn boolean(v: bool) -> Value { return Value { kind: 0, number: 0, flag: v, start: 0, length: 0 }; }
 fn integer(v: i64) -> Value { return Value { kind: 1, number: v, flag: false, start: 0, length: 0 }; }
+
+fn ints_zero() -> Value {
+    return Value { kind: 3, number: 0, flag: false, start: 0, length: 0 };
+}
+fn ints_at(xs: Value, index: i64) -> i64 {
+    if xs.kind != 3 || index < 0 || index >= xs.length { fail(); }
+    return ints_pool[xs.start+index];
+}
+fn ints_store(items: i64[:]) -> Value {
+    if items.len > 4096 { fail(); }
+    if items.len == 0 { return ints_zero(); }
+    let start = ints_pool.len;
+    for value in items { ints_pool.push(value); }
+    return Value { kind: 3, number: 0, flag: false,
+                   start: start, length: items.len };
+}
+fn ints_parse(raw: u8[:]) -> Value {
+    if raw.len < 2 || raw[0] != '[' || raw[raw.len-1] != ']' { fail(); }
+    let inner = trim(raw[1..raw.len-1]);
+    if inner.len == 0 { return ints_zero(); }
+    var items: i64[>..] = [];
+    for part in split(inner,',') {
+        if items.len >= 4096 { fail(); }
+        let parsed, ok = parse_int(trim(part));
+        if !ok { fail(); }
+        items.push(parsed);
+    }
+    return ints_store(items);
+}
+fn ints_printable(xs: Value) -> u8[>..] {
+    var out: u8[>..] = [];
+    out.push('[');
+    for i in 0..xs.length {
+        if i > 0 { out.push(','); }
+        format_int(out,ints_at(xs,i),10,0,' ');
+    }
+    out.push(']');
+    return out;
+}
+fn ints_append(xs: Value, value: i64) -> Value {
+    if xs.kind != 3 || xs.length >= 4096 { fail(); }
+    var contents: i64[>..] = [];
+    for i in 0..xs.length { contents.push(ints_at(xs,i)); }
+    contents.push(value);
+    return ints_store(contents);
+}
+fn ints_tail(xs: Value) -> Value {
+    if xs.kind != 3 { fail(); }
+    if xs.length == 0 { return ints_zero(); }
+    var contents: i64[>..] = [];
+    for i in 1..xs.length { contents.push(ints_at(xs,i)); }
+    return ints_store(contents);
+}
+fn ints_equal(a: Value, b: Value) -> bool {
+    if a.length != b.length { return false; }
+    for i in 0..a.length { if ints_at(a,i) != ints_at(b,i) { return false; } }
+    return true;
+}
+
 fn zero(k: i64) -> Value {
-    return if k == 0 { boolean(false) } else if k == 1 { integer(0) } else { nat_zero() };
+    return if k == 0 { boolean(false) } else if k == 1 { integer(0) }
+           else if k == 2 { nat_zero() } else { ints_zero() };
 }
 fn equal(a: Value, b: Value) -> bool {
     if a.kind != b.kind { return false; }
     if a.kind == 0 { return a.flag == b.flag; }
     if a.kind == 1 { return a.number == b.number; }
-    return nat_compare(a,b) == 0;
+    if a.kind == 2 { return nat_compare(a,b) == 0; }
+    return ints_equal(a,b);
 }
 fn type_name(t: u8[:]) -> i64 {
     if t == "bool" { return 0; }
     if t == "int" { return 1; }
     if t == "nat" { return 2; }
+    if t == "ints" { return 3; }
     fail();
     return -1;
 }
@@ -146,6 +211,8 @@ fn parse_value(raw: u8[:], kind: i64) -> Value {
         if ok { return integer(number); }
     } else if kind == 2 {
         return nat_parse(raw);
+    } else if kind == 3 {
+        return ints_parse(raw);
     }
     fail();
     return zero(kind);
@@ -227,6 +294,10 @@ recursive fn expression(s: u8[:], p: i64, nodes: State[:],
         let value = nat_parse(trim(s[begin..end_lit]));
         return if execute { value } else { nat_zero() }, end_lit + 1;
     }
+    if word == "empty" {
+        let end_empty = expect(s,after,'(');
+        return ints_zero(), expect(s,end_empty,')');
+    }
     if after >= s.len || s[after] != '(' {
         let id = lookup(nodes,word);
         if id < 0 { fail(); }
@@ -236,9 +307,18 @@ recursive fn expression(s: u8[:], p: i64, nodes: State[:],
         return if execute { values[id] } else { zero(nodes[id].kind) }, after;
     }
     if word != "if" && word != "eq" && word != "lt" && word != "le" &&
-       word != "add" && word != "sub" && word != "mul" { fail(); }
+       word != "add" && word != "sub" && word != "mul" &&
+       word != "append" && word != "get" &&
+       word != "len" && word != "tail" { fail(); }
     let open = after + 1;
     let a, next = expression(s,open,nodes,values,premises,execute,depth - 1);
+    if word == "len" || word == "tail" {
+        if a.kind != 3 { fail(); }
+        let close = expect(s,next,')');
+        if !execute { return zero(if word=="len" { 1 } else { 3 }),close; }
+        if word == "len" { return integer(a.length),close; }
+        return ints_tail(a),close;
+    }
     let comma = expect(s,next,',');
     if word == "if" {
         if a.kind != 0 { fail(); }
@@ -267,6 +347,16 @@ recursive fn expression(s: u8[:], p: i64, nodes: State[:],
             else { 0 }
         } else { nat_compare(a,b) };
         return boolean(ordering < 0 || (word == "le" && ordering == 0)), close;
+    }
+    if word == "append" {
+        if a.kind != 3 || b.kind != 1 { fail(); }
+        if !execute { return ints_zero(), close; }
+        return ints_append(a,b.number),close;
+    }
+    if word == "get" {
+        if a.kind != 3 || b.kind != 1 { fail(); }
+        if !execute { return integer(0), close; }
+        return integer(ints_at(a,b.number)),close;
     }
     if a.kind != b.kind || (a.kind != 1 && a.kind != 2) { fail(); }
     if !execute { return zero(a.kind), close; }
@@ -305,6 +395,8 @@ fn function_reserved(name: u8[:]) -> bool {
     return name == "add" || name == "sub" || name == "mul" ||
            name == "eq" || name == "lt" || name == "le" ||
            name == "nat" || name == "if" || name == "fn" ||
+           name == "empty" || name == "append" || name == "get" ||
+           name == "len" || name == "tail" ||
            name == "source" || name == "derive";
 }
 // Iterative expansion is required by Goose's strict scope checks: no
@@ -704,8 +796,10 @@ fn show(nodes: State[:], values: Value[:]) {
             print(nodes[i].name, ": ", values[i].flag);
         } else if values[i].kind == 1 {
             print(nodes[i].name, ": ", values[i].number);
-        } else {
+        } else if values[i].kind == 2 {
             print(nodes[i].name, ": ", nat_text(values[i]));
+        } else {
+            print(nodes[i].name, ": ", ints_printable(values[i]));
         }
     }
 }
@@ -884,6 +978,19 @@ fn relocate_nat(value: Value, fresh: u8[>..]&) -> Value {
     }
     return moved;
 }
+
+// The old ints pool remains untouched until all roots have been copied.
+// Relocating the current valuation, template defaults and scheduled facts
+// also permits a future list to survive ordinary finite epoch turnover.
+fn relocate_ints(value: Value, fresh: i64[>..]&) -> Value {
+    if value.kind != 3 || value.length == 0 { return value; }
+    var moved = value;
+    moved.start = fresh.len;
+    for i in 0..value.length {
+        fresh.push(ints_pool[value.start+i]);
+    }
+    return moved;
+}
 fn compact_nat_roots(values: Value[:], defaults: Value[:],
                      facts: EpochFact[:]) {
     var fresh: u8[>..] = [];
@@ -894,6 +1001,12 @@ fn compact_nat_roots(values: Value[:], defaults: Value[:],
     // logical extent and copying the packed roots reclaims obsolete digits.
     nat_pool.resize(0, 0);
     nat_pool.append(fresh);
+    var fresh_ints: i64[>..] = [];
+    for &value in values { value = relocate_ints(value,fresh_ints); }
+    for &value in defaults { value = relocate_ints(value,fresh_ints); }
+    for &fact in facts { fact.value = relocate_ints(fact.value,fresh_ints); }
+    ints_pool.resize(0,0);
+    ints_pool.append(fresh_ints);
 }
 
 fn run_recurrence(nodes: State[:], values: Value[:], active: bool[:],
@@ -1016,8 +1129,10 @@ fn main() {
                 print(nodes[target].name, ": ", values[target].flag);
             } else if values[target].kind == 1 {
                 print(nodes[target].name, ": ", values[target].number);
-            } else {
+            } else if values[target].kind == 2 {
                 print(nodes[target].name, ": ", nat_text(values[target]));
+            } else {
+                print(nodes[target].name, ": ", ints_printable(values[target]));
             }
             return;
         }
