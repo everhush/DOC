@@ -189,6 +189,26 @@ jobs:
             exit 1
           fi
           echo DOC_WEBGPU_FAULT_INJECTION_PASS
+          # Second dependent GPU compute stage folds DOC-generated Boolean lanes.
+          for lanes in 1 64 65 129 256 1024; do
+            DOC_GPU_REDUCTION=1 DOC_GPU_LANES=$lanes "$executable" --staged-shaders-repair \
+              validation-logs/goose-webgpu/stage-1.wgsl \
+              validation-logs/goose-webgpu/stage-2.wgsl \
+              > "validation-logs/doc-reduction-$lanes.log" 2>&1
+            test "$(grep -c '^DOC_WEBGPU_REDUCTION_PASS:' "validation-logs/doc-reduction-$lanes.log")" = 2
+            test "$(grep -c '^DOC_WEBGPU_COMPUTE_PASS:' "validation-logs/doc-reduction-$lanes.log")" = 2
+          done
+          DOC_GPU_EXECUTION=cpu DOC_GPU_REDUCTION=1 DOC_GPU_LANES=129 \
+            "$executable" --staged-repair > validation-logs/doc-reduction-cpu-only.log 2>&1
+          if grep -q '^DOC_WEBGPU_REDUCTION_PASS:' validation-logs/doc-reduction-cpu-only.log; then
+            echo "CPU fallback falsely claimed GPU reduction" >&2
+            exit 1
+          fi
+          if DOC_GPU_REDUCTION=invalid "$executable" > validation-logs/doc-invalid-reduction.log 2>&1; then
+            echo "Invalid DOC GPU reduction setting accepted" >&2
+            exit 1
+          fi
+          echo DOC_WEBGPU_DEPENDENT_REDUCTION_PASS
           echo DOC_WEBGPU_REPAIR_AND_CPU_FALLBACK_PASS
       - name: Preserve WebGPU adapter and correctness evidence
         if: always()

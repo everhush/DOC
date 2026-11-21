@@ -80,6 +80,11 @@ async fn run() -> Result<(), Box<dyn Error>> {
     if require_hardware=="1" && execution!="gpu" {
         return Err("hardware validation requires strict GPU execution".into());
     }
+    let reduction = std::env::var("DOC_GPU_REDUCTION").unwrap_or_else(|_| "0".into());
+    if reduction != "0" && reduction != "1" {
+        return Err("DOC_GPU_REDUCTION must be 0 or 1".into());
+    }
+    let reduction = reduction == "1";
     let fault_episode=std::env::var("DOC_GPU_INJECT_FAILURE_EPISODE")
         .ok().map(|s|s.parse::<usize>()).transpose()?;
     if fault_episode.is_some_and(|n|n>=if repair {2}else{1}) {
@@ -205,6 +210,16 @@ async fn run() -> Result<(), Box<dyn Error>> {
             usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
             mapped_at_creation: false,
         });
+        let reduce_result = reduction.then(||device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("DOC aggregate candidate"),size: 4,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+            mapped_at_creation: false,
+        }));
+        let reduce_readback = reduction.then(||device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("DOC aggregate readback"),size: 4,
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        }));
         let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
             label: Some("DOC ordered Boolean stages"),
         });
@@ -242,6 +257,46 @@ async fn run() -> Result<(), Box<dyn Error>> {
             pass.set_bind_group(0, &bind_group, &[]);
             pass.dispatch_workgroups(workgroups, 1, 1);
         }
+        if let (Some(count_result),Some(count_readback)) =
+            (reduce_result.as_ref(),reduce_readback.as_ref()) {
+            const COUNT_WGSL: &str = r#"
+struct Storage { data: array<u32>, }
+@group(0) @binding(0) var<storage, read> input: Storage;
+@group(0) @binding(1) var<storage, read_write> result: Storage;
+@compute @workgroup_size(1)
+fn main() {
+    var count: u32 = 0u;
+    for (var i: u32 = 0u; i < arrayLength(&input.data); i = i + 1u) {
+        count = count + input.data[i];
+    }
+    result.data[0] = count;
+}
+"#;
+            let shader=device.create_shader_module(wgpu::ShaderModuleDescriptor {
+                label:Some("DOC dependent batch aggregation"),source:wgpu::ShaderSource::Wgsl(COUNT_WGSL.into()),
+            });
+            let pipeline=device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                label:Some("DOC count true dependent reduction"),layout:None,module:&shader,
+                entry_point:Some("main"),compilation_options:wgpu::PipelineCompilationOptions::default(),
+                cache:None,
+            });
+            let bind=device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label:Some("DOC map/reduction dependency"),
+                layout:&pipeline.get_bind_group_layout(0),
+                entries:&[
+                    wgpu::BindGroupEntry {binding:0,resource:output_buffers.last()
+                        .ok_or("missing DOC map stage")?.as_entire_binding()},
+                    wgpu::BindGroupEntry {binding:1,resource:count_result.as_entire_binding()},
+                ],
+            });
+            let mut pass=encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label:Some("DOC reduction compute"),timestamp_writes:None,
+            });
+            pass.set_pipeline(&pipeline);pass.set_bind_group(0,&bind,&[]);
+            pass.dispatch_workgroups(1,1,1);
+            drop(pass);
+            encoder.copy_buffer_to_buffer(count_result,0,count_readback,0,4);
+        }
         encoder.copy_buffer_to_buffer(
             output_buffers.last().ok_or("missing output buffer")?,
             0, &readback, 0, nbytes,
@@ -264,8 +319,16 @@ async fn run() -> Result<(), Box<dyn Error>> {
         slice.map_async(wgpu::MapMode::Read, move |res| {
             let _ = tx.send(res);
         });
+        let reduce_receiver=reduce_readback.as_ref().map(|buf|{
+            let (tx,rx)=std::sync::mpsc::channel();
+            buf.slice(..).map_async(wgpu::MapMode::Read,move |res|{let _=tx.send(res);});
+            rx
+        });
         device.poll(wgpu::Maintain::Wait);
         rx.recv()?.map_err(|e| format!("DOC WebGPU readback failure: {e}"))?;
+        if let Some(rx)=reduce_receiver{
+            rx.recv()?.map_err(|e| format!("DOC WebGPU reduction readback failure: {e}"))?;
+        }
         let mapped = slice.get_mapped_range();
         let got: Vec<u32> = mapped
             .chunks_exact(4)
@@ -282,6 +345,18 @@ async fn run() -> Result<(), Box<dyn Error>> {
         // Only successful complete readback and CPU equivalence are observable.
         println!("DOC_WEBGPU_HOST_TIMING: episode={episode} lanes={lane_count} setup_ms={host_setup_ms:.3} total_ms={:.3}",
             gpu_started.elapsed().as_secs_f64() * 1000.0);
+        if let Some(reduction_readback)=reduce_readback.as_ref(){
+            let mapped=reduction_readback.slice(..).get_mapped_range();
+            let count=u32::from_le_bytes(mapped[..4].try_into()
+                .map_err(|_| "invalid DOC reduction readback")?);
+            drop(mapped);
+            reduction_readback.unmap();
+            let expected_count=expected.iter().sum::<u32>();
+            if count!=expected_count {
+                return Err(format!("DOC reduction mismatch episode={episode}: GPU={count}, CPU={expected_count}").into());
+            }
+            println!("DOC_WEBGPU_REDUCTION_PASS: episode={episode} count={count}");
+        }
         if repair { println!("DOC_WEBGPU_EPISODE: {episode}"); }
         println!("DOC_WEBGPU_COMPUTE_PASS: {got:?}");
     }
