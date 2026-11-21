@@ -11,17 +11,27 @@ pub type StateId = usize;
 pub type Result<T> = std::result::Result<T,String>;
 
 #[derive(Clone,Debug,PartialEq,Eq)]
-pub enum Value { Int(i64), Bool(bool), Nat(String), Ints(Vec<i64>), MaybeInt(Option<i64>) }
+pub enum Value { Int(i64), Bool(bool), Nat(String), Ints(Vec<i64>),
+    MaybeInt(Option<i64>), Text(String) }
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
-pub enum Type { Int, Bool, Nat, Ints, MaybeInt }
+pub enum Type { Int, Bool, Nat, Ints, MaybeInt, Text }
 impl Value {
     pub fn kind(&self)->Type {
         match self {Self::Int(_)=>Type::Int,Self::Bool(_)=>Type::Bool,
             Self::Nat(_)=>Type::Nat,Self::Ints(_)=>Type::Ints,
-            Self::MaybeInt(_)=>Type::MaybeInt}
+            Self::MaybeInt(_)=>Type::MaybeInt,Self::Text(_)=>Type::Text}
     }
     pub fn parse_for_type(s:&str,kind:Type)->Result<Self>{
         if kind==Type::Nat {return Ok(Self::Nat(nat::canonical(s.trim())?));}
+        if kind==Type::Text {
+            let source=s.trim();
+            let literal=source.strip_prefix('"').and_then(|s|s.strip_suffix('"'))
+                .ok_or("text source requires a quoted UTF-8 value")?;
+            if literal.len()>16384 || literal.contains(['\n','\r','"','\\']) {
+                return Err("unsupported text source literal/control sequence".into());
+            }
+            return Ok(Self::Text(literal.to_string()));
+        }
         if kind==Type::MaybeInt {
             let raw=s.trim();
             if raw=="none" {return Ok(Self::MaybeInt(None));}
@@ -58,7 +68,7 @@ impl Value {
     }
 }
 impl Type { pub fn parse(s:&str)->Result<Self>{
-    match s.trim() {"int"=>Ok(Self::Int),"bool"=>Ok(Self::Bool),"nat"=>Ok(Self::Nat),"ints"=>Ok(Self::Ints),"maybe_int"=>Ok(Self::MaybeInt),
+    match s.trim() {"int"=>Ok(Self::Int),"bool"=>Ok(Self::Bool),"nat"=>Ok(Self::Nat),"ints"=>Ok(Self::Ints),"maybe_int"=>Ok(Self::MaybeInt),"text"=>Ok(Self::Text),
         _=>Err(format!("invalid type: {s}"))}
 }}
 impl std::fmt::Display for Value {
@@ -66,6 +76,7 @@ impl std::fmt::Display for Value {
         match self {
             Self::Int(x)=>write!(f,"{x}"),Self::Bool(x)=>write!(f,"{x}"),
             Self::Nat(x)=>write!(f,"{x}"),
+            Self::Text(value)=>write!(f,"{value}"),
             Self::MaybeInt(None)=>write!(f,"none"),
             Self::MaybeInt(Some(n))=>write!(f,"some({n})"),
             Self::Ints(xs)=>{
@@ -89,6 +100,7 @@ pub enum Expr {
     Length(Box<Self>), Get(Box<Self>,Box<Self>), Tail(Box<Self>),
     NoInt, SomeInt(Box<Self>), TryGet(Box<Self>,Box<Self>),
     UnwrapOr(Box<Self>,Box<Self>),
+    Concat(Box<Self>,Box<Self>), StartsWith(Box<Self>,Box<Self>),
     If(Box<Self>,Box<Self>,Box<Self>),
 }
 impl Expr {
@@ -124,8 +136,19 @@ impl Expr {
                 }else{Err("get requires (ints,int)".into())}
             }
             Length(list)=>{
-                if list.kind(args)?==Type::Ints {Ok(Type::Int)}
-                else{Err("len requires ints".into())}
+                if list.kind(args)?==Type::Ints || list.kind(args)?==Type::Text {
+                    Ok(Type::Int)
+                }else{Err("len requires ints or text".into())}
+            }
+            Concat(a,b)=>{
+                if a.kind(args)?==Type::Text && b.kind(args)?==Type::Text{
+                    Ok(Type::Text)
+                }else{Err("concat requires (text,text)".into())}
+            }
+            StartsWith(a,b)=>{
+                if a.kind(args)?==Type::Text && b.kind(args)?==Type::Text{
+                    Ok(Type::Bool)
+                }else{Err("starts_with requires (text,text)".into())}
             }
             Tail(list)=>{
                 if list.kind(args)?==Type::Ints {Ok(Type::Ints)}
@@ -196,7 +219,23 @@ impl Expr {
             },
             Length(list)=>match list.eval(args)?{
                 Value::Ints(xs)=>Ok(Value::Int(xs.len() as i64)),
-                _=>Err("len expects ints collection".into())
+                Value::Text(s)=>Ok(Value::Int(s.len() as i64)),
+                _=>Err("len expects ints collection or text".into())
+            },
+            Concat(a,b)=>match (a.eval(args)?,b.eval(args)?) {
+                (Value::Text(mut lhs),Value::Text(rhs))=>{
+                    if lhs.len().checked_add(rhs.len()).is_none_or(|n|n>16384){
+                        return Err("DOC text exceeds 16KiB limit".into());
+                    }
+                    lhs.push_str(&rhs);
+                    Ok(Value::Text(lhs))
+                }
+                _=>Err("concat requires text inputs".into())
+            },
+            StartsWith(a,b)=>match (a.eval(args)?,b.eval(args)?) {
+                (Value::Text(text),Value::Text(prefix))=>
+                    Ok(Value::Bool(text.starts_with(&prefix))),
+                _=>Err("starts_with requires text inputs".into())
             },
             Tail(list)=>match list.eval(args)?{
                 Value::Ints(xs)=>Ok(Value::Ints(xs.into_iter().skip(1).collect())),
@@ -276,6 +315,7 @@ fn reserved_user_ident(s:&str)->bool {
     matches!(s,"add"|"sub"|"mul"|"eq"|"if"|"lt"|"le"|"nat"|
         "empty"|"append"|"get"|"len"|"tail"|
         "none"|"some"|"try_get"|"unwrap_or"|
+        "text"|"concat"|"starts_with"|
         "true"|"false"|"source"|"derive"|"fn")
 }
 fn replace_function_formals(body:&str,params:&[String],args:&[String])->String {
@@ -517,8 +557,17 @@ impl Graph {
                 let raw=std::fs::read_to_string(&file_path)
                     .map_err(|e|format!("DOC read effect {}: {e}",file_path.display()))?;
                 if raw.len()>8_192{return Err("DOC read effect exceeds 8KiB".into());}
-                let typed=Value::parse_for_type(raw.trim(),kind)?;
-                assembled.push_str(&format!("source {name}: {ty} = {typed}\n"));
+                let typed=if kind==Type::Text {
+                    let data=raw.trim_end_matches(['\r','\n']);
+                    if data.len()>16384 || data.contains(['\r','\n','"','\\']) {
+                        return Err("DOC text effect exceeds simple literal contract".into());
+                    }
+                    Value::Text(data.into())
+                }else{Value::parse_for_type(raw.trim(),kind)?};
+                let source_text=if kind==Type::Text {
+                    format!("source {name}: {ty} = \"{typed}\"\n")
+                }else{format!("source {name}: {ty} = {typed}\n")};
+                assembled.push_str(&source_text);
             }else{
                 assembled.push_str(original);
                 assembled.push('\n');
@@ -611,9 +660,25 @@ impl Graph {
     }
 }
 fn lex(text:&str)->Result<Vec<String>>{
-    let mut tokens=Vec::new();let mut word=String::new();
+    let mut tokens=Vec::new();
+    let mut word=String::new();
+    let mut quoted=false;
     for ch in text.chars(){
-        if ch.is_ascii_alphanumeric()||ch=='_'||(ch=='-'&&word.is_empty()){
+        if quoted{
+            if matches!(ch,'\n'|'\r'|'\\'){
+                return Err("DOC literal disallows unescaped controls and backslashes".into());
+            }
+            word.push(ch);
+            if ch=='"'{
+                tokens.push(std::mem::take(&mut word));
+                quoted=false;
+            }
+        }else if ch=='"'{
+            if !word.is_empty(){tokens.push(std::mem::take(&mut word));}
+            word.push('"');
+            quoted=true;
+        }else if ch.is_ascii_alphanumeric() || ch=='_' ||
+                 (ch=='-' && word.is_empty()){
             word.push(ch);
         }else{
             if !word.is_empty(){tokens.push(std::mem::take(&mut word));}
@@ -621,6 +686,7 @@ fn lex(text:&str)->Result<Vec<String>>{
             else if !ch.is_whitespace(){return Err(format!("illegal token {ch}"));}
         }
     }
+    if quoted{return Err("unterminated DOC text literal".into());}
     if !word.is_empty(){tokens.push(word);}
     Ok(tokens)
 }
@@ -651,6 +717,12 @@ impl Parser<'_>{
                 self.eat(")")?;
                 return Ok(Expr::Lit(Value::Nat(nat::canonical(&digits)?)));
             }
+            if token=="text"{
+                let literal=self.next()?;
+                let value=Value::parse_for_type(&literal,Type::Text)?;
+                self.eat(")")?;
+                return Ok(Expr::Lit(value));
+            }
             if token=="empty" || token=="none" {
                 self.eat(")")?;
                 return Ok(if token=="empty"{Expr::Empty}else{Expr::NoInt});
@@ -680,6 +752,8 @@ impl Parser<'_>{
                     "append"=>Expr::Append(a,b),"get"=>Expr::Get(a,b),
                     "try_get"=>Expr::TryGet(a,b),
                     "unwrap_or"=>Expr::UnwrapOr(a,b),
+                    "concat"=>Expr::Concat(a,b),
+                    "starts_with"=>Expr::StartsWith(a,b),
                     _=>return Err(format!("unknown operator {token}"))
                 }
             };
