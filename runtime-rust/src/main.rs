@@ -39,7 +39,11 @@ fn run() -> Result<(), String> {
             carry.push((source, previous));
         }
         let halt = if let Some(name) = &halt_name {
-            Some(graph.id(name).ok_or("unknown recurrent halt state")?)
+            let id = graph.id(name).ok_or("unknown recurrent halt state")?;
+            if graph.states[id].kind != doc_runtime::Type::Bool {
+                return Err("halt predicate must name a Boolean state".into());
+            }
+            Some(id)
         } else {
             None
         };
