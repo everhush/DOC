@@ -1,0 +1,5 @@
+# Infinite loop with b increment
+0 inc a 1
+1 decz a 2 3
+2 inc b 1
+3 halt
