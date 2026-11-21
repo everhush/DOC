@@ -199,6 +199,21 @@ jobs:
           fi
           echo DOC_RUST_WGPU_FAILURE_BOUNDARIES_PASS
           echo DOC_RUST_WGPU_INDEPENDENT_PASS
+      - name: Stage exact tested Rust GPU binaries for quota-free Kaggle packaging
+        run: |
+          set -euo pipefail
+          mkdir -p validation-logs/gpu-binaries
+          install -m 755 runtime-rust/target/release/examples/webgpu_bool \
+            validation-logs/gpu-binaries/webgpu_bool
+          install -m 755 runtime-rust/target/release/examples/webgpu_integer_eq \
+            validation-logs/gpu-binaries/webgpu_integer_eq
+          sha256sum validation-logs/gpu-binaries/* \
+            > validation-logs/gpu-binaries/SHA256SUMS
+          cp "$(command -v vulkaninfo)" \
+            validation-logs/gpu-binaries/vulkaninfo
+          cp -L /usr/lib/x86_64-linux-gnu/libvulkan.so.1 \
+            validation-logs/gpu-binaries/libvulkan.so.1
+          echo DOC_NATIVE_WGPU_KAGGLE_BUNDLE_PASS
       - name: Preserve Rust-only wgpu evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -371,6 +386,17 @@ jobs:
           grep -Fx 'DOC_GOOSE_SDL3_NATIVE_PARITY_PASS: 77 checks' \
             validation-logs/goose-sdl3/doc-goose-sdl3-summary.log
           echo DOC_GOOSE_SDL3_NATIVE_ONLY_PASS
+      - name: Package portable SDL3 Xvfb utilities for Kaggle GPU-only runner
+        run: |
+          set -euo pipefail
+          mkdir -p validation-logs/gpu-platform-bin
+          for cmd in Xvfb xvfb-run xauth; do
+            install -m 755 "$(command -v "$cmd")" \
+              "validation-logs/gpu-platform-bin/$cmd"
+          done
+          sha256sum validation-logs/gpu-platform-bin/* \
+            > validation-logs/gpu-platform-bin/SHA256SUMS
+          echo DOC_GOOSE_SDL3_KAGGLE_PLATFORM_BUNDLE_PASS
       - name: Preserve native Goose SDL3 GPU binary, oracle and adapter evidence
         if: always()
         uses: actions/upload-artifact@v4
