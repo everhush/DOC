@@ -43,11 +43,15 @@ runtime-goose/doc_sdl3_gpu.goose with the native Goose compiler.
 
 Example native execution:
 
-    GOOSE_GFX_HEADLESS=1 ./doc-goose-sdl3 runtime-rust/examples/integer_equality.doc eq 65
+    xvfb-run -a env GOOSE_GFX_HEADLESS=1 SDL_VIDEODRIVER=x11 \
+        SDL_GPU_DRIVER=vulkan ./doc-goose-sdl3 \
+        runtime-rust/examples/integer_equality.doc eq 65
 
 Independent native GPU parity:
 
-    GOOSE_GFX_HEADLESS=1 python3 runtime-goose/check-doc-sdl3-gpu.py ./doc-goose-sdl3 validation-logs/sdl3
+    xvfb-run -a env GOOSE_GFX_HEADLESS=1 SDL_VIDEODRIVER=x11 \
+        SDL_GPU_DRIVER=vulkan python3 runtime-goose/check-doc-sdl3-gpu.py \
+        ./doc-goose-sdl3 validation-logs/sdl3
 
 See the secondary .github/workflows/doc-validation.yml for the exact
 dependency setup, full test matrix and optional hardware runner gates.
@@ -56,3 +60,14 @@ Known constraints: static pure-operation eligibility, platform GPU
 availability, physical device-loss testing, broader DOC-to-GPU placement,
 real-device benchmarks and a production graphical game engine remain
 explicit acceptance gates. Mesa llvmpipe is a SOFTWARE Vulkan adapter.
+
+Linux CI uses a virtual X11 display to enable SDL3's Vulkan-capable X11
+video backend; the bare SDL offscreen driver on this runner lacks the
+Vulkan_CreateSurface entrypoint. The compute dispatch and readback are still
+fully Goose-owned SDL3 GPU calls, and the selected Mesa llvmpipe adapter is
+SOFTWARE Vulkan (not accelerated physical hardware). Future hardware
+performance claims must use opt-in self-hosted physical-GPU runners.
+
+The secondary CI also compares the Rust wgpu and Goose SDL3 **observed GPU
+results** for common DOC integer eq/lt/le source epochs. This is evidence
+only; the GPU implementations and shader packaging remain independent.
