@@ -242,4 +242,5 @@ for bin in "$native" "$rust"; do
     fi
 done
 
+bash runtime-goose/check-doc-recurrence-policy.sh "$native" "$rust" "$logs"
 echo DOC_TYPED_FINITE_PASS | tee -a "$logs/goose-typed-differential.log"
