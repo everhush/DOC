@@ -15,7 +15,7 @@ permissions:
 
 concurrency:
   group: doc-ci-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   rust:
@@ -164,6 +164,31 @@ jobs:
               exit 1
             fi
           done
+          # A simulated late GPU failure must never publish the failed
+          # candidate and must NOT be silently reclassified as CPU fallback.
+          for epoch in 0 1; do
+            if DOC_GPU_EXECUTION=auto DOC_GPU_INJECT_FAILURE_EPISODE="$epoch" \
+              "$executable" --repair > "validation-logs/doc-injected-failure-$epoch.log" 2>&1; then
+              echo "Unexpectedly accepted injected GPU failure in episode $epoch" >&2
+              exit 1
+            fi
+            grep -F "DOC_WEBGPU_INJECTED_FAILURE: episode=$epoch" \
+              "validation-logs/doc-injected-failure-$epoch.log"
+            published=$(grep -c '^DOC_WEBGPU_COMPUTE_PASS:' \
+              "validation-logs/doc-injected-failure-$epoch.log" || true)
+            test "$published" = "$epoch"
+            if grep -q '^DOC_CPU_FALLBACK_PASS:' \
+              "validation-logs/doc-injected-failure-$epoch.log"; then
+              echo 'Wrongly treated a failed GPU dispatch as CPU fallback' >&2
+              exit 1
+            fi
+          done
+          if DOC_GPU_REQUIRE_HARDWARE=1 DOC_GPU_EXECUTION=cpu \
+            "$executable" > validation-logs/doc-invalid-hardware-fallback.log 2>&1; then
+            echo 'Hardware gate accepted a CPU-only execution' >&2
+            exit 1
+          fi
+          echo DOC_WEBGPU_FAULT_INJECTION_PASS
           echo DOC_WEBGPU_REPAIR_AND_CPU_FALLBACK_PASS
       - name: Preserve WebGPU adapter and correctness evidence
         if: always()
@@ -180,13 +205,26 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
+      - name: Restore pinned upstream Goose compiler build cache
+        id: goose-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            /tmp/goose
+            /tmp/goose-build
+          key: doc-goose-compiler-${{ runner.os }}-9412b80f52d833c4697cffdbbf1f4eeb5195cd41-release-v1
       - name: Configure upstream Goose compiler, no optional graphics packages
+        if: steps.goose-cache.outputs.cache-hit != 'true'
         run: |
           git init /tmp/goose
           git -C /tmp/goose fetch --depth 1 https://github.com/aardappel/goose.git 9412b80f52d833c4697cffdbbf1f4eeb5195cd41
           git -C /tmp/goose checkout --detach FETCH_HEAD
           cmake -S /tmp/goose -B /tmp/goose-build -DCMAKE_BUILD_TYPE=Release
           cmake --build /tmp/goose-build --parallel 2
+      - name: Verify cached or newly compiled Goose executable
+        run: |
+          test -x /tmp/goose-build/goose
+          /tmp/goose-build/goose version
       - name: Type-check and execute preliminary Goose smoke
         run: |
           set -o pipefail
@@ -220,4 +258,45 @@ jobs:
           name: doc-goose-toolchain-smoke
           path: validation-logs/
           retention-days: 7
+          if-no-files-found: warn
+
+
+  webgpu-hardware:
+    # Opt-in: configure a labelled physical-GPU self-hosted runner AND
+    # repository variable DOC_ENABLE_HARDWARE_GPU=true. Never substitute
+    # Mesa lavapipe, SwiftShader or CPU fallback for this required evidence.
+    if: ${{ vars.DOC_ENABLE_HARDWARE_GPU == 'true' }}
+    needs: goose-toolchain
+    name: Hardware WebGPU DOC compute (opt-in physical GPU runner)
+    runs-on: [self-hosted, Linux, doc-webgpu-hardware]
+    timeout-minutes: 30
+    env:
+      DOC_GPU_REQUIRE_HARDWARE: "1"
+      DOC_GPU_EXECUTION: gpu
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: runtime-rust
+      - name: Record real adapter and driver
+        run: |
+          set -euo pipefail
+          mkdir -p validation-logs
+          vulkaninfo --summary 2>&1 | tee validation-logs/hardware-adapter.log
+      - name: Strict hardware WebGPU compute and source repair
+        run: |
+          set -euo pipefail
+          cargo run --release --manifest-path runtime-rust/Cargo.toml \
+            --features webgpu --example webgpu_bool -- --staged-repair \
+            2>&1 | tee validation-logs/hardware-repair.log
+          test "$(grep -c '^DOC_WEBGPU_COMPUTE_PASS:' validation-logs/hardware-repair.log)" = 2
+          grep -E 'DOC_WEBGPU_ADAPTER:.*type=(IntegratedGpu|DiscreteGpu)' validation-logs/hardware-repair.log
+      - name: Preserve physical GPU evidence even on failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: doc-physical-gpu-validation
+          path: validation-logs/
+          retention-days: 14
           if-no-files-found: warn
