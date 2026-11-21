@@ -1,0 +1,6 @@
+# Arbitrarily extensible natural-number factorial, authored directly in DOC.
+# Every epoch is a finite DAG; forward typed carry supplies recurrence.
+source n: nat = 0
+source product: nat = 1
+derive next_n: nat (n) = add(n,nat(1))
+derive next_product: nat (product,next_n) = mul(product,next_n)
