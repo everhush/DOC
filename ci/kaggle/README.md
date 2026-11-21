@@ -38,3 +38,14 @@ The first real Kaggle T4 session failed **before GPU testing** because an uncond
 Private Kaggle datasets use upstream-license-preserving `other` metadata because Xvfb/Vulkan helper executables are third-party artifacts. Dataset uploads use Kaggle storage/API but **do not allocate a GPU session**. A missing NVIDIA graphics/Vulkan ICD is an infrastructure block; this path does **not** install GPU kernel drivers, call CUDA as if it were Vulkan, or count Mesa llvmpipe as physical GPU parity. Automatic GPU reruns remain disabled. <https://github.com/Kaggle/kaggle-cli/blob/main/docs/kernels_metadata.md> documents the private notebook `dataset_sources` contract.
 
 **Private dataset-readiness requirement:** The initial private upload can succeed before Kaggle's dataset status API is readable. The dispatcher now polls boundedly for readiness without launching GPU work and records only a non-secret count of failed status polls. If the token lacks private-dataset read/status permission, the job fails closed with no GPU session; enable the needed datasets API permission before retrying. The GitHub workflow budget remains deliberately conservative: failed GitHub controllers can count against the rolling-week automation cap even if no remote notebook was launched, to prevent uncontrolled repeated submissions.
+
+
+## Weekly budget accounting
+
+The rolling-seven-day limit counts **attempted remote GPU notebook submissions**,
+not preflight-only GitHub CPU jobs. The controller inspects authenticated GitHub
+job logs: a `DOC_KAGGLE_DISPATCH: notebook=` marker counts even if remote
+execution subsequently fails, while a complete pre-dispatch failure or a
+quota-skip marker does not. Missing, unreadable, ambiguous, or truncated logs
+**count conservatively**, never granting extra GPU attempts. Kaggle's live
+account GPU-hours check and a 2-hour reserve are mandatory on every launch.

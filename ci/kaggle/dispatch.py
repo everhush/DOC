@@ -125,6 +125,23 @@ def kaggle(command, env, timeout=60):
         raise RuntimeError("Kaggle CLI operation failed: " + command[0])
     return p.stdout
 
+def gpu_session_attempted(log):
+    """Conservatively count a Kaggle notebook push, not just GitHub's CPU preflight.
+
+    A missing/truncated/unreadable historical log counts as an attempt.
+    A completed preflight failure with no notebook-dispatch marker does not
+    spend GPU time and cannot use up the GPU-session weekly allocation.
+    """
+    if re.search(r"(?m)^\\d{4}-\\d{2}-\\d{2}T[^\\n]*Z DOC_KAGGLE_DISPATCH: notebook=", log):
+        return True
+    if re.search(r"(?m)^\\d{4}-\\d{2}-\\d{2}T[^\\n]*Z DOC_KAGGLE_PHYSICAL_GPU_PARITY_PASS:", log):
+        return True
+    if re.search(r"(?m)^\\d{4}-\\d{2}-\\d{2}T[^\\n]*Z DOC_KAGGLE_QUOTA_SKIP:", log):
+        return False
+    if re.search(r"(?m)^\\d{4}-\\d{2}-\\d{2}T[^\\n]*Z DOC_KAGGLE_DISPATCH_FAILURE:", log):
+        return False
+    return True
+
 def github_attempts(repo, token, current_run):
     if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repo):
         raise ValueError("Invalid repository")
@@ -148,10 +165,27 @@ def github_attempts(repo, token, current_run):
         entries = jobs.get("jobs")
         if not isinstance(entries, list) or len(entries) >= 100:
             raise ValueError("Incomplete historical GPU job status")
-        return any(
-            "Kaggle Rust wgpu vs Goose SDL3 physical GPU" in item.get("name", "")
-            and item.get("conclusion") != "skipped"
-            for item in entries)
+        for item in entries:
+            if ("Kaggle Rust wgpu vs Goose SDL3 physical GPU" not in
+                item.get("name", "") or item.get("conclusion") == "skipped"):
+                continue
+            if not isinstance(item.get("id"), int):
+                return True
+            uri = f"https://api.github.com/repos/{repo}/actions/jobs/{item['id']}/logs"
+            req = urllib.request.Request(uri, headers={
+                "Authorization": "Bearer " + token,
+                "Accept": "application/vnd.github+json",
+                "X-GitHub-Api-Version": "2022-11-28"})
+            try:
+                with urllib.request.urlopen(req, timeout=30) as response:
+                    output = response.read(12_000_001)
+                if len(output) > 12_000_000:
+                    return True  # Truncated historical evidence is ambiguous.
+                if gpu_session_attempted(output.decode("utf-8", errors="replace")):
+                    return True
+            except (OSError, ValueError, UnicodeError):
+                return True  # Missing evidence cannot increase GPU allowance.
+        return False
     return github_recent_attempts(history, current_run, dt.datetime.now(dt.timezone.utc), attempted)
 
 def prepare_kernel(folder, template, spec, username):
