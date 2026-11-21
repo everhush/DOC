@@ -5,7 +5,7 @@ fn main() {
 }
 fn run() -> Result<(), String> {
     let mut args = env::args().skip(1);
-    let file = args.next().ok_or("usage: doc FILE.doc [source=value ... | --through=N source=previous ... | --until=BOOL --max-epochs=N source=previous ...]")?;
+    let file = args.next().ok_or("usage: doc FILE.doc [source=value ... | --through=N source=previous ... | --until=BOOL --max-epochs=N source=previous ... | --demand=STATE source=value ...]")?;
     let src = fs::read_to_string(&file).map_err(|e| format!("{file}: {e}"))?;
     let graph = Graph::parse(&src)?;
     let workers = env::var("DOC_WORKERS").ok().and_then(|v| v.parse().ok())
@@ -108,6 +108,23 @@ fn run() -> Result<(), String> {
             let requested = facts.get(&next).map(Vec::as_slice).unwrap_or(&[]);
             recurrence.advance(requested)?;
         }
+    }
+    if let Some(target_name) = args.peek().and_then(|arg|
+        arg.strip_prefix("--demand=")).map(str::to_owned) {
+        args.next();
+        let target = graph.id(&target_name).ok_or("unknown DOC demand target")?;
+        let mut requested = Runtime::new(graph, workers, Cutoff::Exact);
+        let mut changes = Vec::new();
+        for assignment in args {
+            let (name, text) = assignment.split_once('=')
+                .ok_or("expected source=value after --demand")?;
+            let source = requested.graph.id(name).ok_or("unknown DOC source")?;
+            changes.push((source, Value::parse(text)?));
+        }
+        requested.update(&changes)?;
+        requested.stabilize_requested(&[target])?;
+        println!("{target_name}: {}", requested.value(target).ok_or("missing demanded value")?);
+        return Ok(());
     }
     let mut rt = Runtime::new(graph, workers, Cutoff::Exact);
     let mut changes = Vec::new();

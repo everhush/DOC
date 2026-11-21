@@ -1,0 +1,5 @@
+# The overflowing peer is not an ancestor of the requested target.
+source a: int = 1
+derive target: int (a) = add(a,2)
+derive broken: int (a) = add(9223372036854775807,a)
+derive copy: int (target) = add(target,1)
