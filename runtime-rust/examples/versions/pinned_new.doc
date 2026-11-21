@@ -4,4 +4,4 @@ source items: ints = [0]
 source n: nat = 10
 derive size: int (items) = add(len(items),1)
 derive next: nat (n) = add(n,nat(2))
-derive joined: text (msg) = concat(msg,"!")
+derive joined: text (msg) = concat(msg,text("!"))
