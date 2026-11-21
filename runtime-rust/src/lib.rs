@@ -424,7 +424,7 @@ impl Runtime {
     }
     fn eval(&self,id:StateId)->Result<Value>{
         let d=self.graph.states[id].definition.as_ref().ok_or("not derived")?;
-        let args:Result<Vec<Value>>=d.premises.iter().map(|p|self.values[*p].ok_or("missing premise".into())).collect();
+        let args:Result<Vec<Value>>=d.premises.iter().map(|p|self.values[*p].clone().ok_or("missing premise".into())).collect();
         d.expr.eval(&args?)
     }
     /// Evaluate selected ready definitions against one settled pre-valuation.
@@ -489,14 +489,14 @@ impl Runtime {
     pub fn observe(&mut self,id:StateId)->Result<Value>{
         if id>=self.graph.states.len(){return Err("unknown state".into());}
         self.stabilize()?;
-        self.values[id].ok_or("missing stable value".into())
+        self.values[id].clone().ok_or("missing stable value".into())
     }
     pub fn oracle(&self)->Result<Vec<Value>>{
         let mut vals=vec![None;self.graph.states.len()];
         for &id in &self.graph.topo{
             if let Some(d)=&self.graph.states[id].definition{
                 let inputs:Result<Vec<Value>>=d.premises.iter()
-                    .map(|p|vals[*p].ok_or("missing oracle premise".into())).collect();
+                    .map(|p|vals[*p].clone().ok_or("missing oracle premise".into())).collect();
                 vals[id]=Some(d.expr.eval(&inputs?)?);
             }else{vals[id]=self.values[id].clone();}
         }
