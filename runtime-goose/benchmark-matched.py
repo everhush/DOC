@@ -51,6 +51,31 @@ runs = {
         ["--through=20", "pc=pc_next", "a=a_next", "b=b_next"],
         "b: 3",
     ),
+    "signed_sort_network": (
+        "runtime-rust/examples/sort4_int.doc",
+        ["a=7", "b=-4", "c=12", "d=0"],
+        "first: -4",
+    ),
+    "arbitrary_nat_sort": (
+        "runtime-rust/examples/sort4_nat.doc",
+        ["a=99999999999999999999", "b=12", "c=100000000000000000000", "d=0"],
+        "first: 0",
+    ),
+    "native_pure_functions": (
+        "runtime-rust/examples/functions_int.doc",
+        ["x=-42", "lo=-7", "hi=11"],
+        "quadruple: -28",
+    ),
+    "native_function_module": (
+        "runtime-rust/examples/module_clamp.doc",
+        ["x=100", "lo=-13", "hi=11"],
+        "bounded: 11",
+    ),
+    "typed_read_effect": (
+        "runtime-rust/examples/effect_demo.doc",
+        [],
+        "incremented: -22",
+    ),
 }
 binaries = {"rust": rust, "goose": goose}
 sha = os.environ.get("GITHUB_SHA", "local-unversioned")
