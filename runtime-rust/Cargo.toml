@@ -33,5 +33,10 @@ name = "webgpu_bool"
 path = "examples/webgpu_bool.rs"
 required-features = ["webgpu"]
 
+[[example]]
+name = "webgpu_integer_eq"
+path = "examples/webgpu_integer_eq.rs"
+required-features = ["webgpu"]
+
 [dev-dependencies]
 naga = { version = "24", features = ["wgsl-in"] }
