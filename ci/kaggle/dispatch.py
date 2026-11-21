@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 import re
 import subprocess
+import tarfile
 import sys
 import tempfile
 import time
@@ -175,8 +176,18 @@ def verify_result(folder, spec):
     for key, value in expected.items():
         if result.get(key) != value:
             raise AssertionError("Missing or stale Kaggle GPU parity evidence: " + key)
-    if not (folder / "doc-kaggle-logs.tar.gz").is_file():
-        raise AssertionError("Missing raw physical-GPU evidence archive")
+    archive_path = folder / "doc-kaggle-logs.tar.gz"
+    try:
+        with tarfile.open(archive_path, "r:gz") as archive:
+            members = {entry.name for entry in archive.getmembers() if entry.isfile()}
+            required = {
+                "report/native-gpu-equivalence.log",
+                "goose/goose-sdl3/doc-goose-sdl3-summary.log",
+            }
+            if not required.issubset(members):
+                raise AssertionError("Incomplete raw physical-GPU evidence archive")
+    except (OSError, tarfile.TarError) as error:
+        raise AssertionError("Missing or invalid raw physical-GPU evidence archive") from error
     return result
 
 def main():
