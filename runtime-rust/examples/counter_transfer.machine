@@ -1,0 +1,4 @@
+# Transfer all a to b
+0 decz a 1 2
+1 inc b 0
+2 halt

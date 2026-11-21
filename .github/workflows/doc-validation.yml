@@ -236,6 +236,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - name: Build Rust DOC reference for cross-runtime source differential
         run: cargo build --release --manifest-path runtime-rust/Cargo.toml --bin doc
+      - name: Build Rust arbitrary-precision two-counter recurrence witness
+        run: cargo build --release --manifest-path runtime-rust/Cargo.toml --bin doc_counter
       - name: Validate Goose DOC and identical-source Rust/Goose differential
         run: bash runtime-goose/check-doc-bool.sh /tmp/goose-build/goose validation-logs runtime-rust/target/release/doc
       - name: Goose finite DAG incremental repair and native Rust differential
@@ -244,6 +246,8 @@ jobs:
         run: bash runtime-goose/check-doc-typed.sh /tmp/goose-build/goose runtime-rust/target/release/doc validation-logs
       - name: Same-source balanced reduction with independent oracle (1, 2, 4 workers)
         run: bash runtime-goose/check-doc-reduction.sh /tmp/goose-build/goose runtime-rust/target/release/doc validation-logs
+      - name: Independent Rust-Goose arbitrary-natural counter oracle
+        run: bash runtime-goose/check-doc-counter.sh /tmp/goose-build/goose runtime-rust/target/release/doc_counter validation-logs
       - name: Publish native Goose shader and CPU oracle
         uses: actions/upload-artifact@v4
         with:
