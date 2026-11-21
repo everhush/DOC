@@ -414,49 +414,85 @@ fn expand_function_calls(source: u8[:],functions: UserFn[:],
     return current;
 }
 
+// Pure function module registration; import is a compile-time filesystem
+// operation, not an effect inside dependency computation.
+fn declare_user_function(rest: u8[:],functions: UserFn[>..]&,
+                         nodes: State[:]) {
+    let assign = find(rest,"=");
+    if assign < 0 || functions.len >= 64 { fail(); }
+    let signature = trim(rest[..assign]);
+    let open = find(signature,"(");
+    if open <= 0 || signature[signature.len-1] != ')' { fail(); }
+    let name = trim(signature[..open]);
+    if !valid_name(name) || function_reserved(name) ||
+       lookup(nodes,name) >= 0 || function_index(functions,name) >= 0 {
+        fail();
+    }
+    let formals = trim(signature[open+1..signature.len-1]);
+    if formals.len > 256 { fail(); }
+    var count = 0;
+    if formals.len > 0 {
+        for part in split(formals,',') {
+            let formal = trim(part);
+            if !valid_name(formal) || function_reserved(formal) ||
+               count >= 4 { fail(); }
+            var i = 0;
+            for previous in split(formals,',') {
+                if i >= count { break; }
+                if trim(previous) == formal { fail(); }
+                i++;
+            }
+            count++;
+        }
+    }
+    let body = trim(rest[assign+1..]);
+    if body.len == 0 || body.len > 512 { fail(); }
+    functions.push(UserFn {
+        name: name, formals: formals, body: body, count: count,
+    });
+}
+
 fn load(source: u8[:], nodes: State[>..]&, values: Value[>..]&,
-        active: bool[>..]&) {
+        active: bool[>..]&, origin: u8[:]) {
     var functions: UserFn[>..] = [];
     for original in split(source,'\n') {
         var n = 0;
         while n < original.len && original[n] != '#' { n++; }
         let line = trim(original[..n]);
         if line.len == 0 { continue; }
-        if starts_with(line,"fn ") {
-            let rest = line[3..];
-            let assign = find(rest,"=");
-            if assign < 0 || functions.len >= 64 { fail(); }
-            let signature = trim(rest[..assign]);
-            let open = find(signature,"(");
-            if open <= 0 || signature[signature.len - 1] != ')' { fail(); }
-            let name = trim(signature[..open]);
-            if !valid_name(name) || function_reserved(name) ||
-               lookup(nodes,name) >= 0 || function_index(functions,name) >= 0 {
-                fail();
+        if starts_with(line,"import ") {
+            // Single-level, function-only module imports relative to this
+            // source file. We reject transitive imports and side-effectful
+            // module declarations instead of silently changing semantics.
+            let relative = trim(line[7..]);
+            if relative.len < 5 || relative.len > 256 ||
+               relative[0] == '/' ||
+               relative[relative.len-4..] != ".doc" { fail(); }
+            for c in relative {
+                if c == ' ' || c == '\t' || c == '\r' { fail(); }
             }
-            let formals = trim(signature[open+1..signature.len-1]);
-            if formals.len > 256 { fail(); }
-            var count = 0;
-            if formals.len > 0 {
-                for part in split(formals,',') {
-                    let formal = trim(part);
-                    if !valid_name(formal) || function_reserved(formal) ||
-                       count >= 4 { fail(); }
-                    var i = 0;
-                    for previous in split(formals,',') {
-                        if i >= count { break; }
-                        if trim(previous) == formal { fail(); }
-                        i++;
-                    }
-                    count++;
-                }
+            var prefix = 0;
+            for i in 0..origin.len {
+                if origin[i] == '/' { prefix = i+1; }
             }
-            let body = trim(rest[assign+1..]);
-            if body.len == 0 || body.len > 512 { fail(); }
-            functions.push(UserFn {
-                name: name, formals: formals, body: body, count: count,
-            });
-        } else if starts_with(line,"source ") {
+            var module_path: u8[>..] = [];
+            module_path.append(origin[..prefix]);
+            module_path.append(relative);
+            if module_path.len > 512 { fail(); }
+            var module_source: u8[>..] = [];
+            if !read_file(module_path,module_source) ||
+               module_source.len > 65536 { fail(); }
+            for original_module in split(module_source,'\n') {
+                var last = 0;
+                while last < original_module.len &&
+                      original_module[last] != '#' { last++; }
+                let declaration = trim(original_module[..last]);
+                if declaration.len == 0 { continue; }
+                if !starts_with(declaration,"fn ") { fail(); }
+                declare_user_function(declaration[3..],functions,nodes);
+            }
+        } else if starts_with(line,"fn ") {
+            declare_user_function(line[3..],functions,nodes);        } else if starts_with(line,"source ") {
             let rest = line[7..];
             let colon = find(rest,":");
             let assign = find(rest,"=");
@@ -896,7 +932,7 @@ fn main() {
     var nodes: State[>..] = [];
     var values: Value[>..] = [];
     var active: bool[>..] = [];
-    load(source,nodes,values,active);
+    load(source,nodes,values,active,path);
     if arg_count() >= 3 {
         var mode: u8[>..] = [];
         arg(2,mode);
