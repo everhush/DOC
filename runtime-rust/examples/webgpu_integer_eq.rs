@@ -38,7 +38,7 @@ fn input_for(index: usize, epoch: usize) -> (i64, i64) {
         0 => a,
         1 => a.checked_add(1).filter(|v| i32::try_from(*v).is_ok()).unwrap_or(-1),
         2 => a.checked_sub(1).filter(|v| i32::try_from(*v).is_ok()).unwrap_or(1),
-        _ => -a,
+        _ => if a == i64::from(i32::MIN) { i64::from(i32::MAX) } else { -a },
     };
     (a,b)
 }
@@ -220,7 +220,7 @@ mod tests {
     #[test]
     fn unsigned_transport_preserves_signed_i32_extremes() {
         for epoch in 0..2 {
-            for lane in 0..200 {
+            for lane in 0..4096 {
                 let (a,b)=input_for(lane,epoch);
                 assert_eq!((a as i32) as i64,a);
                 assert_eq!((b as i32) as i64,b);
