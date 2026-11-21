@@ -13,7 +13,9 @@ bad=f"{base}/pinned_invalid.doc"
 p=subprocess.run([goose,old,f"--replace-pinned={new}"],
                  capture_output=True,text=True,timeout=45)
 if p.returncode:
-    raise AssertionError("Goose pinned graph replacement failed\n"+p.stderr)
+    raise AssertionError(
+        "Goose pinned graph replacement failed\nstdout:\n"
+        +p.stdout+"\nstderr:\n"+p.stderr)
 marker="DOC_GOOSE_GRAPH_PINNED_REPLACE_PASS: 4 readers, full pool compaction"
 assert p.stdout.count(marker)==1,p.stdout
 assert p.stdout.count("DOC_GRAPH_GENERATION: 0")==1,p.stdout
