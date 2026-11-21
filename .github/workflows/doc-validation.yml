@@ -270,6 +270,14 @@ jobs:
           cmake -S /tmp/doc-sdl3-goose -B /tmp/doc-sdl3-build \
             -DCMAKE_BUILD_TYPE=Release -DGOOSE_BUILTIN_LIBS=gfx
           cmake --build /tmp/doc-sdl3-build --parallel 2
+      - name: Save pinned upstream SDL3 toolchain before DOC GPU checks
+        if: steps.goose-sdl3-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: |
+            /tmp/doc-sdl3-goose
+            /tmp/doc-sdl3-build
+          key: goose-sdl3-gfx-v1-9412b80f52d833c4697cffdbbf1f4eeb5195cd41-v2
       - name: Native Goose SDL3 compiler, module and executable validation
         run: |
           set -euo pipefail
