@@ -732,8 +732,12 @@ fn boolean_worker_eligible(nodes: State[:], frontier: i64[:]) -> bool {
            find(body,"len")>=0 || find(body,"tail")>=0 ||
            find(body,"add")>=0 || find(body,"sub")>=0 ||
            find(body,"mul")>=0 { return false; }
+        // Only immediate int/bool scalar inputs are sent to isolated
+        // workers. Nat/ints handles reference parent thread-owned pools and
+        // MUST NOT cross queues without an explicit owning deep copy.
         for k in 0..nodes[id].count {
-            if nodes[nodes[id].premise[k]].kind != 0 { return false; }
+            let kind=nodes[nodes[id].premise[k]].kind;
+            if kind != 0 && kind != 1 { return false; }
         }
     }
     return true;
