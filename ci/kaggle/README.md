@@ -1,53 +1,57 @@
-# Kaggle physical-GPU offload for DOC
+# DOC Kaggle hardware testing
 
-The ordinary **DOC dual-runtime validation** pipeline retains Rust and Goose CPU execution, deterministic CPU fallback, oracle comparisons, portability, and Mesa **software-Vulkan** checks. Those Mesa jobs use GitHub CPU resources and never count as proof of a physical GPU.
+DOC's Kaggle runner follows **the Kaggle account's own GPU quota, available
+accelerators, and platform session rules**. The repository adds **no arbitrary
+weekly submission cap, quota reserve, maximum GPU session duration, mandatory
+wait between tests, ban on reruns, deduplication gate, or workflow concurrency
+limit**. Exact repeats are allowed.
 
-The new **DOC Kaggle physical GPU parity (quota gated)** workflow offloads *hardware* GPU verification to a private Kaggle script running the exact trusted commit. It independently builds native Rust with wgpu and native Goose with SDL3 gfx, requires a physical NVIDIA Vulkan ICD, executes Goose's 77 GPU/CPU oracle checks, then compares 42 Rust wgpu versus Goose SDL3 result episodes. CUDA visibility alone is **not** DOC GPU support; Vulkan-less Kaggle sessions fail closed and retain diagnostics. TPU, Metal and D3D12 need different hardware and are not implied by this notebook.
+## Architecture and usage
 
-## Setup
+The normal GitHub Actions workflow continues native Rust and Goose CPU tests,
+software-Vulkan (Mesa) validation, and cross-runtime parity without consuming
+Kaggle GPU hours. The separate `.github/workflows/doc-kaggle-gpu.yml` runs
+after successful trusted branch validation and can also be started manually.
+The workflow submits a private Kaggle GPU notebook, using source and native
+Rust `wgpu` and Goose SDL3 binaries built by the successful, exact-SHA CPU CI.
+It checks the real remaining GPU balance through `kaggle quota --format json`
+and defers to Kaggle's own quota enforcement; only zero/unknown balance blocks
+submission. It does not impose DOC-side run-count or time limits.
 
-The secondary repository GitHub Actions secret must be named **KAGGLE_DOC_1**. It may contain a raw Kaggle API token or a legacy kaggle.json object with username and key. When using a raw token also set GitHub **repository variable DOC_KAGGLE_USERNAME** to the owner username. The private Kaggle kernel is uniquely named for each GitHub run. The credentials stay exclusively on GitHub and are not embedded in the kernel.
+The private notebook must confirm a **physical Vulkan GPU** (CUDA presence
+alone is insufficient) and execute the 77 Goose GPU/CPU oracle checks and
+42 independent Rust/Goose GPU-result parity cases. Native timing evidence
+includes startup, device/pipeline initialization, dispatch and readback, and
+must never be represented as isolated kernel latency or proof of GPU speedup.
+Failing hardware access or mismatching results are correctly reported as
+blocked/failed, not CPU-fallback GPU success. Metal, Direct3D and TPU require
+separate platforms.
 
-Manual dispatch is available once GitHub recognizes the workflow on the default branch. **DOC_KAGGLE_AUTORUN=true** is an optional repository variable that enables automatic offload after a successful trusted push CI; default is **OFF** to protect weekly quota. Manual and automatic submissions use the same strict policy.
+## Credentials
 
-## GPU quota controls
+Use secret `KAGGLE_DOC_1` on the secondary repository; do not put it in any
+notebook, log, source file or dataset. A raw Kaggle API token can use repository
+variable `DOC_KAGGLE_USERNAME` for the account owner; legacy Kaggle JSON
+credentials include username and key. Ensure the token can read, create and
+check private Kaggle datasets and notebooks. Private datasets carry the
+precompiled, cryptographically checked native build artifacts; no source
+compiler or DOC GPU-host language crossover runs in Kaggle.
 
-- Check **live GPU remaining hours** via `kaggle quota --format json` before every submission. Do not assume 30 GPU hours or infer GPU quota from AI benchmark quota.
-- **No DOC-specific weekly run-count limit.** Submit distinct, meaningful tests as often as the live Kaggle quota permits. Duplicate work is identified by exact source revision and accelerator (seven-day lookback), not by an arbitrary weekly counter. Each remote session remains bounded to **30 minutes** (manual 15/20/30).
-- There is **no artificial two-hour reserve**. The account must have enough remaining GPU quota for the proposed session; other notebooks still count against the live account total.
-- Serialize GitHub Kaggle jobs and **never auto-cancel** a remote kernel; cancelling GitHub alone does not terminate a Kaggle session. Kaggle push sets a remote session timeout.
-- If quota, API state, source SHA, physical Vulkan adapter, or full 77/42 parity evidence cannot be verified, **never report hardware parity success**.
+## Non-enforced best practices
 
-Run the policy tests locally, without consuming quota:
+- Prefer experiments that yield new evidence, but repeat any workload when
+  reproducing results or investigating variance. No script blocks duplicates.
+- Check Kaggle's real remaining GPU hours and prioritize valuable tests; using
+  the whole available allowance is permitted.
+- Prefer reviewing a job's output before launching another when debugging
+  infrastructure errors, but there is no enforced waiting or run cap.
+- Keep verified SHA, device type, raw logs, GPU/CPU parity, sample counts and
+  conditions alongside benchmarking results.
+- Be aware that GitHub-hosted CI and Kaggle each have their **own platform
+  execution limits**. Those external limits are not DOC-created quotas.
+
+Offline verification without Kaggle:
 `python3 -m unittest discover -s ci/kaggle -p 'test_*.py' -v`
 
-Evidence is retained in GitHub artifacts (`doc-kaggle-summary.json`, raw GPU parity logs, quota preflight). See [Kaggle CLI kernel docs](https://github.com/Kaggle/kaggle-cli/blob/main/docs/kernels.md), [Kaggle CLI quota](https://github.com/Kaggle/kaggle-cli/blob/main/CHANGELOG.md), and [Kaggle authentication](https://github.com/Kaggle/kaggle-cli/blob/main/skills/references/auth.md).
-
-The dispatcher reads the owner from `kaggle config view` for modern raw tokens when `DOC_KAGGLE_USERNAME` is not set; if Kaggle cannot resolve it, set the variable. Workflow reruns are refused to avoid duplicate GPU spend. Result verification checks the archived native 77/42 pass markers, NVIDIA hardware-adapter information, exact source SHA and selected quota-limited accelerator.
-
-If Kaggle exposes CUDA but no NVIDIA Vulkan ICD, the native notebook can attempt to install only `libnvidia-gl-<nvidia-smi driver branch>` from the image's configured APT repository, with a strict 220-second cap. This is user-space Vulkan support only, never an in-container kernel-driver override. It then rechecks a physical Vulkan device and fails closed on missing or incompatible drivers; no CUDA-only or llvmpipe run counts as DOC GPU parity.
-
-The native GPU session can optionally record 54 random-interleaved Rust/Goose signed-equality/ordering CLI timings (plus 12 warmups) from exactly the same DOC inputs and verified GPU outputs, with raw CSV and median/p95 JSON. This is *end-to-end CLI timing* (including startup, SDL3 Xvfb, pipeline creation, transfers, dispatch and readback), **not** isolated GPU kernel latency or a claim of speedup. A remaining-time guard can skip this benchmark without misreporting the independently verified 77/42 hardware correctness result.
-
-**Kaggle bootstrap reliability (after first real run #44950662134):** A T4 notebook was genuinely created and quota passed with 30h preflight remaining, but unconditional `apt-get update` timed out at 260 seconds *before any DOC GPU code ran*. The revised bootstrap now checks NVIDIA hardware first, detects installed APT packages and skips update/install entirely when possible. It uses pre-existing package metadata first and allows only one short bounded update/retry if essential libraries are missing. Timed-out APT commands preserve diagnostic logs and step metrics. The first session counts against the maximum two DOC attempts in a rolling week; do not claim GPU parity from that failed bootstrap.
-
-## Quota-efficient prebuilt native execution (new)
-
-The first real Kaggle T4 session failed **before GPU testing** because an unconditional `apt-get update` stalled for 260 seconds. For subsequent runs, **GitHub's standard CPU/Mesa CI builds and tests all the native Rust wgpu and Goose SDL3 executables**. Each successful exact-SHA standard CI run publishes a portable Rust Vulkan bundle, a statically linked native Goose SDL3 binary, and Xvfb helpers. The secret-backed GitHub Kaggle controller validates the source SHA and standard CI result, downloads those two verified artifacts with its GitHub token, packages the identical DOC source and parity oracles into a private Kaggle input dataset, verifies readiness and **only then** submits a GPU notebook. Kaggle no longer runs `apt-get update`, builds either runtime, or fetches DOC/Goose source. It just verifies the bundle hash, tests physical NVIDIA Vulkan availability, runs the native GPU programs and saves parity/optional latency measurements.
-
-Private Kaggle datasets use upstream-license-preserving `other` metadata because Xvfb/Vulkan helper executables are third-party artifacts. Dataset uploads use Kaggle storage/API but **do not allocate a GPU session**. A missing NVIDIA graphics/Vulkan ICD is an infrastructure block; this path does **not** install GPU kernel drivers, call CUDA as if it were Vulkan, or count Mesa llvmpipe as physical GPU parity. Automatic GPU reruns remain disabled. <https://github.com/Kaggle/kaggle-cli/blob/main/docs/kernels_metadata.md> documents the private notebook `dataset_sources` contract.
-
-**Private dataset-readiness requirement:** The initial private upload can succeed before Kaggle's dataset status API is readable. The dispatcher now polls boundedly for readiness without launching GPU work and records only a non-secret count of failed status polls. If the token lacks private-dataset read/status permission, the job fails closed with no GPU session; enable the needed datasets API permission before retrying. The GitHub workflow budget remains deliberately conservative: failed GitHub controllers can count against the rolling-week automation cap even if no remote notebook was launched, to prevent uncontrolled repeated submissions.
-
-
-## Weekly budget accounting
-
-There is no weekly submission cap. The seven-day history check is used only
-to prevent submitting the **same DOC commit and accelerator** more than once.
-A changed DOC implementation or a different GPU type is new useful work. CPU
-preflight failures do not count as GPU execution. GitHub jobs remain serialized
-and Kaggle's current account-level remaining GPU hours are checked before
-every dispatch; the only quota requirement is enough remaining time to cover
-the chosen remote session.
-
-**Quota policy (22 November 2026):** The user explicitly authorized using the full available Kaggle GPU-hour quota for distinct, meaningful testing, even within two days. Do not consume it by re-running unchanged tasks. This supersedes all older two-jobs/week and two-hours-reserve instructions.
+References: [Kaggle CLI kernel metadata](https://github.com/Kaggle/kaggle-cli/blob/main/docs/kernels_metadata.md),
+[Kaggle CLI authentication](https://github.com/Kaggle/kaggle-cli/blob/main/skills/references/auth.md).

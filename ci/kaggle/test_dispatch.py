@@ -13,23 +13,13 @@ module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 
 class KaggleDispatchPolicy(unittest.TestCase):
-    def test_count_actual_notebook_pushes_not_cpu_preflight(self):
-        ts = "2026-11-21T21:43:52.6962854Z "
-        first = ts + "DOC_KAGGLE_DISPATCH: notebook=person/doc-gpu-123-1 sha=" + "a"*40 + " minutes=30"
-        blocked = ts + "DOC_KAGGLE_DISPATCH_FAILURE: RuntimeError: Kaggle private binary dataset status unavailable"
-        skipped = ts + "DOC_KAGGLE_QUOTA_SKIP: maximum 2 attempts"
-        sha="a"*40
-        self.assertTrue(module.duplicate_gpu_submission(first,sha,"NvidiaTeslaT4"))
-        self.assertFalse(module.duplicate_gpu_submission(blocked,sha,"NvidiaTeslaT4"))
-        self.assertFalse(module.duplicate_gpu_submission(skipped,sha,"NvidiaTeslaT4"))
-        self.assertFalse(module.duplicate_gpu_submission("",sha,"NvidiaTeslaT4"))
-        tagged=first+" accelerator=NvidiaTeslaT4"
-        self.assertTrue(module.duplicate_gpu_submission(tagged,sha,"NvidiaTeslaT4"))
-        self.assertFalse(module.duplicate_gpu_submission(tagged,sha,"NvidiaL4"))
-        self.assertFalse(module.duplicate_gpu_submission(
-            tagged.replace(sha,"b"*40),sha,"NvidiaTeslaT4"))
-        self.assertFalse(hasattr(module,"MAX_WEEKLY_RUNS"))
-        self.assertEqual(module.MIN_QUOTA_RESERVE_HOURS,0.0)
+    def test_no_doc_usage_caps_or_duplicate_prohibitions(self):
+        self.assertFalse(hasattr(module, "MAX_WEEKLY_RUNS"))
+        self.assertFalse(hasattr(module, "MAX_SESSION_MINUTES"))
+        self.assertFalse(hasattr(module, "MIN_QUOTA_RESERVE_HOURS"))
+        self.assertFalse(hasattr(module, "DUPLICATE_LOOKBACK_DAYS"))
+        self.assertFalse(hasattr(module, "github_duplicate_work"))
+        self.assertFalse(hasattr(module, "duplicate_gpu_submission"))
 
     def test_live_quota_units_and_gpu_tpu_separation(self):
         q = [{"resource":"GPU","remaining":"25.50h","total":"30h"},
@@ -50,11 +40,10 @@ class KaggleDispatchPolicy(unittest.TestCase):
         self.assertEqual(module.status_from_cli("KernelWorkerStatus.RUNNING"),"RUNNING")
         self.assertEqual(module.status_from_cli("INCOMPLETE"),"UNKNOWN")
         self.assertEqual(module.status_from_cli("unknown"),"UNKNOWN")
-    def test_no_weekly_quota_cap_and_session_timeout(self):
-        self.assertEqual(module.MIN_QUOTA_RESERVE_HOURS,0.0)
-        self.assertEqual(module.DUPLICATE_LOOKBACK_DAYS,7)
-        self.assertFalse(hasattr(module,"MAX_WEEKLY_RUNS"))
-        self.assertEqual(module.MAX_SESSION_MINUTES,30)
+    def test_session_duration_left_to_kaggle(self):
+        self.assertFalse(hasattr(module, "MAX_SESSION_MINUTES"))
+        self.assertFalse(hasattr(module, "MIN_QUOTA_RESERVE_HOURS"))
+        self.assertEqual(module.DEFAULT_ACCELERATOR, "NvidiaTeslaT4")
     def test_private_legacy_json_and_raw_token(self):
         with tempfile.TemporaryDirectory() as temp:
             env,owner=module.auth_environment('{"username":"Tester","key":"FAKE"}',
@@ -78,7 +67,7 @@ class KaggleDispatchPolicy(unittest.TestCase):
             self.assertEqual(owner,"testowner")
     def test_exact_sha_and_no_stale_parity(self):
         fields={"repo":"x0796666-ui/DOC","sha":"a"*40,"run_id":"123",
-                "attempt":"1","minutes":30,"accelerator":"NvidiaTeslaT4"}
+                "attempt":"1","accelerator":"NvidiaTeslaT4"}
         with tempfile.TemporaryDirectory() as temp:
             folder=Path(temp)/"kernel"
             name=module.prepare_kernel(folder,
@@ -108,7 +97,7 @@ class KaggleDispatchPolicy(unittest.TestCase):
                     archive.add(path,arcname=name)
             result={"sha":"b"*40,"run_id":"123","result":"pass",
                     "hardware":True,"backend":"vulkan",
-                    "accelerator":"NvidiaTeslaT4","max_gpu_minutes":30,
+                    "accelerator":"NvidiaTeslaT4",
                     "goose_sdl3_checks":77,"dual_backend_episodes":42}
             (out/"doc-kaggle-summary.json").write_text(json.dumps(result))
             with self.assertRaises(AssertionError):
