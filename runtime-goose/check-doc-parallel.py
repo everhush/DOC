@@ -39,17 +39,21 @@ if "DOC_GOOSE_PARALLEL_FRONTIER:" in serial.stderr:
 for run_result,n in ((parallel2,2),(parallel4,4)):
     if f"DOC_GOOSE_PARALLEL_FRONTIER: workers={n} candidates=128" not in run_result.stderr:
         raise AssertionError(f"native Goose never dispatched {n} isolated workers")
-# Rust source is the same and its Boolean outputs must match Goose states.
-reference=subprocess.run([rust,fixture,"--next","a=false"],
-                         capture_output=True,text=True,timeout=60)
-if reference.returncode:
-    raise AssertionError(f"Rust reference failed: {reference.stderr}")
-for episode,block in enumerate(reference.stdout.split("a: ")[1:3]):
-    for i in range(128):
-        value=next((line.split(":",1)[1].strip() for line in block.splitlines()
-                    if line.startswith(f"p{i:03}:")),None)
-        if value!=str(bool(episode)).lower():
-            raise AssertionError("Rust Boolean oracle mismatch")
+# Rust uses one source-episode invocation per process rather than
+# Goose's --next. Both must still compute the identical DOC graph valuation.
+for episode,assignments in enumerate(([],["a=false"])):
+    reference=subprocess.run([rust,fixture,*assignments],
+                             capture_output=True,text=True,timeout=60)
+    if reference.returncode:
+        raise AssertionError(f"Rust reference failed: {reference.stderr}")
+    parsed={}
+    for line in reference.stdout.splitlines():
+        if ":" in line:
+            name,value=line.split(":",1)
+            if name in expected: parsed[name]=value.strip()=="true"
+    for name,epochs in expected.items():
+        if parsed.get(name) != epochs[episode]:
+            raise AssertionError(f"Rust Boolean oracle mismatch {name} episode={episode}")
 # Resource cap, safe fail-stop rather than silently applying an invalid budget.
 bad=subprocess.run([goose,fixture],env={**os.environ,"DOC_GOOSE_WORKERS":"17"},
                    capture_output=True,timeout=30)
