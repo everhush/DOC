@@ -53,8 +53,8 @@ def preflight_hardware():
     output = run("nvidia-smi", ["nvidia-smi", "-L"], max_seconds=20)
     if "GPU" not in output:
         raise RuntimeError("INFRA_BLOCKED: no NVIDIA GPU attached by Kaggle")
-    icd = Path("/usr/share/vulkan/icd.d")
-    nvidia = sorted(icd.glob("*nvidia*.json")) if icd.is_dir() else []
+    nvidia = sorted(path for root in ("/usr/share/vulkan/icd.d", "/etc/vulkan/icd.d", "/usr/local/share/vulkan/icd.d")
+                    for path in Path(root).glob("*nvidia*.json"))
     if not nvidia:
         raise RuntimeError(
             "INFRA_BLOCKED: Kaggle exposed CUDA but not the NVIDIA Vulkan ICD; "
