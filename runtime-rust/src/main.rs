@@ -1,13 +1,12 @@
 use doc_runtime::{recurrence::Recurrence, Cutoff, Graph, Runtime, Value};
-use std::{env, fs, process};
+use std::{env, process};
 fn main() {
     if let Err(e) = run() { eprintln!("DOC: {e}"); process::exit(1); }
 }
 fn run() -> Result<(), String> {
     let mut args = env::args().skip(1);
     let file = args.next().ok_or("usage: doc FILE.doc [source=value ... | --through=N source=previous ... | --until=BOOL --max-epochs=N source=previous ... | --demand=STATE source=value ...]")?;
-    let src = fs::read_to_string(&file).map_err(|e| format!("{file}: {e}"))?;
-    let graph = Graph::parse(&src)?;
+    let graph = Graph::parse_file(&file)?;
     let workers = env::var("DOC_WORKERS").ok().and_then(|v| v.parse().ok())
         .unwrap_or_else(|| std::thread::available_parallelism().map_or(1, |v| v.get()));
     let mut args = args.peekable();
