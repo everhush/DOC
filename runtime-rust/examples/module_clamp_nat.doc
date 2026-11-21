@@ -1,0 +1,7 @@
+# Same reusable pure DOC module, instantiated at arbitrary natural size.
+import lib/ordering.doc
+source x: nat = 999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999
+source lo: nat = 20
+source hi: nat = 100000000000000000000000000000000000000000000000000000000000000000000000000000000
+derive bounded: nat (x,lo,hi) = clamp(x,lo,hi)
+derive amplified: nat (bounded) = quadruple(bounded)

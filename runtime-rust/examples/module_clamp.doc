@@ -1,0 +1,7 @@
+# Explicit compile-time module import. Same DOC program in both runtimes.
+import lib/ordering.doc
+source x: int = 100
+source lo: int = -13
+source hi: int = 11
+derive bounded: int (x,lo,hi) = clamp(x,lo,hi)
+derive amplified: int (bounded) = quadruple(bounded)
