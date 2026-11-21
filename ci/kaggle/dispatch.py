@@ -109,7 +109,7 @@ def auth_environment(secret, directory, username_hint):
             p = subprocess.run(["kaggle", "config", "view"], env=env,
                 capture_output=True, text=True, timeout=25)
             if p.returncode == 0:
-                match = re.search(r"(?mi)^\\s*-?\\s*username:\\s*([a-z0-9_-]+)\\s*$", p.stdout)
+                match = re.search(r"(?mi)^\s*-?\s*username:\s*([a-z0-9_-]+)\s*$", p.stdout)
                 if match:
                     username = match.group(1).lower()
     if not re.fullmatch(r"[a-z0-9_-]{2,60}", username):
