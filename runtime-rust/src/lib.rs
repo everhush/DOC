@@ -41,6 +41,7 @@ pub enum Expr {
     Lit(Value),Arg(usize),
     Add(Box<Self>,Box<Self>), Sub(Box<Self>,Box<Self>),
     Mul(Box<Self>,Box<Self>), Eq(Box<Self>,Box<Self>),
+    Lt(Box<Self>,Box<Self>), Le(Box<Self>,Box<Self>),
     If(Box<Self>,Box<Self>,Box<Self>),
 }
 impl Expr {
@@ -57,6 +58,14 @@ impl Expr {
             Eq(a,b)=>{
                 if a.kind(args)?==b.kind(args)? {Ok(Type::Bool)}
                 else {Err("incompatible equality types".into())}
+            }
+            Lt(a,b)|Le(a,b)=>{
+                let left=a.kind(args)?;let right=b.kind(args)?;
+                if left==right && (left==Type::Int || left==Type::Nat) {
+                    Ok(Type::Bool)
+                }else{
+                    Err("ordering requires identical int or nat operand types".into())
+                }
             }
             If(c,a,b)=>{
                 if c.kind(args)?!=Type::Bool {return Err("if condition must be bool".into());}
@@ -93,6 +102,16 @@ impl Expr {
                 }
             }
             Eq(a,b)=>Ok(Value::Bool(a.eval(args)?==b.eval(args)?)),
+            Lt(a,b)|Le(a,b)=>{
+                let ordered=match (a.eval(args)?,b.eval(args)?) {
+                    (Value::Int(x),Value::Int(y))=>x.cmp(&y),
+                    (Value::Nat(x),Value::Nat(y))=>
+                        x.len().cmp(&y.len()).then_with(||x.cmp(&y)),
+                    _=>return Err("ordering requires identical numeric kinds".into())
+                };
+                Ok(Value::Bool(ordered==std::cmp::Ordering::Less ||
+                    (matches!(self,Le(_, _)) && ordered==std::cmp::Ordering::Equal)))
+            }
             If(c,a,b)=>match c.eval(args)? {
                 Value::Bool(true)=>a.eval(args),Value::Bool(false)=>b.eval(args),
                 _=>Err("bool expected".into())
@@ -251,6 +270,7 @@ impl Parser<'_>{
                 match token.as_str(){
                     "add"=>Expr::Add(a,b),"sub"=>Expr::Sub(a,b),
                     "mul"=>Expr::Mul(a,b),"eq"=>Expr::Eq(a,b),
+                    "lt"=>Expr::Lt(a,b),"le"=>Expr::Le(a,b),
                     _=>return Err(format!("unknown operator {token}"))
                 }
             };

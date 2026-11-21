@@ -235,7 +235,7 @@ recursive fn expression(s: u8[:], p: i64, nodes: State[:],
         if !allowed { fail(); }
         return if execute { values[id] } else { zero(nodes[id].kind) }, after;
     }
-    if word != "if" && word != "eq" &&
+    if word != "if" && word != "eq" && word != "lt" && word != "le" &&
        word != "add" && word != "sub" && word != "mul" { fail(); }
     let open = after + 1;
     let a, next = expression(s,open,nodes,values,premises,execute,depth - 1);
@@ -257,6 +257,16 @@ recursive fn expression(s: u8[:], p: i64, nodes: State[:],
     if word == "eq" {
         if a.kind != b.kind { fail(); }
         return boolean(execute && equal(a,b)), close;
+    }
+    if word == "lt" || word == "le" {
+        if a.kind != b.kind || (a.kind != 1 && a.kind != 2) { fail(); }
+        if !execute { return boolean(false), close; }
+        let ordering = if a.kind == 1 {
+            if a.number < b.number { -1 }
+            else if a.number > b.number { 1 }
+            else { 0 }
+        } else { nat_compare(a,b) };
+        return boolean(ordering < 0 || (word == "le" && ordering == 0)), close;
     }
     if a.kind != b.kind || (a.kind != 1 && a.kind != 2) { fail(); }
     if !execute { return zero(a.kind), close; }
