@@ -245,7 +245,8 @@ jobs:
           sudo apt-get install -y -qq cmake ninja-build pkg-config git \
             libx11-dev libxext-dev libxrandr-dev libxinerama-dev \
             libxcursor-dev libxi-dev libxkbcommon-dev libxss-dev \
-            libxfixes-dev libx11-xcb-dev libasound2-dev libvulkan-dev \
+            libxfixes-dev libx11-xcb-dev libxtst-dev libxdamage-dev \
+            libxshmfence-dev libxrender-dev libasound2-dev libvulkan-dev \
             libvulkan1 mesa-vulkan-drivers vulkan-tools
           mkdir -p validation-logs
           vulkaninfo --summary > validation-logs/goose-sdl3-adapter.log 2>&1
