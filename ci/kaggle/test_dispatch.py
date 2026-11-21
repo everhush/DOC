@@ -13,6 +13,27 @@ module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 
 class KaggleDispatchPolicy(unittest.TestCase):
+    def test_count_actual_notebook_pushes_not_cpu_preflight(self):
+        ts = "2026-11-21T21:43:52.6962854Z "
+        first = ts + "DOC_KAGGLE_DISPATCH: notebook=person/doc-gpu-123-1 sha=" + "a"*40 + " minutes=30"
+        blocked = ts + "DOC_KAGGLE_DISPATCH_FAILURE: RuntimeError: Kaggle private binary dataset status unavailable"
+        skipped = ts + "DOC_KAGGLE_QUOTA_SKIP: maximum 2 attempts"
+        self.assertTrue(module.gpu_session_attempted(first))
+        self.assertFalse(module.gpu_session_attempted(blocked))
+        self.assertFalse(module.gpu_session_attempted(skipped))
+        self.assertTrue(module.gpu_session_attempted(""))
+        self.assertTrue(module.gpu_session_attempted("Kaggle kernel was launched, but log truncated"))
+        self.assertTrue(module.gpu_session_attempted(
+            first + "\\n" + blocked))
+        history={"workflow_runs":[
+            {"id":1,"created_at":"2026-11-22T00:00:00Z"},
+            {"id":2,"created_at":"2026-11-21T21:00:00Z","conclusion":"failure"},
+            {"id":3,"created_at":"2026-11-21T20:00:00Z","conclusion":"failure"}]}
+        log_by_run={"2": first,"3":blocked}
+        self.assertEqual(module.github_recent_attempts(history,1,
+            dt.datetime(2026,11,22,tzinfo=dt.timezone.utc),
+            lambda run_id: module.gpu_session_attempted(log_by_run[run_id])),1)
+
     def test_live_quota_units_and_gpu_tpu_separation(self):
         q = [{"resource":"GPU","remaining":"25.50h","total":"30h"},
              {"resource":"TPU","remaining":"100h"}]
