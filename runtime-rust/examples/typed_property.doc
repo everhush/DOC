@@ -1,0 +1,20 @@
+# A shared source exercising EVERY current DOC typed value family.
+source x: int = -3
+source y: int = 5
+source index: int = 0
+source seq: ints = [4,7]
+source n: nat = 99999999999999999999999999999999999
+source flag: bool = true
+source msg: text = "Hi 世界"
+derive sum: int (x,y) = add(x,y)
+derive ordered: bool (x,y) = le(x,y)
+derive extended: ints (seq,sum) = append(seq,sum)
+derive result: maybe_int (extended,index) = try_get(extended,index)
+derive selected: int (result,x) = unwrap_or(result,x)
+derive count: int (extended) = len(extended)
+derive increment: nat (n) = add(n,nat(1))
+derive is_zero: bool (n) = eq(n,nat(0))
+derive prefix: bool (msg) = starts_with(msg,text("Hi"))
+derive newmsg: text (msg) = concat(msg,text("!"))
+derive bytes: int (newmsg) = len(newmsg)
+derive choice: bool (ordered,flag) = if(flag,ordered,false)
