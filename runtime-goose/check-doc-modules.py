@@ -39,6 +39,10 @@ for kind in ("int","nat"):
 bad_entries={
     "missing":"import missing_module.doc",
     "absolute":"import /tmp/private.doc",
+    "parent":"import ../secret.doc",
+    "dot":"import ./lib/ordering.doc",
+    "drive":"import C:/Windows/secret.doc",
+    "backslash":"import lib\\ordering.doc",
     "duplicate":"import lib/ordering.doc\nimport lib/ordering.doc",
 }
 for name,head in bad_entries.items():

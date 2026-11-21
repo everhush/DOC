@@ -314,6 +314,27 @@ fn expand_function_calls(input:&str,functions:&HashMap<String,UserFn>,depth:usiz
     Ok(out)
 }
 
+/// Portable lexical DOC path policy: no parent/current traversal, absolute,
+/// drive, whitespace, or alternate separator tokens. The Rust file boundary
+/// also verifies canonical containment to reject symlink escapes.
+fn safe_doc_relative_path(path:&str)->bool{
+    !path.is_empty() && path.len()<=256 && path.is_ascii() &&
+    path.split('/').all(|component|
+        !component.is_empty() && component!="." && component!=".." &&
+        component.bytes().all(|b|
+            b.is_ascii_alphanumeric() || matches!(b,b'_'|b'-'|b'.')))
+}
+fn confined_doc_path(base:&std::path::Path,raw:&str)->Result<std::path::PathBuf>{
+    if !safe_doc_relative_path(raw) {return Err("DOC path rejected by confinement policy".into());}
+    let root=std::fs::canonicalize(base)
+        .map_err(|e|format!("DOC source directory unavailable: {e}"))?;
+    let file=std::fs::canonicalize(base.join(raw))
+        .map_err(|e|format!("DOC input path unavailable: {e}"))?;
+    if !file.starts_with(&root){
+        return Err("DOC path escapes source directory".into());
+    }
+    Ok(file)
+}
 impl Graph {
     pub fn new(states:Vec<State>)->Result<Self>{
         let n=states.len();
@@ -369,13 +390,12 @@ impl Graph {
             let line=original.split('#').next().unwrap_or("").trim();
             if let Some(path)=line.strip_prefix("import "){
                 let path=path.trim();
-                if path.is_empty() || path.split_whitespace().count()!=1 ||
-                   !path.ends_with(".doc") || Path::new(path).is_absolute(){
+                if !safe_doc_relative_path(path) || !path.ends_with(".doc"){
                     return Err("DOC module import requires one relative .doc path".into());
                 }
                 modules+=1;
                 if modules>64{return Err("DOC module import limit exceeded".into());}
-                let module=base.join(path);
+                let module=confined_doc_path(base,path)?;
                 let body=std::fs::read_to_string(&module)
                     .map_err(|e|format!("DOC module {}: {e}",module.display()))?;
                 if body.len()>65_536{return Err("DOC module exceeds 64KiB".into());}
@@ -407,12 +427,10 @@ impl Graph {
                 let relative=operand.trim().strip_prefix('"')
                     .and_then(|s|s.strip_suffix('"'))
                     .ok_or("effect read path must be quoted")?;
-                if relative.is_empty() || relative.contains('"') ||
-                   relative.bytes().any(|c|c.is_ascii_whitespace()) ||
-                   Path::new(relative).is_absolute(){
-                    return Err("DOC effect read requires a relative ASCII path".into());
+                if !safe_doc_relative_path(relative) {
+                    return Err("DOC effect read requires a confined relative path".into());
                 }
-                let file_path=base.join(relative);
+                let file_path=confined_doc_path(base,relative)?;
                 let raw=std::fs::read_to_string(&file_path)
                     .map_err(|e|format!("DOC read effect {}: {e}",file_path.display()))?;
                 if raw.len()>8_192{return Err("DOC read effect exceeds 8KiB".into());}
