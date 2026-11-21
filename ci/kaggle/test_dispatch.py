@@ -24,7 +24,7 @@ class KaggleDispatchPolicy(unittest.TestCase):
         self.assertTrue(module.gpu_session_attempted(""))
         self.assertTrue(module.gpu_session_attempted("Kaggle kernel was launched, but log truncated"))
         self.assertTrue(module.gpu_session_attempted(
-            first + "\\n" + blocked))
+            first + "\n" + blocked))
         history={"workflow_runs":[
             {"id":1,"created_at":"2026-11-22T00:00:00Z"},
             {"id":2,"created_at":"2026-11-21T21:00:00Z","conclusion":"failure"},
