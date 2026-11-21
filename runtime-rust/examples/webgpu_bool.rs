@@ -230,7 +230,7 @@ async fn run() -> Result<(), Box<dyn Error>> {
         let host_setup_ms = gpu_started.elapsed().as_secs_f64() * 1000.0;
         queue.submit(Some(encoder.finish()));
         if let Some(error) = device.pop_error_scope().await {
-            return Err(format!("DOC WebGPU validation failure at episode {episode}: {error}").into());
+            return Err(format!("DOC WebGPU validation failure: episode={episode}: {error}").into());
         }
         let slice = readback.slice(..);
         let (tx, rx) = std::sync::mpsc::channel();
