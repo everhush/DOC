@@ -219,4 +219,28 @@ for bin in "$native" "$rust"; do
     diff -u <(printf 'a: 0\nsafe: 1\noverflow: 9223372036854775807\n') "$tmp/frontier-values-$label.log"
 done
 
+
+# Version boundary: a successful epoch may precede a failed next generation.
+# This tests observable publication, not physical snapshot retention/reclamation.
+cat > "$tmp/epoch-overflow.doc" <<'DOC'
+source counter: int = 9223372036854775806
+derive next_counter: int (counter) = add(counter,1)
+DOC
+for bin in "$native" "$rust"; do
+    label=rust
+    if [[ "$bin" == "$native" ]]; then label=goose; fi
+    if "$bin" "$tmp/epoch-overflow.doc" --through=2 counter=next_counter > "$logs/epoch-overflow-$label.log" 2>&1; then
+        echo "Accepted overflowing epoch: $label" >&2
+        exit 1
+    fi
+    grep -Fx 'epoch: 0' "$logs/epoch-overflow-$label.log" >/dev/null
+    grep -Fx 'epoch: 1' "$logs/epoch-overflow-$label.log" >/dev/null
+    grep -Fx 'counter: 9223372036854775807' "$logs/epoch-overflow-$label.log" >/dev/null
+    if grep -q '^epoch: 2
+ "$logs/epoch-overflow-$label.log"; then
+        echo "Published failed epoch: $label" >&2
+        exit 1
+    fi
+done
+
 echo DOC_TYPED_FINITE_PASS | tee -a "$logs/goose-typed-differential.log"
