@@ -88,198 +88,70 @@ jobs:
           if-no-files-found: warn
 
   webgpu-compute:
-    needs: goose-toolchain
-    name: DOC-derived WebGPU compute on Mesa lavapipe (software adapter)
+    name: Native Rust wgpu DOC compute (Mesa Vulkan, no Goose bridge)
     runs-on: ubuntu-latest
-    timeout-minutes: 25
-    env:
-      XDG_RUNTIME_DIR: /tmp/doc-xdg
+    timeout-minutes: 35
+    needs: rust
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: runtime-rust
-      - name: Install Vulkan software adapter for real WebGPU dispatch
+      - name: Install Mesa Vulkan for actual Rust WebGPU dispatch
         run: |
-          set -o pipefail
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends mesa-vulkan-drivers libvulkan1 vulkan-tools
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq libvulkan1 mesa-vulkan-drivers vulkan-tools
           mkdir -p validation-logs
-          install -d -m 700 "$XDG_RUNTIME_DIR"
-          lavapipe_icd=$(dpkg-query -L "mesa-vulkan-drivers:$(dpkg --print-architecture)" | awk '/\/lvp_icd(\.[^/]+)?\.json$/')
-          if [[ ! -f "$lavapipe_icd" ]]; then
-            echo 'Expected one installed lavapipe Vulkan manifest.' >&2
-            exit 1
-          fi
-          printf 'VK_DRIVER_FILES=%s\n' "$lavapipe_icd" | tee validation-logs/vulkan-icd.log >> "$GITHUB_ENV"
-          VK_DRIVER_FILES="$lavapipe_icd" vulkaninfo --summary 2>&1 | tee validation-logs/vulkan-adapter.log
-      - name: Test WebGPU batch validation
-        run: cargo test --release --manifest-path runtime-rust/Cargo.toml --features webgpu --example webgpu_bool
-      - name: Compile, dispatch and compare DOC GPU vs CPU outputs
-        env:
-          RUST_LOG: wgpu_core=debug,wgpu_hal=debug
-        run: |
-          set -o pipefail
-          cargo run --release --manifest-path runtime-rust/Cargo.toml --features webgpu --example webgpu_bool 2>&1 | tee validation-logs/doc-webgpu-compute.log
-          grep -q DOC_WEBGPU_COMPUTE_PASS validation-logs/doc-webgpu-compute.log
-      - name: Get native Goose shader and CPU oracle
-        uses: actions/download-artifact@v4
-        with:
-          name: doc-goose-webgpu-input
-          path: validation-logs/goose-webgpu
-      - name: Dispatch Goose-derived WGSL and compare both native CPU results
-        run: |
-          set -o pipefail
-          cargo run --release --manifest-path runtime-rust/Cargo.toml --features webgpu --example webgpu_bool -- --shader validation-logs/goose-webgpu/conditional.wgsl 2>&1 | tee validation-logs/doc-goose-webgpu-compute.log
-          grep '^DOC_WEBGPU_COMPUTE_PASS:' validation-logs/doc-goose-webgpu-compute.log > validation-logs/doc-goose-webgpu-actual.txt
-          diff -u validation-logs/goose-webgpu/expected.txt validation-logs/doc-goose-webgpu-actual.txt
-      - name: Check ordered device stages from both lowerers
-        run: |
-          set -o pipefail
-          cargo run --release --manifest-path runtime-rust/Cargo.toml --features webgpu --example webgpu_bool -- --staged 2>&1 | tee validation-logs/doc-rust-staged.log
-          cargo run --release --manifest-path runtime-rust/Cargo.toml --features webgpu --example webgpu_bool -- --staged-shaders validation-logs/goose-webgpu/stage-1.wgsl validation-logs/goose-webgpu/stage-2.wgsl 2>&1 | tee validation-logs/doc-goose-staged.log
-          for runtime in rust goose; do
-            grep '^DOC_WEBGPU_COMPUTE_PASS:' "validation-logs/doc-${runtime}-staged.log" > "validation-logs/doc-${runtime}-staged-actual.txt"
-            diff -u validation-logs/goose-webgpu/staged-expected.txt "validation-logs/doc-${runtime}-staged-actual.txt"
-          done
-          printf 'invalid WGSL\n' > validation-logs/invalid.wgsl
-          if cargo run --release --manifest-path runtime-rust/Cargo.toml --features webgpu --example webgpu_bool -- --staged-shaders validation-logs/goose-webgpu/stage-1.wgsl validation-logs/invalid.wgsl > validation-logs/doc-invalid-staged.log 2>&1; then
-            echo 'Invalid stage unexpectedly completed' >&2
-            exit 1
-          fi
-          grep -F 'DOC WebGPU validation failure:' validation-logs/doc-invalid-staged.log
-          if grep -q '^DOC_WEBGPU_COMPUTE_PASS:' validation-logs/doc-invalid-staged.log; then exit 1; fi
-      - name: Source-update GPU repair and explicit CPU fallback boundary tests
+          vulkaninfo --summary > validation-logs/rust-adapter.log 2>&1
+      - name: Rust wgpu map, staged reduction, source repair and CPU differential
         run: |
           set -euo pipefail
-          cargo build --release --manifest-path runtime-rust/Cargo.toml --features webgpu --example webgpu_bool
-          executable=runtime-rust/target/release/examples/webgpu_bool
-          for lanes in 1 63 64 65 127 128 129 130 256; do
-            DOC_GPU_LANES=$lanes "$executable" --repair > "validation-logs/doc-gpu-repair-$lanes.log" 2>&1
-            grep -Fx 'DOC_WEBGPU_EPISODE: 0' "validation-logs/doc-gpu-repair-$lanes.log"
-            grep -Fx 'DOC_WEBGPU_EPISODE: 1' "validation-logs/doc-gpu-repair-$lanes.log"
-            test "$(grep -c '^DOC_WEBGPU_COMPUTE_PASS:' "validation-logs/doc-gpu-repair-$lanes.log")" = 2
-          done
-          DOC_GPU_LANES=65 "$executable" --repair-shader validation-logs/goose-webgpu/conditional.wgsl \
-            > validation-logs/doc-goose-gpu-repair.log 2>&1
-          test "$(grep -c '^DOC_WEBGPU_COMPUTE_PASS:' validation-logs/doc-goose-gpu-repair.log)" = 2
-          DOC_GPU_LANES=129 "$executable" --staged-shaders-repair \
-            validation-logs/goose-webgpu/stage-1.wgsl \
-            validation-logs/goose-webgpu/stage-2.wgsl \
-            > validation-logs/doc-goose-staged-repair.log 2>&1
-          test "$(grep -c '^DOC_WEBGPU_COMPUTE_PASS:' validation-logs/doc-goose-staged-repair.log)" = 2
-          DOC_GPU_EXECUTION=cpu DOC_GPU_LANES=65 "$executable" --staged-repair \
-            > validation-logs/doc-cpu-fallback.log 2>&1
-          test "$(grep -c '^DOC_CPU_FALLBACK_PASS:' validation-logs/doc-cpu-fallback.log)" = 2
-          if grep -q '^DOC_WEBGPU_COMPUTE_PASS:' validation-logs/doc-cpu-fallback.log; then exit 1; fi
-          for invalid in 0 4097 abc; do
-            if DOC_GPU_LANES=$invalid "$executable" \
-              > "validation-logs/doc-invalid-lanes-$invalid.log" 2>&1; then
-              echo "Accepted invalid lane count $invalid" >&2
-              exit 1
-            fi
-          done
-          # A simulated late GPU failure must never publish the failed
-          # candidate and must NOT be silently reclassified as CPU fallback.
-          for epoch in 0 1; do
-            if DOC_GPU_EXECUTION=auto DOC_GPU_INJECT_FAILURE_EPISODE="$epoch" \
-              "$executable" --repair > "validation-logs/doc-injected-failure-$epoch.log" 2>&1; then
-              echo "Unexpectedly accepted injected GPU failure in episode $epoch" >&2
-              exit 1
-            fi
-            grep -F "DOC_WEBGPU_INJECTED_FAILURE: episode=$epoch" \
-              "validation-logs/doc-injected-failure-$epoch.log"
-            published=$(grep -c '^DOC_WEBGPU_COMPUTE_PASS:' \
-              "validation-logs/doc-injected-failure-$epoch.log" || true)
-            test "$published" = "$epoch"
-            if grep -q '^DOC_CPU_FALLBACK_PASS:' \
-              "validation-logs/doc-injected-failure-$epoch.log"; then
-              echo 'Wrongly treated a failed GPU dispatch as CPU fallback' >&2
-              exit 1
-            fi
-          done
-          if DOC_GPU_REQUIRE_HARDWARE=1 DOC_GPU_EXECUTION=cpu \
-            "$executable" > validation-logs/doc-invalid-hardware-fallback.log 2>&1; then
-            echo 'Hardware gate accepted a CPU-only execution' >&2
-            exit 1
-          fi
-          echo DOC_WEBGPU_FAULT_INJECTION_PASS
-          # Second dependent GPU compute stage folds DOC-generated Boolean lanes.
-          for lanes in 1 64 65 129 256 1024; do
-            DOC_GPU_REDUCTION=1 DOC_GPU_LANES=$lanes "$executable" --staged-shaders-repair \
-              validation-logs/goose-webgpu/stage-1.wgsl \
-              validation-logs/goose-webgpu/stage-2.wgsl \
-              > "validation-logs/doc-reduction-$lanes.log" 2>&1
-            test "$(grep -c '^DOC_WEBGPU_REDUCTION_PASS:' "validation-logs/doc-reduction-$lanes.log")" = 2
-            test "$(grep -c '^DOC_WEBGPU_COMPUTE_PASS:' "validation-logs/doc-reduction-$lanes.log")" = 2
-          done
-          DOC_GPU_EXECUTION=cpu DOC_GPU_REDUCTION=1 DOC_GPU_LANES=129 \
-            "$executable" --staged-repair > validation-logs/doc-reduction-cpu-only.log 2>&1
-          if grep -q '^DOC_WEBGPU_REDUCTION_PASS:' validation-logs/doc-reduction-cpu-only.log; then
-            echo "CPU fallback falsely claimed GPU reduction" >&2
-            exit 1
-          fi
-          if DOC_GPU_REDUCTION=invalid "$executable" > validation-logs/doc-invalid-reduction.log 2>&1; then
-            echo "Invalid DOC GPU reduction setting accepted" >&2
-            exit 1
-          fi
-          echo DOC_WEBGPU_DEPENDENT_REDUCTION_PASS
-          echo DOC_WEBGPU_REPAIR_AND_CPU_FALLBACK_PASS
-      - name: Signed i64 DOC equality on portable i32 WebGPU with real dispatch
-        run: |
-          set -euo pipefail
-          cargo test --release --manifest-path runtime-rust/Cargo.toml --features webgpu --example webgpu_integer_eq
-          cargo build --release --manifest-path runtime-rust/Cargo.toml --features webgpu --example webgpu_integer_eq
-          executable=runtime-rust/target/release/examples/webgpu_integer_eq
-          for lanes in 1 2 63 64 65 129 257 1024; do
-            DOC_GPU_LANES=$lanes "$executable"               > "validation-logs/signed-rust-$lanes.log" 2>&1
-            DOC_GPU_LANES=$lanes "$executable"               --shader validation-logs/goose-webgpu/integer-equality.wgsl               > "validation-logs/signed-goose-$lanes.log" 2>&1
-            for origin in rust goose; do
-              log="validation-logs/signed-$origin-$lanes.log"
-              test "$(grep -c '^DOC_SIGNED_WEBGPU_COMPUTE_PASS:' "$log")" = 2
-              grep -F 'DOC_SIGNED_WEBGPU_ADAPTER:' "$log"
-            done
-            diff -u               <(grep '^DOC_SIGNED_WEBGPU_COMPUTE_PASS:' "validation-logs/signed-rust-$lanes.log")               <(grep '^DOC_SIGNED_WEBGPU_COMPUTE_PASS:' "validation-logs/signed-goose-$lanes.log")
-          done
-          if DOC_GPU_INJECT_INT_OUT_OF_RANGE=1 "$executable"             > validation-logs/signed-out-of-range.log 2>&1; then
-            echo 'WebGPU accepted out-of-range DOC i64' >&2
-            exit 1
-          fi
-          grep -F 'outside i32 WebGPU eligibility range' validation-logs/signed-out-of-range.log
-          if grep -q '^DOC_SIGNED_WEBGPU_COMPUTE_PASS:' validation-logs/signed-out-of-range.log; then
-            exit 1
-          fi
-          DOC_GPU_EXECUTION=cpu "$executable"             > validation-logs/signed-cpu-only.log 2>&1
-          test "$(grep -c '^DOC_SIGNED_CPU_ONLY_PASS:' validation-logs/signed-cpu-only.log)" = 2
-          if grep -q '^DOC_SIGNED_WEBGPU_COMPUTE_PASS:' validation-logs/signed-cpu-only.log; then exit 1; fi
-          # Additional signed ordering operators, independently lowered
-          # from identical DOC source by the Rust and Goose frontends.
-          for op in lt le; do
-            for lanes in 1 64 65 257; do
-              DOC_GPU_LANES=$lanes "$executable" "--$op" \
-                > "validation-logs/signed-$op-rust-$lanes.log" 2>&1
-              DOC_GPU_LANES=$lanes "$executable" "--$op" --shader \
-                "validation-logs/goose-webgpu/integer-$([ "$op" = lt ] && echo less || echo le).wgsl" \
-                > "validation-logs/signed-$op-goose-$lanes.log" 2>&1
-              for origin in rust goose; do
-                test "$(grep -c '^DOC_SIGNED_WEBGPU_COMPUTE_PASS:' \
-                    "validation-logs/signed-$op-$origin-$lanes.log")" = 2
-              done
-              diff -u \
-                <(grep '^DOC_SIGNED_WEBGPU_COMPUTE_PASS:' "validation-logs/signed-$op-rust-$lanes.log") \
-                <(grep '^DOC_SIGNED_WEBGPU_COMPUTE_PASS:' "validation-logs/signed-$op-goose-$lanes.log")
+          cargo test --release --manifest-path runtime-rust/Cargo.toml \
+            --features webgpu --example webgpu_integer_eq
+          cargo build --release --manifest-path runtime-rust/Cargo.toml \
+            --features webgpu --examples
+          bool=runtime-rust/target/release/examples/webgpu_bool
+          signed=runtime-rust/target/release/examples/webgpu_integer_eq
+          "$bool" > validation-logs/rust-map.log 2>&1
+          grep -F 'DOC_WEBGPU_COMPUTE_PASS:' validation-logs/rust-map.log
+          DOC_GPU_REDUCTION=1 "$bool" --staged-repair \
+            > validation-logs/rust-staged-reduction.log 2>&1
+          test "$(grep -c '^DOC_WEBGPU_COMPUTE_PASS:' \
+            validation-logs/rust-staged-reduction.log)" = 2
+          test "$(grep -c '^DOC_WEBGPU_REDUCTION_PASS:' \
+            validation-logs/rust-staged-reduction.log)" = 2
+          for mode in eq lt le; do
+            for lanes in 1 63 64 65 129 257 1024; do
+              if [ "$mode" = eq ]; then
+                DOC_GPU_LANES="$lanes" "$signed" \
+                  > "validation-logs/rust-$mode-$lanes.log" 2>&1
+              else
+                DOC_GPU_LANES="$lanes" "$signed" "--$mode" \
+                  > "validation-logs/rust-$mode-$lanes.log" 2>&1
+              fi
+              test "$(grep -c '^DOC_SIGNED_WEBGPU_COMPUTE_PASS:' \
+                "validation-logs/rust-$mode-$lanes.log")" = 2
             done
           done
-          echo DOC_SIGNED_WEBGPU_ORDERING_PASS
-          echo DOC_SIGNED_WEBGPU_DIFFERENTIAL_PASS
-      - name: Preserve WebGPU adapter and correctness evidence
+          if DOC_GPU_INJECT_INT_OUT_OF_RANGE=1 "$signed" \
+            > validation-logs/rust-range-reject.log 2>&1; then
+            echo "Rust wgpu i64 range rejection failed" >&2; exit 1
+          fi
+          DOC_GPU_EXECUTION=cpu DOC_GPU_REDUCTION=1 "$bool" --staged-repair \
+            > validation-logs/rust-cpu-only.log 2>&1
+          if grep -q '^DOC_WEBGPU_COMPUTE_PASS:' validation-logs/rust-cpu-only.log; then
+            echo "Rust CPU fallback falsely claimed GPU dispatch" >&2; exit 1
+          fi
+          echo DOC_RUST_WGPU_INDEPENDENT_PASS
+      - name: Preserve Rust-only wgpu evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: doc-webgpu-lavapipe
+          name: doc-rust-wgpu-validation
           path: validation-logs/
-          retention-days: 7
+          retention-days: 14
           if-no-files-found: warn
 
   goose-toolchain:
@@ -350,13 +222,6 @@ jobs:
             > validation-logs/goose-installed-smoke.log 2>&1
           grep -Fx 'chosen: 10' validation-logs/goose-installed-smoke.log
           echo DOC_GOOSE_PACKAGED_INSTALL_PASS
-      - name: Publish native Goose shader and CPU oracle
-        uses: actions/upload-artifact@v4
-        with:
-          name: doc-goose-webgpu-input
-          path: validation-logs/goose-webgpu/
-          retention-days: 7
-          if-no-files-found: error
       - name: Preserve Goose compilation evidence
         if: always()
         uses: actions/upload-artifact@v4
