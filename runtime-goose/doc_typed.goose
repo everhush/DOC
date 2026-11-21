@@ -544,6 +544,30 @@ fn declare_user_function(rest: u8[:],functions: UserFn[>..]&,
     });
 }
 
+// Lexical portable path policy. Goose stdlib currently has no exposed
+// canonical-path/symlink-check primitive: this is a strong lexical check,
+// not an OS-level filesystem sandbox against preexisting symlinks.
+fn safe_doc_path(path: u8[:]) -> bool {
+    if path.len == 0 || path.len > 256 || path[0] == '/' { return false; }
+    var component_start = 0;
+    for i in 0..path.len {
+        let c=path[i];
+        if c == '/' {
+            if i == component_start { return false; }
+            let component=path[component_start..i];
+            if component == "." || component == ".." { return false; }
+            component_start=i+1;
+        } else if !((c >= 'a' && c <= 'z') ||
+                    (c >= 'A' && c <= 'Z') ||
+                    (c >= '0' && c <= '9') ||
+                    c == '-' || c == '_' || c == '.') {
+            return false;
+        }
+    }
+    let last=path[component_start..];
+    return last.len > 0 && last != "." && last != "..";
+}
+
 fn load(source: u8[:], nodes: State[>..]&, values: Value[>..]&,
         active: bool[>..]&, origin: u8[:]) {
     var functions: UserFn[>..] = [];
@@ -558,12 +582,8 @@ fn load(source: u8[:], nodes: State[>..]&, values: Value[>..]&,
             // source file. We reject transitive imports and side-effectful
             // module declarations instead of silently changing semantics.
             let relative = trim(line[7..]);
-            if relative.len < 5 || relative.len > 256 ||
-               relative[0] == '/' ||
+            if !safe_doc_path(relative) || relative.len < 5 ||
                relative[relative.len-4..] != ".doc" { fail(); }
-            for c in relative {
-                if c == ' ' || c == '\t' || c == '\r' { fail(); }
-            }
             var prefix = 0;
             for i in 0..origin.len {
                 if origin[i] == '/' { prefix = i+1; }
@@ -605,11 +625,7 @@ fn load(source: u8[:], nodes: State[>..]&, values: Value[>..]&,
             if quoted.len < 3 || quoted[0] != '"' ||
                quoted[quoted.len-1] != '"' { fail(); }
             let relative = quoted[1..quoted.len-1];
-            if relative.len == 0 || relative[0] == '/' { fail(); }
-            for c in relative {
-                if c == '"' || c == ' ' || c == '\r' ||
-                   c == '\t' || c == '\n' { fail(); }
-            }
+            if !safe_doc_path(relative) { fail(); }
             var prefix = 0;
             for i in 0..origin.len {
                 if origin[i] == '/' { prefix = i+1; }

@@ -30,6 +30,9 @@ tests={
     "missing":"effect a: int = read(\"not-found.txt\")",
     "wrong-op":"effect a: int = write(\"source.txt\")",
     "absolute":"effect a: int = read(\"/tmp/no.txt\")",
+    "parent":"effect a: int = read(\"../outside.txt\")",
+    "dot":"effect a: int = read(\"./bad-bool.txt\")",
+    "drive":"effect a: int = read(\"C:/Windows/secret.txt\")",
     "bad-bool":"effect a: bool = read(\"bad-bool.txt\")",
     "oversize":"effect a: nat = read(\"too-many.txt\")",
 }
