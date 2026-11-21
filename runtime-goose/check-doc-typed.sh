@@ -245,4 +245,5 @@ done
 bash runtime-goose/check-doc-recurrence-policy.sh "$native" "$rust" "$logs"
 bash runtime-goose/check-doc-demand.sh "$native" "$rust" "$logs"
 python3 runtime-goose/check-doc-nat.py "$native" "$rust" "$logs"
+python3 runtime-goose/check-doc-counter-program.py "$native" "$rust" "$logs"
 echo DOC_TYPED_FINITE_PASS | tee -a "$logs/goose-typed-differential.log"
