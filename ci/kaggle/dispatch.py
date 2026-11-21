@@ -17,9 +17,11 @@ import tempfile
 import time
 import urllib.request
 
-MAX_WEEKLY_RUNS = 2
+# No DOC-specific weekly run cap: spend the actual account quota on distinct
+# experiments. A small 7-day duplicate lookback is NOT a quota/run limit.
+DUPLICATE_LOOKBACK_DAYS = 7
 MAX_SESSION_MINUTES = 30
-MIN_QUOTA_RESERVE_HOURS = 2.0
+MIN_QUOTA_RESERVE_HOURS = 0.0
 ACCELERATORS = {"NvidiaTeslaT4", "NvidiaL4"}
 STATUS = re.compile(r"\b(?:KERNELWORKERSTATUS[.]|KERNELSTATUS[.])?(COMPLETE|COMPLETED|ERROR|FAILED|CANCELLED|CANCELED|RUNNING|QUEUED|PENDING|INITIALIZING)\b")
 
@@ -49,27 +51,28 @@ def gpu_remaining_hours(blob):
         raise ValueError("Missing or ambiguous GPU quota: refusing to submit")
     return quota_hours(rows[0]["remaining"])
 
-def github_recent_attempts(data, current_run, now, attempted=None):
-    runs = data.get("workflow_runs") if isinstance(data, dict) else None
-    if not isinstance(runs, list) or len(runs) >= 100:
-        raise ValueError("Incomplete workflow-run history: refusing to submit")
-    since = now - dt.timedelta(days=7)
-    count = 0
-    for run in runs:
-        if str(run.get("id")) == str(current_run):
+def duplicate_gpu_submission(log, sha, accelerator):
+    """A prior remote submission for this exact source and GPU experiment.
+
+    The source revision is the authoritative work identity: changing the DOC
+    implementation/tests creates new useful work. Different accelerators are
+    distinct hardware experiments. Historical logs without an accelerator
+    field (older workflow revisions) match conservatively by source SHA.
+    CPU-only failures and quota skips never become GPU submissions.
+    """
+    if not re.fullmatch(r"[0-9a-f]{40}", sha):
+        raise ValueError("Invalid DOC source SHA in duplicate check")
+    if accelerator not in ACCELERATORS:
+        raise ValueError("Unsupported Kaggle GPU experiment")
+    for line in log.splitlines():
+        if "DOC_KAGGLE_DISPATCH: notebook=" not in line:
             continue
-        created = run.get("created_at")
-        if not created:
-            raise ValueError("Missing run timestamp")
-        timestamp = dt.datetime.fromisoformat(created.replace("Z", "+00:00"))
-        if timestamp < since or run.get("conclusion") == "skipped":
+        if not re.search(r"\bsha=" + re.escape(sha) + r"(?:\s|$)", line):
             continue
-        # workflow_run events exist even when DOC_KAGGLE_AUTORUN=false.
-        # Only real non-skipped GPU jobs may consume the two-run budget.
-        if attempted is not None and not attempted(str(run["id"])):
-            continue
-        count += 1
-    return count
+        match = re.search(r"\baccelerator=([A-Za-z0-9_-]+)(?:\s|$)", line)
+        if match is None or match.group(1) == accelerator:
+            return True
+    return False
 
 def status_from_cli(value):
     hits = STATUS.findall(value.upper())
@@ -142,51 +145,66 @@ def gpu_session_attempted(log):
         return False
     return True
 
-def github_attempts(repo, token, current_run):
+def github_duplicate_work(repo, token, current_run, sha, accelerator):
+    """Check only for an already-submitted identical GPU task, not run count.
+
+    Skip preflight-only failures; check completed/failed submissions alike to
+    avoid repeat billable hardware work. All pages in the recent seven-day
+    lookback are examined; GitHub log/API ambiguity fails closed rather than
+    silently authorizing duplicate work.
+    """
     if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repo):
         raise ValueError("Invalid repository")
     if not token:
-        raise ValueError("GITHUB_TOKEN is required for exact weekly dispatch accounting")
-    uri = f"https://api.github.com/repos/{repo}/actions/workflows/doc-kaggle-gpu.yml/runs?per_page=100"
-    req = urllib.request.Request(uri, headers={
-        "Authorization": "Bearer " + token,
-        "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28"})
-    with urllib.request.urlopen(req, timeout=30) as reply:
-        history = json.load(reply)
-    def attempted(run_id):
-        uri = f"https://api.github.com/repos/{repo}/actions/runs/{run_id}/jobs?per_page=100"
-        jobs_req = urllib.request.Request(uri, headers={
-            "Authorization": "Bearer " + token,
-            "Accept": "application/vnd.github+json",
-            "X-GitHub-Api-Version": "2022-11-28"})
-        with urllib.request.urlopen(jobs_req, timeout=30) as response:
-            jobs = json.load(response)
-        entries = jobs.get("jobs")
-        if not isinstance(entries, list) or len(entries) >= 100:
-            raise ValueError("Incomplete historical GPU job status")
-        for item in entries:
-            if ("Kaggle Rust wgpu vs Goose SDL3 physical GPU" not in
-                item.get("name", "") or item.get("conclusion") == "skipped"):
+        raise ValueError("GITHUB_TOKEN is required for safe GPU deduplication")
+    base = f"https://api.github.com/repos/{repo}"
+    headers = {"Authorization":"Bearer "+token,
+               "Accept":"application/vnd.github+json",
+               "X-GitHub-Api-Version":"2022-11-28"}
+    def get_json(path):
+        with urllib.request.urlopen(
+                urllib.request.Request(base+path,headers=headers),
+                timeout=30) as reply:
+            return json.load(reply)
+    cutoff = dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=DUPLICATE_LOOKBACK_DAYS)
+    for page in range(1, 51):
+        history = get_json(
+            f"/actions/workflows/doc-kaggle-gpu.yml/runs?per_page=100&page={page}")
+        runs = history.get("workflow_runs")
+        if not isinstance(runs,list):
+            raise ValueError("Cannot inspect Kaggle GPU run history")
+        for run in runs:
+            if str(run.get("id")) == str(current_run) or run.get("conclusion") == "skipped":
                 continue
-            if not isinstance(item.get("id"), int):
-                return True
-            uri = f"https://api.github.com/repos/{repo}/actions/jobs/{item['id']}/logs"
-            req = urllib.request.Request(uri, headers={
-                "Authorization": "Bearer " + token,
-                "Accept": "application/vnd.github+json",
-                "X-GitHub-Api-Version": "2022-11-28"})
-            try:
-                with urllib.request.urlopen(req, timeout=30) as response:
-                    output = response.read(12_000_001)
-                if len(output) > 12_000_000:
-                    return True  # Truncated historical evidence is ambiguous.
-                if gpu_session_attempted(output.decode("utf-8", errors="replace")):
+            created = run.get("created_at")
+            if not created:
+                raise ValueError("Unknown date for prior Kaggle GPU attempt")
+            if dt.datetime.fromisoformat(created.replace("Z","+00:00")) < cutoff:
+                continue
+            details = get_json(f"/actions/runs/{run['id']}/jobs?per_page=100")
+            jobs = details.get("jobs")
+            if not isinstance(jobs,list) or len(jobs)>=100:
+                raise ValueError("Incomplete Kaggle GPU job list")
+            for job in jobs:
+                if ("Kaggle Rust wgpu vs Goose SDL3 physical GPU" not in
+                    job.get("name","") or job.get("conclusion")=="skipped"):
+                    continue
+                job_id=job.get("id")
+                if not isinstance(job_id,int):
+                    raise ValueError("Unidentified Kaggle GPU job")
+                uri=f"{base}/actions/jobs/{job_id}/logs"
+                with urllib.request.urlopen(
+                        urllib.request.Request(uri,headers=headers),
+                        timeout=30) as response:
+                    log=response.read(12_000_001)
+                if len(log)>12_000_000:
+                    raise ValueError("Truncated Kaggle GPU job log")
+                if duplicate_gpu_submission(log.decode("utf-8",errors="replace"),
+                                            sha,accelerator):
                     return True
-            except (OSError, ValueError, UnicodeError):
-                return True  # Missing evidence cannot increase GPU allowance.
-        return False
-    return github_recent_attempts(history, current_run, dt.datetime.now(dt.timezone.utc), attempted)
+        if len(runs)<100:
+            return False
+    raise ValueError("Kaggle GPU job history too large to deduplicate safely")
 
 def prepare_kernel(folder, template, spec, username):
     folder.mkdir(parents=True, exist_ok=False)
@@ -278,11 +296,13 @@ def main():
             prepare_kernel(Path(temp) / "kernel", Path(args.template), spec, "test-owner")
         print("DOC_KAGGLE_DRY_RUN_PASS: no credentials, GPU or quota consumed")
         return 0
-    previous = github_attempts(spec["repo"], os.environ.get("GITHUB_TOKEN", ""), spec["run_id"])
-    if previous >= MAX_WEEKLY_RUNS:
-        print(f"DOC_KAGGLE_QUOTA_SKIP: maximum {MAX_WEEKLY_RUNS} attempts in rolling 7 days")
+    duplicate = github_duplicate_work(spec["repo"], os.environ.get("GITHUB_TOKEN", ""),
+                                     spec["run_id"], spec["sha"], args.accelerator)
+    if duplicate:
+        print("DOC_KAGGLE_DUPLICATE_SKIP: identical source and GPU experiment already submitted")
         (out / "doc-kaggle-skipped.json").write_text(json.dumps({
-            "sha": spec["sha"], "reason": "weekly-doc-budget", "previous_attempts": previous}))
+            "sha": spec["sha"], "accelerator":args.accelerator,
+            "reason":"identical-hardware-work-already-submitted"}))
         return 0
     with tempfile.TemporaryDirectory(prefix="doc-kaggle-") as temp:
         env, owner = auth_environment(os.environ.get("KAGGLE_DOC_1", ""),
@@ -291,8 +311,9 @@ def main():
         required = MIN_QUOTA_RESERVE_HOURS + args.minutes / 60
         (out / "doc-kaggle-quota-preflight.json").write_text(json.dumps({
             "sha": spec["sha"], "remaining_gpu_hours": remaining,
-            "required_hours": required, "rolling_week_prior_runs": previous,
-            "weekly_max_runs": MAX_WEEKLY_RUNS, "session_max_minutes": args.minutes}, indent=2))
+            "required_hours": required, "weekly_submission_limit": None,
+            "duplicate_lookback_days":DUPLICATE_LOOKBACK_DAYS,
+            "duplicate_detected":False,"session_max_minutes":args.minutes}, indent=2))
         if remaining < required:
             print(f"DOC_KAGGLE_QUOTA_SKIP: remaining {remaining:.2f}h, needed {required:.2f}h")
             return 0
@@ -308,7 +329,7 @@ def main():
         (out/"doc-kaggle-bundle-provenance.json").write_text(
             json.dumps({"sha":spec["sha"],**bundle},indent=2)+"\n")
         name = prepare_kernel(Path(temp) / "kernel", Path(args.template), spec, owner)
-        print(f"DOC_KAGGLE_DISPATCH: notebook={name} sha={spec['sha']} minutes={args.minutes} "
+        print(f"DOC_KAGGLE_DISPATCH: notebook={name} sha={spec['sha']} accelerator={args.accelerator} minutes={args.minutes} "
               f"dataset={bundle['bundle_dataset']} built-on-github-cpu={bundle['standard_ci_run_id']}")
         kaggle(["kernels", "push", "-p", str(Path(temp) / "kernel"),
                 "--accelerator", args.accelerator, "--timeout", str(args.minutes * 60)], env, timeout=180)
