@@ -232,15 +232,88 @@ jobs:
           if-no-files-found: warn
 
 
+  goose-sdl3-compute:
+    name: Native Goose SDL3 GPU compute, direct device and DOC oracle
+    runs-on: ubuntu-latest
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install SDL3 graphics dependencies and Mesa Vulkan
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq cmake ninja-build pkg-config git \
+            libx11-dev libxext-dev libxrandr-dev libxinerama-dev \
+            libxcursor-dev libxi-dev libxkbcommon-dev libvulkan-dev \
+            libvulkan1 mesa-vulkan-drivers vulkan-tools
+          mkdir -p validation-logs
+          vulkaninfo --summary > validation-logs/goose-sdl3-adapter.log 2>&1
+      - name: Restore pinned SDL3-enabled upstream Goose compiler and gfx package
+        id: goose-sdl3-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            /tmp/doc-sdl3-goose
+            /tmp/doc-sdl3-build
+          key: goose-sdl3-gfx-v1-9412b80f52d833c4697cffdbbf1f4eeb5195cd41-v2
+      - name: Build pinned native Goose with third-party SDL3 gfx
+        if: steps.goose-sdl3-cache.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          git init /tmp/doc-sdl3-goose
+          git -C /tmp/doc-sdl3-goose fetch --depth 1 \
+            https://github.com/aardappel/goose.git \
+            9412b80f52d833c4697cffdbbf1f4eeb5195cd41
+          git -C /tmp/doc-sdl3-goose checkout --detach FETCH_HEAD
+          cmake -S /tmp/doc-sdl3-goose -B /tmp/doc-sdl3-build \
+            -DCMAKE_BUILD_TYPE=Release -DGOOSE_BUILTIN_LIBS=gfx
+          cmake --build /tmp/doc-sdl3-build --parallel 2
+      - name: Native Goose SDL3 compiler, module and executable validation
+        run: |
+          set -euo pipefail
+          test -x /tmp/doc-sdl3-build/goose
+          /tmp/doc-sdl3-build/goose version \
+            > validation-logs/goose-sdl3-compiler-version.log
+          /tmp/doc-sdl3-build/goose check runtime-goose/doc_sdl3_gpu.goose \
+            2>&1 | tee validation-logs/goose-sdl3-check.log
+          /tmp/doc-sdl3-build/goose build runtime-goose/doc_sdl3_gpu.goose \
+            --offline -o validation-logs/doc-goose-sdl3 \
+            2>&1 | tee validation-logs/goose-sdl3-build.log
+          chmod +x validation-logs/doc-goose-sdl3
+          ldd validation-logs/doc-goose-sdl3 \
+            > validation-logs/goose-sdl3-native-dependencies.log 2>&1 || true
+          if grep -REn 'fn emit_shader|fn emit_signed_equality|--emit-wgsl' \
+            runtime-goose --include='*.goose'; then
+            echo "Removed custom Goose WGSL source has reappeared" >&2
+            exit 1
+          fi
+      - name: Real SDL3 GPU compute, dependent stages and independent CPU oracle
+        env:
+          GOOSE_GFX_HEADLESS: "1"
+          VK_ICD_FILENAMES: /usr/share/vulkan/icd.d/lvp_icd.x86_64.json
+        run: |
+          set -euo pipefail
+          python3 runtime-goose/check-doc-sdl3-gpu.py \
+            validation-logs/doc-goose-sdl3 validation-logs/goose-sdl3
+          grep -Fx 'DOC_GOOSE_SDL3_NATIVE_PARITY_PASS: 77 checks' \
+            validation-logs/goose-sdl3/doc-goose-sdl3-summary.log
+          echo DOC_GOOSE_SDL3_NATIVE_ONLY_PASS
+      - name: Preserve native Goose SDL3 GPU binary, oracle and adapter evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: doc-goose-sdl3-native-gpu
+          path: validation-logs/
+          retention-days: 14
+          if-no-files-found: warn
+
   webgpu-hardware:
-    # Opt-in: configure a labelled physical-GPU self-hosted runner AND
-    # repository variable DOC_ENABLE_HARDWARE_GPU=true. Never substitute
-    # Mesa lavapipe, SwiftShader or CPU fallback for this required evidence.
+    # The Rust wgpu physical-GPU gate remains independent of Goose SDL3.
     if: ${{ vars.DOC_ENABLE_HARDWARE_GPU == 'true' }}
-    needs: goose-toolchain
-    name: Hardware WebGPU DOC compute (opt-in physical GPU runner)
-    runs-on: [self-hosted, Linux, doc-webgpu-hardware]
-    timeout-minutes: 30
+    needs: webgpu-compute
+    name: Native Rust wgpu physical GPU (opt-in)
+    runs-on: [self-hosted, Linux, X64, doc-webgpu-hardware]
+    timeout-minutes: 35
     env:
       DOC_GPU_REQUIRE_HARDWARE: "1"
       DOC_GPU_EXECUTION: gpu
@@ -250,47 +323,67 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: runtime-rust
-      - name: Record real adapter and driver
+      - name: Reject software devices
         run: |
           set -euo pipefail
           mkdir -p validation-logs
-          vulkaninfo --summary 2>&1 | tee validation-logs/hardware-adapter.log
-      - name: Strict hardware WebGPU compute and source repair
+          vulkaninfo --summary > validation-logs/rust-hardware-adapter.log 2>&1
+          grep -Eq 'PHYSICAL_DEVICE_TYPE_(DISCRETE_GPU|INTEGRATED_GPU)' \
+            validation-logs/rust-hardware-adapter.log
+      - name: Rust wgpu actual hardware stages and reductions
         run: |
           set -euo pipefail
-          cargo run --release --manifest-path runtime-rust/Cargo.toml \
+          DOC_GPU_REDUCTION=1 cargo run --release \
+            --manifest-path runtime-rust/Cargo.toml \
             --features webgpu --example webgpu_bool -- --staged-repair \
-            2>&1 | tee validation-logs/hardware-repair.log
-          test "$(grep -c '^DOC_WEBGPU_COMPUTE_PASS:' validation-logs/hardware-repair.log)" = 2
-          grep -E 'DOC_WEBGPU_ADAPTER:.*type=(IntegratedGpu|DiscreteGpu)' validation-logs/hardware-repair.log
-      - name: Download independent Goose-generated signed WGSL
-        uses: actions/download-artifact@v4
-        with:
-          name: doc-goose-webgpu-input
-          path: validation-logs/goose-webgpu
-      - name: Verify actual physical-GPU DOC signed equality and dependent reduction
-        run: |
-          set -euo pipefail
-          DOC_GPU_LANES=257 cargo run --release --manifest-path runtime-rust/Cargo.toml \
+            2>&1 | tee validation-logs/rust-hardware-map.log
+          test "$(grep -c '^DOC_WEBGPU_REDUCTION_PASS:' \
+            validation-logs/rust-hardware-map.log)" = 2
+          DOC_GPU_LANES=257 cargo run --release \
+            --manifest-path runtime-rust/Cargo.toml \
             --features webgpu --example webgpu_integer_eq \
-            -- --shader validation-logs/goose-webgpu/integer-equality.wgsl \
-            2>&1 | tee validation-logs/hardware-signed-goose.log
-          test "$(grep -c '^DOC_SIGNED_WEBGPU_COMPUTE_PASS:' validation-logs/hardware-signed-goose.log)" = 2
-          grep -E 'DOC_SIGNED_WEBGPU_ADAPTER:.*type=(IntegratedGpu|DiscreteGpu)' \
-            validation-logs/hardware-signed-goose.log
-          DOC_GPU_LANES=256 DOC_GPU_REDUCTION=1 cargo run --release \
-            --manifest-path runtime-rust/Cargo.toml --features webgpu \
-            --example webgpu_bool -- --staged-shaders-repair \
-            validation-logs/goose-webgpu/stage-1.wgsl \
-            validation-logs/goose-webgpu/stage-2.wgsl \
-            2>&1 | tee validation-logs/hardware-goose-reduction.log
-          test "$(grep -c '^DOC_WEBGPU_REDUCTION_PASS:' validation-logs/hardware-goose-reduction.log)" = 2
-          echo DOC_HARDWARE_SIGNED_AND_REDUCTION_PASS
-      - name: Preserve physical GPU evidence even on failures
+            2>&1 | tee validation-logs/rust-hardware-signed.log
+          test "$(grep -c '^DOC_SIGNED_WEBGPU_COMPUTE_PASS:' \
+            validation-logs/rust-hardware-signed.log)" = 2
+          echo DOC_RUST_HARDWARE_GPU_PASS
+      - name: Preserve Rust hardware evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: doc-physical-gpu-validation
+          name: doc-rust-hardware-gpu
+          path: validation-logs/
+          retention-days: 14
+          if-no-files-found: warn
+
+  goose-sdl3-hardware:
+    if: ${{ vars.DOC_ENABLE_HARDWARE_GPU == 'true' }}
+    needs: goose-sdl3-compute
+    name: Native Goose SDL3 physical GPU compute (opt-in)
+    runs-on: [self-hosted, Linux, X64, doc-webgpu-hardware]
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc-goose-sdl3-native-gpu
+          path: validation-logs
+      - name: Prove native Goose SDL3 executes on a physical GPU
+        env:
+          GOOSE_GFX_HEADLESS: "1"
+        run: |
+          set -euo pipefail
+          vulkaninfo --summary > validation-logs/goose-hardware-adapter.log 2>&1
+          grep -Eq 'PHYSICAL_DEVICE_TYPE_(DISCRETE_GPU|INTEGRATED_GPU)' \
+            validation-logs/goose-hardware-adapter.log
+          chmod +x validation-logs/doc-goose-sdl3
+          python3 runtime-goose/check-doc-sdl3-gpu.py \
+            validation-logs/doc-goose-sdl3 validation-logs/goose-hardware
+          echo DOC_GOOSE_SDL3_HARDWARE_GPU_PASS
+      - name: Preserve Goose SDL3 physical GPU evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: doc-goose-sdl3-hardware-gpu
           path: validation-logs/
           retention-days: 14
           if-no-files-found: warn
