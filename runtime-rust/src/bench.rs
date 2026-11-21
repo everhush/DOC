@@ -18,7 +18,7 @@ fn main() {
         rt.update(&[(0, Value::Int(i))]).expect("update");
         rt.stabilize().expect("stabilize");
         assert_eq!(rt.value(width), Some(Value::Int(width as i64 - 1 + i)));
-        assert_eq!(rt.value(width), Some(rt.oracle().unwrap()[width]));
+        assert_eq!(rt.value(width), Some(rt.oracle().unwrap()[width].clone()));
     }
     println!("width={width} workers={workers} runs=10 elapsed_ms={:.3}", start.elapsed().as_secs_f64()*1000.0);
 }
