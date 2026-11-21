@@ -62,6 +62,22 @@ jobs:
         run: |
           cargo fmt --manifest-path runtime-rust/Cargo.toml --all -- --check
           cargo clippy --manifest-path runtime-rust/Cargo.toml --all-targets
+      - name: Package and re-execute native Rust DOC Linux binary
+        run: |
+          set -euo pipefail
+          mkdir -p validation-logs/release/bin
+          install -m 755 runtime-rust/target/release/doc validation-logs/release/bin/doc-rust
+          ldd validation-logs/release/bin/doc-rust > validation-logs/rust-dynamic-dependencies.txt 2>&1 || true
+          tar -czf validation-logs/doc-rust-linux-x86_64.tar.gz \
+            -C validation-logs/release bin/doc-rust \
+            -C . LICENSE runtime-rust/examples/repair.doc
+          scratch=$(mktemp -d)
+          trap 'rm -rf -- "$scratch"' EXIT
+          tar -xzf validation-logs/doc-rust-linux-x86_64.tar.gz -C "$scratch"
+          "$scratch/bin/doc-rust" "$scratch/runtime-rust/examples/repair.doc" a=4 b=1 \
+            > validation-logs/rust-installed-smoke.log 2>&1
+          grep -Fx 'chosen: 10' validation-logs/rust-installed-smoke.log
+          echo DOC_RUST_PACKAGED_INSTALL_PASS
       - name: Preserve raw outputs, including failures
         if: always()
         uses: actions/upload-artifact@v4
@@ -315,6 +331,25 @@ jobs:
         run: bash runtime-goose/check-doc-reduction.sh /tmp/goose-build/goose runtime-rust/target/release/doc validation-logs
       - name: Independent Rust-Goose arbitrary-natural counter oracle
         run: bash runtime-goose/check-doc-counter.sh /tmp/goose-build/goose runtime-rust/target/release/doc_counter validation-logs
+      - name: Package and re-execute native Goose DOC Linux binary
+        run: |
+          set -euo pipefail
+          mkdir -p validation-logs/release/bin
+          /tmp/goose-build/goose build runtime-goose/doc_typed.goose --offline \
+            -o validation-logs/release/bin/doc-goose \
+            > validation-logs/goose-packaging-build.log 2>&1
+          chmod 755 validation-logs/release/bin/doc-goose
+          ldd validation-logs/release/bin/doc-goose > validation-logs/goose-dynamic-dependencies.txt 2>&1 || true
+          tar -czf validation-logs/doc-goose-linux-x86_64.tar.gz \
+            -C validation-logs/release bin/doc-goose \
+            -C . LICENSE runtime-rust/examples/repair.doc
+          scratch=$(mktemp -d)
+          trap 'rm -rf -- "$scratch"' EXIT
+          tar -xzf validation-logs/doc-goose-linux-x86_64.tar.gz -C "$scratch"
+          "$scratch/bin/doc-goose" "$scratch/runtime-rust/examples/repair.doc" a=4 b=1 \
+            > validation-logs/goose-installed-smoke.log 2>&1
+          grep -Fx 'chosen: 10' validation-logs/goose-installed-smoke.log
+          echo DOC_GOOSE_PACKAGED_INSTALL_PASS
       - name: Publish native Goose shader and CPU oracle
         uses: actions/upload-artifact@v4
         with:
