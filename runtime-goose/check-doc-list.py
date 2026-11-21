@@ -54,19 +54,26 @@ for data in inputs:
         if got!=expected:
             raise AssertionError(f"{binary} list values mismatch: {got} vs {expected}")
         cases+=1
-# Genuine DOC recurrence, each stable episode's carried values.
-for data in ([],[1],[-1,0,1],[5,-3,9,0],list(range(30))):
-    source="["+ ",".join(str(v) for v in data)+"]"
+# Genuine DOC recurrence with a fresh program file per input list:
+# not a host-side substitute for repeated forward DOC carry.
+for iteration,data in enumerate(([],[1],[-1,0,1],[5,-3,9,0],
+                                 list(range(30)),[10,-3,4,-2])):
+    initial="["+ ",".join(str(v) for v in data)+"]"
+    authored=Path(program).read_text().replace(
+        "source remaining: ints = [5,-3,9,0]",
+        f"source remaining: ints = {initial}")
+    program_path=root/f"list-recurrence-{iteration}.doc"
+    program_path.write_text(authored)
     for binary in (rust,goose):
-        output=run(binary,program,"--until=done",
+        output=run(binary,str(program_path),"--until=done",
                    f"--max-epochs={len(data)+2}",
-                   "remaining=next_remaining","total=next_total",
-                   f"--fact=1:total=0" if False else "--fact=1:total=0")
-        # Same built-in default source is used here, independent of fixture.
-        # A custom initial list is tested above through CLI update.
-        if data==[5,-3,9,0]:
-            if "DOC_RECURRENCE_HALT: 4" not in output:
-                raise AssertionError("DOC list carry did not halt at 4 epochs")
+                   "remaining=next_remaining","total=next_total")
+        if f"DOC_RECURRENCE_HALT: {len(data)}" not in output:
+            raise AssertionError(f"{binary} list carry did not halt at {len(data)}")
+        totals=[int(line.split(":",1)[1]) for line in output.splitlines()
+                if line.startswith("total:")]
+        if not totals or totals[-1]!=sum(data):
+            raise AssertionError(f"{binary} list sum mismatch: {totals}")
         cases+=1
 # Verify an out-of-bounds index produces no stable observation and no success.
 for text in (
