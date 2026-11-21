@@ -1,4 +1,4 @@
-name: DOC Kaggle physical GPU parity (quota gated)
+name: DOC Kaggle physical GPU parity
 
 # Kaggle owns GPU quota, accelerator availability and session duration.
 # No DOC-specific usage, repeat, concurrency or session-time restrictions.
