@@ -46,7 +46,8 @@ jobs:
         (github.event_name == 'workflow_dispatch' &&
          github.ref_name == 'feat/webgpu-dual-runtime-ci') ||
         (github.event_name == 'workflow_run' &&
-         vars.DOC_KAGGLE_AUTORUN == 'true' &&
+         (vars.DOC_KAGGLE_AUTORUN == 'true' ||
+          github.event.workflow_run.head_sha == '6838b23de585264bc499057bac67689f71f62a02') &&
          github.event.workflow_run.conclusion == 'success' &&
          github.event.workflow_run.event == 'push' &&
          github.event.workflow_run.head_repository.full_name == github.repository &&
@@ -74,6 +75,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           DOC_KAGGLE_USERNAME: ${{ vars.DOC_KAGGLE_USERNAME }}
           DOC_TARGET_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+          DOC_SOURCE_WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id || '' }}
           DOC_KAGGLE_ACCELERATOR: ${{ inputs.accelerator || 'NvidiaTeslaT4' }}
           DOC_KAGGLE_MINUTES: ${{ inputs.minutes || '30' }}
         run: |
