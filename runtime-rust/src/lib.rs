@@ -552,7 +552,6 @@ impl Graph {
                 let file_path=confined_doc_path(base,relative)?;
                 let raw=std::fs::read_to_string(&file_path)
                     .map_err(|e|format!("DOC read effect {}: {e}",file_path.display()))?;
-                if raw.len()>8_192{return Err("DOC read effect exceeds 8KiB".into());}
                 let typed=if kind==Type::Text {
                     let data=raw.trim_end_matches(['\r','\n']);
                     if data.chars().any(|ch|matches!(ch,'\r'|'\n'|'"'|'\\')) {
