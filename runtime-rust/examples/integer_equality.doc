@@ -1,0 +1,4 @@
+# One identical typed DOC graph for Rust and Goose GPU equality lowering.
+source a: int = -1
+source b: int = 1
+derive equal: bool (a,b) = eq(a,b)
