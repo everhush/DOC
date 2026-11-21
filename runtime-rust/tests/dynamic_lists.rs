@@ -59,5 +59,23 @@ fn collection_bounds_and_types_are_checked() {
     assert!(Value::parse_for_type("[0,0,0]",doc_runtime::Type::Ints).is_ok());
     assert!(Value::parse_for_type(
         &format!("[{}]",vec!["1";4097].join(",")),
-        doc_runtime::Type::Ints).is_err());
+        doc_runtime::Type::Ints).is_ok());
+}
+
+#[test]
+fn dynamic_collections_extend_beyond_previous_fixed_cap() {
+    let values=(0..4097i64).collect::<Vec<_>>();
+    let list=format!("[{}]",values.iter().map(i64::to_string)
+        .collect::<Vec<_>>().join(","));
+    let source=format!("source items: ints = {list}\n\
+        derive expanded: ints (items) = append(items,777)\n\
+        derive count: int (expanded) = len(expanded)\n");
+    let graph=Graph::parse(&source).unwrap();
+    let mut runtime=Runtime::new(graph.clone(),4,Cutoff::Exact);
+    runtime.stabilize().unwrap();
+    assert_eq!(runtime.value(graph.id("count").unwrap()),Some(Value::Int(4098)));
+    let mut expected=values;
+    expected.push(777);
+    assert_eq!(runtime.value(graph.id("expanded").unwrap()),
+               Some(Value::Ints(expected)));
 }

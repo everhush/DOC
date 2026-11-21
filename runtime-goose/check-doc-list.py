@@ -88,6 +88,27 @@ for text in (
     for binary in (rust,goose):
         run(binary,str(bad),valid=False)
         cases+=1
+
+# Dynamic native collection storage must not impose the old 4096-element cap.
+# Both runtimes evaluate the SAME large source and DOC append/length semantics.
+large=list(range(4097))
+large_source="["+ ",".join(map(str,large))+"]"
+large_doc=root/"list-beyond-old-cap.doc"
+large_doc.write_text(
+    f"source items: ints = {large_source}\n"
+    "derive expanded: ints (items) = append(items,777)\n"
+    "derive count: int (expanded) = len(expanded)\n"
+)
+for binary in (rust,goose):
+    stdout=run(binary,str(large_doc))
+    observed={}
+    for line in stdout.splitlines():
+        if line.startswith(("items: ","expanded: ","count: ")):
+            name,value=line.split(": ",1)
+            observed[name]=int(value) if name=="count" else ast.literal_eval(value)
+    if observed!={"items":large,"expanded":large+[777],"count":4098}:
+        raise AssertionError(f"{binary} large DOC collection result mismatch")
+    cases+=1
 assert all(isinstance(v,int) for values in inputs for v in values)
 root.joinpath("doc-list-conformance.log").write_text(
     f"DOC_NATIVE_DYNAMIC_LIST_PASS: {cases} independent checks\n"
