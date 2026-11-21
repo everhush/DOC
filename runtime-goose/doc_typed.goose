@@ -1298,10 +1298,14 @@ thread_fn snapshot_reader(worker:i64,
 fn snapshot_proof(nodes:State[:],values:Value[:],active:bool[:]) {
     let _initial=stabilize(nodes,values,active);
     let original=snapshot_digest(values,nat_pool,ints_pool);
+    // Goose copy() consumes an owned value, not a borrowed slice.
+    // Take an explicit owned root first and deep-copy it per worker.
+    var owned_values:Value[>..]=[];
+    owned_values.append(values);
     var ids:i64[>..]=[];
     for worker in 0..4 {
         ids.push(thread_spawn(snapshot_reader,worker,
-                              copy(values),copy(nat_pool),copy(ints_pool)));
+                              copy(owned_values),copy(nat_pool),copy(ints_pool)));
     }
     var ready:bool[>..]=[];ready.resize(4,false);
     for i in 0..4 {
