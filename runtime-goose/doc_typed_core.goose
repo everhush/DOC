@@ -45,7 +45,7 @@ fn utf8_valid(bytes:u8[:])->bool {
 }
 
 fn text_store(raw:u8[:])->Value {
-    if raw.len>16384 || !utf8_valid(raw) {fail();}
+    if !utf8_valid(raw) {fail();}
     if raw.len==0 {return text_zero();}
     for c in raw {if c=='"' || c=='\\' || c=='\n' || c=='\r' {fail();}}
     let start=text_pool.len;
@@ -66,7 +66,7 @@ fn text_equal(a:Value,b:Value)->bool {
     return true;
 }
 fn text_concat(a:Value,b:Value)->Value {
-    if a.kind!=5 || b.kind!=5 || a.length+b.length>16384 {fail();}
+    if a.kind!=5 || b.kind!=5 || a.length>9223372036854775807-b.length {fail();}
     var out:u8[>..]=[];
     for i in 0..a.length {out.push(text_pool[a.start+i]);}
     for i in 0..b.length {out.push(text_pool[b.start+i]);}
@@ -784,7 +784,7 @@ fn load(source: u8[:], nodes: State[>..]&, values: Value[>..]&,
             file_path.append(relative);
             if file_path.len > 512 { fail(); }
             var text: u8[>..] = [];
-            if !read_file(file_path,text) || text.len > 8192 { fail(); }
+            if !read_file(file_path,text) { fail(); }
             let value=if kind==5 {text_store(trim(text))}
                 else{parse_value(trim(text),kind)};
             nodes.push(State {

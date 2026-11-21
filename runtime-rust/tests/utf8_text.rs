@@ -34,7 +34,7 @@ fn utf8_recurrence_preserves_owned_text_snapshots_under_eviction() {
                Some(Value::Text("🙂".repeat(21))));
 }
 #[test]
-fn text_literals_reject_invalid_escapes_and_overlarge_data() {
+fn text_literals_reject_invalid_escapes() {
     for source in [
         "source a: text = \"unterminated\n",
         "source a: text = \"x\\\\y\"\n",
@@ -44,5 +44,21 @@ fn text_literals_reject_invalid_escapes_and_overlarge_data() {
         assert!(Graph::parse(source).is_err(),"{source}");
     }
     assert!(Value::parse_for_type(
-        &format!("\"{}\"","x".repeat(16385)),Type::Text).is_err());
+        &format!("\"{}\"","x".repeat(16385)),Type::Text).is_ok());
+}
+
+#[test]
+fn utf8_source_and_concat_can_exceed_old_fixed_text_ceiling() {
+    let large="世界🙂".repeat(2500);
+    let source=format!("source payload: text = \"{large}\"\n\
+        derive expanded: text (payload) = concat(payload,text(\"!\"))\n\
+        derive bytes: int (expanded) = len(expanded)\n");
+    let graph=Graph::parse(&source).unwrap();
+    let mut runtime=Runtime::new(graph.clone(),4,Cutoff::Exact);
+    runtime.stabilize().unwrap();
+    let expanded=format!("{large}!");
+    assert_eq!(runtime.value(graph.id("expanded").unwrap()),
+               Some(Value::Text(expanded.clone())));
+    assert_eq!(runtime.value(graph.id("bytes").unwrap()),
+               Some(Value::Int(expanded.len() as i64)));
 }
