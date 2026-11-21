@@ -1,0 +1,7 @@
+# Explicit read-only filesystem effects sampled into DOC source facts.
+effect count: int = read("data/signed_count.txt")
+effect amount: nat = read("data/nat_amount.txt")
+effect enabled: bool = read("data/enabled.txt")
+derive incremented: int (count) = add(count,1)
+derive next_amount: nat (amount) = add(amount,nat(1))
+derive selected: nat (amount,enabled) = if(enabled,add(amount,nat(3)),nat(0))
