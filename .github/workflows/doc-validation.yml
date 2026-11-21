@@ -5,6 +5,8 @@ on:
     branches: [feat/webgpu-dual-runtime-ci]
     paths:
       - '.github/workflows/doc-validation.yml'
+      - '.github/workflows/doc-kaggle-gpu.yml'
+      - 'ci/kaggle/**'
       - 'runtime-rust/**'
       - 'runtime-goose/**'
   pull_request:
@@ -38,6 +40,8 @@ jobs:
           for script in runtime-goose/*.sh runtime-rust/*.sh; do
             bash -n "$script"
           done
+      - name: Validate Kaggle budget policies without credentials or GPUs
+        run: python3 -m unittest discover -s ci/kaggle -p 'test_*.py' -v
       - name: Native compile, tests and WGSL parse/validation
         run: |
           set -o pipefail
@@ -407,86 +411,9 @@ jobs:
           retention-days: 14
           if-no-files-found: warn
 
-  webgpu-hardware:
-    # The Rust wgpu physical-GPU gate remains independent of Goose SDL3.
-    if: ${{ vars.DOC_ENABLE_HARDWARE_GPU == 'true' }}
-    needs: webgpu-compute
-    name: Native Rust wgpu physical GPU (opt-in)
-    runs-on: [self-hosted, Linux, X64, doc-webgpu-hardware]
-    timeout-minutes: 35
-    env:
-      DOC_GPU_REQUIRE_HARDWARE: "1"
-      DOC_GPU_EXECUTION: gpu
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: runtime-rust
-      - name: Reject software devices
-        run: |
-          set -euo pipefail
-          mkdir -p validation-logs
-          vulkaninfo --summary > validation-logs/rust-hardware-adapter.log 2>&1
-          grep -Eq 'PHYSICAL_DEVICE_TYPE_(DISCRETE_GPU|INTEGRATED_GPU)' \
-            validation-logs/rust-hardware-adapter.log
-      - name: Rust wgpu actual hardware stages and reductions
-        run: |
-          set -euo pipefail
-          DOC_GPU_REDUCTION=1 cargo run --release \
-            --manifest-path runtime-rust/Cargo.toml \
-            --features webgpu --example webgpu_bool -- --staged-repair \
-            2>&1 | tee validation-logs/rust-hardware-map.log
-          test "$(grep -c '^DOC_WEBGPU_REDUCTION_PASS:' \
-            validation-logs/rust-hardware-map.log)" = 2
-          DOC_GPU_LANES=257 cargo run --release \
-            --manifest-path runtime-rust/Cargo.toml \
-            --features webgpu --example webgpu_integer_eq \
-            2>&1 | tee validation-logs/rust-hardware-signed.log
-          test "$(grep -c '^DOC_SIGNED_WEBGPU_COMPUTE_PASS:' \
-            validation-logs/rust-hardware-signed.log)" = 2
-          echo DOC_RUST_HARDWARE_GPU_PASS
-      - name: Preserve Rust hardware evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: doc-rust-hardware-gpu
-          path: validation-logs/
-          retention-days: 14
-          if-no-files-found: warn
-
-  goose-sdl3-hardware:
-    if: ${{ vars.DOC_ENABLE_HARDWARE_GPU == 'true' }}
-    needs: goose-sdl3-compute
-    name: Native Goose SDL3 physical GPU compute (opt-in)
-    runs-on: [self-hosted, Linux, X64, doc-webgpu-hardware]
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
-        with:
-          name: doc-goose-sdl3-native-gpu
-          path: validation-logs
-      - name: Prove native Goose SDL3 executes on a physical GPU
-        env:
-          GOOSE_GFX_HEADLESS: "1"
-        run: |
-          set -euo pipefail
-          vulkaninfo --summary > validation-logs/goose-hardware-adapter.log 2>&1
-          grep -Eq 'PHYSICAL_DEVICE_TYPE_(DISCRETE_GPU|INTEGRATED_GPU)' \
-            validation-logs/goose-hardware-adapter.log
-          chmod +x validation-logs/doc-goose-sdl3
-          python3 runtime-goose/check-doc-sdl3-gpu.py \
-            validation-logs/doc-goose-sdl3 validation-logs/goose-hardware
-          echo DOC_GOOSE_SDL3_HARDWARE_GPU_PASS
-      - name: Preserve Goose SDL3 physical GPU evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: doc-goose-sdl3-hardware-gpu
-          path: validation-logs/
-          retention-days: 14
-          if-no-files-found: warn
+  # Physical GPU verification now runs only in doc-kaggle-gpu.yml.
+  # The Rust wgpu and Goose SDL3 jobs above remain CPU-hosted, Mesa Vulkan
+  # correctness/fallback oracles and do not consume the Kaggle quota.
 
   portable-native:
     name: Native Rust and Goose DOC portability (${{ matrix.os }})
