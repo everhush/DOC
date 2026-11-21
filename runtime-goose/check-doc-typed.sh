@@ -236,14 +236,7 @@ for bin in "$native" "$rust"; do
     grep -Fx 'epoch: 0' "$logs/epoch-overflow-$label.log" >/dev/null
     grep -Fx 'epoch: 1' "$logs/epoch-overflow-$label.log" >/dev/null
     grep -Fx 'counter: 9223372036854775807' "$logs/epoch-overflow-$label.log" >/dev/null
-    if grep -q '^epoch: 2
-        echo "Published failed epoch: $label" >&2
-        exit 1
-    fi
-done
-
-echo DOC_TYPED_FINITE_PASS | tee -a "$logs/goose-typed-differential.log"
- "$logs/epoch-overflow-$label.log"; then
+    if grep -q '^epoch: 2$' "$logs/epoch-overflow-$label.log"; then
         echo "Published failed epoch: $label" >&2
         exit 1
     fi
