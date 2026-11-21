@@ -1,0 +1,4 @@
+# Mismatched source type carries no old value; new default wins.
+source a: bool = true
+source b: ints = []
+derive size: int (b) = len(b)

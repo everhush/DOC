@@ -1274,6 +1274,37 @@ fn main() {
             run_recurrence(nodes,values,active,cap,halt,4);
             return;
         }
+        if starts_with(mode,"--replace=") {
+            if arg_count()!=3 { fail(); }
+            let next_path=mode[10..];
+            if next_path.len==0 { fail(); }
+            // Complete the old frontier before any candidate is constructed.
+            let _old=stabilize(nodes,values,active);
+            print("DOC_GRAPH_GENERATION: 0");
+            show(nodes,values);
+            var incoming: u8[>..] = [];
+            if !read_file(next_path,incoming) { fail(); }
+            var pending_nodes: State[>..] = [];
+            var pending_values: Value[>..] = [];
+            var pending_active: bool[>..] = [];
+            load(incoming,pending_nodes,pending_values,pending_active,next_path);
+            for i in 0..pending_nodes.len {
+                if !pending_nodes[i].derived {
+                    let previous=lookup(nodes,pending_nodes[i].name);
+                    if previous >= 0 && !nodes[previous].derived &&
+                       nodes[previous].kind == pending_nodes[i].kind {
+                        pending_values[i]=values[previous];
+                    }
+                }
+            }
+            let _computed=stabilize(pending_nodes,pending_values,pending_active);
+            // The pending graph, sources and derived values form a complete,
+            // independently owned next observation before the generation
+            // marker is released. No prior materialization is modified.
+            print("DOC_GRAPH_GENERATION: 1");
+            show(pending_nodes,pending_values);
+            return;
+        }
         if mode == "--emit-wgsl" {
             if arg_count() != 5 { fail(); }
             var target: u8[>..] = [];

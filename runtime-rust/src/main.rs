@@ -125,6 +125,26 @@ fn run() -> Result<(), String> {
         println!("{target_name}: {}", requested.value(target).ok_or("missing demanded value")?);
         return Ok(());
     }
+    if let Some(next_file)=args.peek()
+        .and_then(|arg|arg.strip_prefix("--replace=")).map(str::to_owned) {
+        args.next();
+        if args.next().is_some(){return Err("graph replacement accepts one path".into());}
+        let mut rt=Runtime::new(graph,workers,Cutoff::Exact);
+        rt.stabilize()?;
+        println!("DOC_GRAPH_GENERATION: 0");
+        for (i,state) in rt.graph.states.iter().enumerate(){
+            println!("{}: {}",state.name,rt.value(i).ok_or("missing old value")?);
+        }
+        // The new generation is constructed and stabilized privately:
+        // an invalid candidate cannot publish a partial replacement.
+        let next_graph=Graph::parse_file(&next_file)?;
+        rt.replace_graph(next_graph)?;
+        println!("DOC_GRAPH_GENERATION: 1");
+        for (i,state) in rt.graph.states.iter().enumerate(){
+            println!("{}: {}",state.name,rt.value(i).ok_or("missing new value")?);
+        }
+        return Ok(());
+    }
     let mut rt = Runtime::new(graph, workers, Cutoff::Exact);
     let mut changes = Vec::new();
     for arg in args {

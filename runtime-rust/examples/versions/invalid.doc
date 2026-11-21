@@ -1,0 +1,3 @@
+# Invalid new expression under carried source a=2 must abort privately.
+source a: int = 0
+derive impossible: int (a) = add(a,9223372036854775807)
