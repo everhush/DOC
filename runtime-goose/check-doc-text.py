@@ -67,6 +67,32 @@ with tempfile.TemporaryDirectory(prefix="doc_utf8_") as td:
         for binary in (rust,goose):
             run(binary,f,success=False)
             cases+=1
+    # Both runtimes must reject malformed UTF-8 at the source boundary,
+    # including overlong, lone continuation, surrogate and >U+10FFFF bytes.
+    for i,invalid_bytes in enumerate((
+        b"\xff", b"\xc0\xaf", b"\xed\xa0\x80",
+        b"\xf4\x90\x80\x80", b"\xe2\x82", b"\x80"
+    )):
+        invalid_source=temp/f"utf8-invalid-{i}.doc"
+        invalid_source.write_bytes(
+            b"source text_value: text = \""+invalid_bytes+b"\"\n")
+        for binary in (rust,goose):
+            p=subprocess.run([binary,str(invalid_source)],
+                             capture_output=True,timeout=20)
+            if p.returncode==0:
+                raise AssertionError(f"{binary} accepted invalid UTF-8 source {i}")
+            cases+=1
+    invalid_data=temp/"bad-utf8.txt"
+    invalid_data.write_bytes(b"\xed\xa0\x80")
+    effect_file=temp/"bad-input.doc"
+    effect_file.write_text(
+        'effect text_value: text = read("bad-utf8.txt")\n')
+    for binary in (rust,goose):
+        p=subprocess.run([binary,str(effect_file)],
+                         capture_output=True,timeout=20)
+        if p.returncode==0:
+            raise AssertionError(f"{binary} accepted invalid UTF-8 file effect")
+        cases+=1
 print(f"DOC_NATIVE_UTF8_TEXT_PASS: {cases} independent cross-runtime cases")
 (root/"doc-utf8-text.log").write_text(
     f"DOC_NATIVE_UTF8_TEXT_PASS: {cases} independent cross-runtime cases\n")
