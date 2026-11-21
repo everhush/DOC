@@ -5,16 +5,32 @@ fn main() {
 }
 fn run() -> Result<(), String> {
     let mut args = env::args().skip(1);
-    let file = args.next().ok_or("usage: doc FILE.doc [source=value ... | --through=N source=previous ...]")?;
+    let file = args.next().ok_or("usage: doc FILE.doc [source=value ... | --through=N source=previous ... | --until=BOOL --max-epochs=N source=previous ...]")?;
     let src = fs::read_to_string(&file).map_err(|e| format!("{file}: {e}"))?;
     let graph = Graph::parse(&src)?;
     let workers = env::var("DOC_WORKERS").ok().and_then(|v| v.parse().ok())
         .unwrap_or_else(|| std::thread::available_parallelism().map_or(1, |v| v.get()));
     let mut args = args.peekable();
-    if let Some(through) = args.peek().and_then(|arg| arg.strip_prefix("--through=")) {
-        let through = through.parse::<i64>().map_err(|_| "invalid epoch limit")?;
-        let through = u64::try_from(through).map_err(|_| "invalid epoch limit")?;
+    let recurrence_command = if let Some(first) = args.peek() {
+        if let Some(limit) = first.strip_prefix("--through=") {
+            Some((false, limit.to_string()))
+        } else {
+            first.strip_prefix("--until=").map(|name| (true, name.to_string()))
+        }
+    } else {
+        None
+    };
+    if let Some((until, first_value)) = recurrence_command {
         args.next();
+        let (end_epoch, halt_name) = if until {
+            let halt_name = first_value;
+            let cap = args.next().ok_or("--until requires --max-epochs=N")?;
+            let cap = cap.strip_prefix("--max-epochs=")
+                .ok_or("--until requires --max-epochs=N")?;
+            (cap.parse::<u64>().map_err(|_| "invalid epoch cap")?, Some(halt_name))
+        } else {
+            (first_value.parse::<u64>().map_err(|_| "invalid epoch limit")?, None)
+        };
         let mut carry = Vec::new();
         for binding in args {
             let (source, previous) = binding.split_once('=').ok_or("expected source=previous")?;
@@ -22,6 +38,11 @@ fn run() -> Result<(), String> {
             let previous = graph.id(previous).ok_or("unknown carry state")?;
             carry.push((source, previous));
         }
+        let halt = if let Some(name) = &halt_name {
+            Some(graph.id(name).ok_or("unknown recurrent halt state")?)
+        } else {
+            None
+        };
         let names: Vec<_> = graph.states.iter().map(|state| state.name.clone()).collect();
         let mut recurrence = Recurrence::new(graph, carry, &[], workers)?;
         loop {
@@ -29,7 +50,20 @@ fn run() -> Result<(), String> {
             for (id, name) in names.iter().enumerate() {
                 println!("{name}: {}", recurrence.value(id).ok_or("incomplete epoch")?);
             }
-            if recurrence.epoch() == through {
+            if let Some(halt_id) = halt {
+                match recurrence.value(halt_id) {
+                    Some(Value::Bool(true)) => {
+                        println!("DOC_RECURRENCE_HALT: {}", recurrence.epoch());
+                        return Ok(());
+                    }
+                    Some(Value::Bool(false)) => {}
+                    _ => return Err("halt predicate must name a Boolean state".into()),
+                }
+            }
+            if recurrence.epoch() == end_epoch {
+                if halt.is_some() {
+                    return Err("DOC recurrence did not halt within the requested epoch cap".into());
+                }
                 return Ok(());
             }
             recurrence.advance(&[])?;
