@@ -1,0 +1,5 @@
+# DOC old immutable graph generation.
+source a: int = 2
+source b: ints = [1,2]
+derive sum: int (a) = add(a,1)
+derive size: int (b) = len(b)

@@ -1,0 +1,6 @@
+# New compatible source authorities retain old facts; derived work rebuilds.
+source a: int = 999
+source b: ints = [7,8,9]
+derive sum: int (a) = add(a,5)
+derive size: int (b) = len(b)
+derive double: int (sum) = add(sum,sum)
