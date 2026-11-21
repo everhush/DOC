@@ -202,7 +202,6 @@ fn ints_at(xs: Value, index: i64) -> i64 {
     return ints_pool[xs.start+index];
 }
 fn ints_store(items: i64[:]) -> Value {
-    if items.len > 4096 { fail(); }
     if items.len == 0 { return ints_zero(); }
     let start = ints_pool.len;
     for value in items { ints_pool.push(value); }
@@ -215,7 +214,6 @@ fn ints_parse(raw: u8[:]) -> Value {
     if inner.len == 0 { return ints_zero(); }
     var items: i64[>..] = [];
     for part in split(inner,',') {
-        if items.len >= 4096 { fail(); }
         let parsed, ok = parse_int(trim(part));
         if !ok { fail(); }
         items.push(parsed);
@@ -233,7 +231,7 @@ fn ints_printable(xs: Value) -> u8[>..] {
     return out;
 }
 fn ints_append(xs: Value, value: i64) -> Value {
-    if xs.kind != 3 || xs.length >= 4096 { fail(); }
+    if xs.kind != 3 { fail(); }
     var contents: i64[>..] = [];
     for i in 0..xs.length { contents.push(ints_at(xs,i)); }
     contents.push(value);

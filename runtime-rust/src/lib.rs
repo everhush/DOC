@@ -47,9 +47,6 @@ impl Value {
             let mut values=Vec::new();
             if !body.trim().is_empty() {
                 for item in body.split(',') {
-                    if values.len()>=4096 {
-                        return Err("DOC ints collection capacity exceeded".into());
-                    }
                     values.push(item.trim().parse::<i64>().map_err(|_|
                         format!("invalid ints item: {item}"))?);
                 }
@@ -202,7 +199,6 @@ impl Expr {
             },
             Append(list,value)=>match (list.eval(args)?,value.eval(args)?) {
                 (Value::Ints(mut xs),Value::Int(x))=>{
-                    if xs.len()>=4096 {return Err("DOC ints collection capacity exceeded".into());}
                     xs.push(x);
                     Ok(Value::Ints(xs))
                 }
