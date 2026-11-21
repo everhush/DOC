@@ -387,22 +387,45 @@ fn emit_shader(nodes: State[:], target: u8[:], path: u8[:]) {
 }
 
 struct Carry { source: i64, previous: i64 }
+struct EpochFact { epoch: i64, source: i64, value: Value }
 
 fn run_recurrence(nodes: State[:], values: Value[:], active: bool[:],
                   limit: i64, halt: i64, first_binding_arg: i64) {
     var carry: Carry[>..] = [];
+    var facts: EpochFact[>..] = [];
     if halt >= 0 && (halt >= nodes.len || nodes[halt].kind != 0) { fail(); }
     for i in first_binding_arg..arg_count() {
         var raw: u8[>..] = [];
         arg(i,raw);
-        let assign = find(raw,"=");
-        if assign <= 0 { fail(); }
-        let source = lookup(nodes,raw[..assign]);
-        let previous = lookup(nodes,raw[assign + 1..]);
-        if source < 0 || previous < 0 || nodes[source].derived ||
-           nodes[source].kind != nodes[previous].kind { fail(); }
-        for old in carry { if old.source == source { fail(); } }
-        carry.push(Carry { source: source, previous: previous });
+        if starts_with(raw,"--fact=") {
+            let rest = raw[7..];
+            let colon = find(rest,":");
+            let assign = find(rest,"=");
+            if colon <= 0 || assign <= colon { fail(); }
+            let epoch, ok = parse_int(rest[..colon]);
+            if !ok || epoch <= 0 || epoch > limit { fail(); }
+            let source = lookup(nodes,rest[colon + 1..assign]);
+            if source < 0 || nodes[source].derived { fail(); }
+            let value = parse_value(rest[assign + 1..],nodes[source].kind);
+            for old in facts {
+                if old.epoch == epoch && old.source == source { fail(); }
+            }
+            facts.push(EpochFact { epoch: epoch, source: source, value: value });
+        } else {
+            let assign = find(raw,"=");
+            if assign <= 0 { fail(); }
+            let source = lookup(nodes,raw[..assign]);
+            let previous = lookup(nodes,raw[assign + 1..]);
+            if source < 0 || previous < 0 || nodes[source].derived ||
+               nodes[source].kind != nodes[previous].kind { fail(); }
+            for old in carry { if old.source == source { fail(); } }
+            carry.push(Carry { source: source, previous: previous });
+        }
+    }
+    for fact in facts {
+        for binding in carry {
+            if fact.source == binding.source { fail(); }
+        }
     }
     var defaults: Value[>..] = [];
     defaults.append(values);
@@ -426,6 +449,9 @@ fn run_recurrence(nodes: State[:], values: Value[:], active: bool[:],
             active[i] = nodes[i].derived;
         }
         for binding in carry { candidate[binding.source] = values[binding.previous]; }
+        for fact in facts {
+            if fact.epoch == epoch + 1 { candidate[fact.source] = fact.value; }
+        }
         let _checked = stabilize(nodes,candidate,active);
         for i in 0..nodes.len { values[i] = candidate[i]; }
         epoch++;
