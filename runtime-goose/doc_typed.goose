@@ -17,8 +17,34 @@ var text_pool:u8[>..];
 fn text_zero()->Value {
     return Value {kind:5,number:0,flag:false,start:0,length:0};
 }
+// Native-Goose strict RFC 3629 scalar UTF-8 validation, no C decoder.
+// Reject overlong encodings, surrogate values and out-of-range code points.
+fn utf8_valid(bytes:u8[:])->bool {
+    var i=0;
+    while i<bytes.len {
+        let lead=bytes[i] as i64;
+        if lead<128 {i++;continue;}
+        let size=if lead>=194 && lead<=223 {2}
+            else if lead>=224 && lead<=239 {3}
+            else if lead>=240 && lead<=244 {4}
+            else {return false;};
+        if i+size>bytes.len {return false;}
+        for j in 1..size {
+            let c=bytes[i+j];
+            if c<128 || c>191 {return false;}
+        }
+        let second=bytes[i+1];
+        if (lead==224 && second<160) ||
+           (lead==237 && second>=160) ||
+           (lead==240 && second<144) ||
+           (lead==244 && second>=144) {return false;}
+        i+=size;
+    }
+    return true;
+}
+
 fn text_store(raw:u8[:])->Value {
-    if raw.len>16384 {fail();}
+    if raw.len>16384 || !utf8_valid(raw) {fail();}
     if raw.len==0 {return text_zero();}
     for c in raw {if c=='"' || c=='\\' || c=='\n' || c=='\r' {fail();}}
     let start=text_pool.len;
@@ -693,6 +719,7 @@ fn safe_doc_path(path: u8[:]) -> bool {
 
 fn load(source: u8[:], nodes: State[>..]&, values: Value[>..]&,
         active: bool[>..]&, origin: u8[:]) {
+    if !utf8_valid(source) {fail();}
     var functions: UserFn[>..] = [];
     var effects = 0;
     for original in split(source,'\n') {
