@@ -1,0 +1,85 @@
+name: DOC Kaggle API permission diagnosis (no GPU)
+
+# This job consumes GitHub CPU only. It never submits a notebook or creates
+# a dataset. Runs on initial push and can be manually rerun after changes.
+on:
+  push:
+    branches: [master]
+    paths: ['.github/workflows/doc-kaggle-permissions.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  kaggle-auth:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install Kaggle CLI for read-only API probes
+        run: python3 -m pip install --disable-pip-version-check 'kaggle>=2.2.1,<3'
+      - name: Test exact dataset owner and token permissions without GPU spend
+        env:
+          KAGGLE_DOC_1: ${{ secrets.KAGGLE_DOC_1 }}
+          DOC_KAGGLE_USERNAME: ${{ vars.DOC_KAGGLE_USERNAME }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, re, subprocess, tempfile
+          from pathlib import Path
+
+          with tempfile.TemporaryDirectory(prefix="doc-kaggle-auth-") as td:
+              env = dict(os.environ)
+              token = env.pop("KAGGLE_DOC_1", "").strip()
+              owner = env.get("DOC_KAGGLE_USERNAME", "").strip().lower()
+              env["KAGGLE_CONFIG_DIR"] = td
+              if not token:
+                  raise SystemExit("DOC_KAGGLE_PERMISSION_RESULT: missing KAGGLE_DOC_1")
+              if token.startswith("{"):
+                  try:
+                      parsed = json.loads(token)
+                      expected_owner = str(parsed.get("username", "")).lower()
+                      env_file = Path(td) / "kaggle.json"
+                      env_file.write_text(json.dumps({"username":parsed["username"],"key":parsed["key"]}))
+                      env_file.chmod(0o600)
+                  except Exception:
+                      raise SystemExit("DOC_KAGGLE_PERMISSION_RESULT: invalid legacy JSON secret")
+                  print("DOC_KAGGLE_OWNER_MATCHES_SECRET:", owner == expected_owner)
+                  if not owner:
+                      owner = expected_owner
+              else:
+                  env["KAGGLE_API_TOKEN"] = token
+              print("DOC_KAGGLE_OWNER_VARIABLE_PRESENT:", bool(owner))
+              if not re.fullmatch(r"[a-z0-9_-]{2,60}", owner):
+                  raise SystemExit("DOC_KAGGLE_PERMISSION_RESULT: invalid or absent username")
+              probes = [
+                  ("quota", ["kaggle","quota","--format","json"]),
+                  ("private_list",["kaggle","datasets","list","--mine","--search","doc-gpu"]),
+                  ("owner_list",["kaggle","datasets","list","--user",owner,"--search","doc-gpu"]),
+                  ("private_status",["kaggle","datasets","status",owner+"/doc-gpu-44953036963-1-bundle"]),
+                  ("private_files",["kaggle","datasets","files",owner+"/doc-gpu-44953036963-1-bundle"]),
+                  ("notebook_list",["kaggle","kernels","list","--mine","--search","doc-gpu"]),
+              ]
+              statuses = {}
+              for name,command in probes:
+                  try:
+                      p = subprocess.run(command,capture_output=True,text=True,
+                                         env=env,timeout=25)
+                      output=(p.stdout+"\n"+p.stderr)[-4000:]
+                      http = re.search(r"(?<!\d)(401|403|404|429|500|503)(?!\d)",output)
+                      statuses[name] = p.returncode == 0
+                      print(f"DOC_KAGGLE_PROBE: {name} success={p.returncode == 0} "
+                            f"rc={p.returncode} http={http.group(1) if http else 'not_shown'}")
+                  except subprocess.TimeoutExpired:
+                      statuses[name]=False
+                      print(f"DOC_KAGGLE_PROBE: {name} timeout")
+              print("DOC_KAGGLE_PERMISSION_RESULT:",json.dumps(statuses,sort_keys=True))
+              if not statuses.get("quota") or not statuses.get("private_list") or not statuses.get("private_status"):
+                  raise SystemExit("DOC_KAGGLE_PERMISSION_BLOCKED: private dataset API needs attention")
+              print("DOC_KAGGLE_PERMISSION_PASS: quota + own datasets + exact status")
+          PY
