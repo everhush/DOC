@@ -13,8 +13,8 @@ Manual dispatch is available once GitHub recognizes the workflow on the default 
 ## GPU quota controls
 
 - Check **live GPU remaining hours** via `kaggle quota --format json` before every submission. Do not assume 30 GPU hours or infer GPU quota from AI benchmark quota.
-- At most **two DOC submissions per rolling seven days**, including cancelled and failed attempts, maximum **30 remote minutes per submission** (manual 15/20/30).
-- Retain at least **2 hours of account GPU quota** *after* the proposed run; other users' notebooks still count against the live account total.
+- **No DOC-specific weekly run-count limit.** Submit distinct, meaningful tests as often as the live Kaggle quota permits. Duplicate work is identified by exact source revision and accelerator (seven-day lookback), not by an arbitrary weekly counter. Each remote session remains bounded to **30 minutes** (manual 15/20/30).
+- There is **no artificial two-hour reserve**. The account must have enough remaining GPU quota for the proposed session; other notebooks still count against the live account total.
 - Serialize GitHub Kaggle jobs and **never auto-cancel** a remote kernel; cancelling GitHub alone does not terminate a Kaggle session. Kaggle push sets a remote session timeout.
 - If quota, API state, source SHA, physical Vulkan adapter, or full 77/42 parity evidence cannot be verified, **never report hardware parity success**.
 
@@ -42,10 +42,12 @@ Private Kaggle datasets use upstream-license-preserving `other` metadata because
 
 ## Weekly budget accounting
 
-The rolling-seven-day limit counts **attempted remote GPU notebook submissions**,
-not preflight-only GitHub CPU jobs. The controller inspects authenticated GitHub
-job logs: a `DOC_KAGGLE_DISPATCH: notebook=` marker counts even if remote
-execution subsequently fails, while a complete pre-dispatch failure or a
-quota-skip marker does not. Missing, unreadable, ambiguous, or truncated logs
-**count conservatively**, never granting extra GPU attempts. Kaggle's live
-account GPU-hours check and a 2-hour reserve are mandatory on every launch.
+There is no weekly submission cap. The seven-day history check is used only
+to prevent submitting the **same DOC commit and accelerator** more than once.
+A changed DOC implementation or a different GPU type is new useful work. CPU
+preflight failures do not count as GPU execution. GitHub jobs remain serialized
+and Kaggle's current account-level remaining GPU hours are checked before
+every dispatch; the only quota requirement is enough remaining time to cover
+the chosen remote session.
+
+**Quota policy (22 November 2026):** The user explicitly authorized using the full available Kaggle GPU-hour quota for distinct, meaningful testing, even within two days. Do not consume it by re-running unchanged tasks. This supersedes all older two-jobs/week and two-hours-reserve instructions.

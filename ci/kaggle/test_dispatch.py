@@ -18,21 +18,18 @@ class KaggleDispatchPolicy(unittest.TestCase):
         first = ts + "DOC_KAGGLE_DISPATCH: notebook=person/doc-gpu-123-1 sha=" + "a"*40 + " minutes=30"
         blocked = ts + "DOC_KAGGLE_DISPATCH_FAILURE: RuntimeError: Kaggle private binary dataset status unavailable"
         skipped = ts + "DOC_KAGGLE_QUOTA_SKIP: maximum 2 attempts"
-        self.assertTrue(module.gpu_session_attempted(first))
-        self.assertFalse(module.gpu_session_attempted(blocked))
-        self.assertFalse(module.gpu_session_attempted(skipped))
-        self.assertTrue(module.gpu_session_attempted(""))
-        self.assertTrue(module.gpu_session_attempted("Kaggle kernel was launched, but log truncated"))
-        self.assertTrue(module.gpu_session_attempted(
-            first + "\n" + blocked))
-        history={"workflow_runs":[
-            {"id":1,"created_at":"2026-11-22T00:00:00Z"},
-            {"id":2,"created_at":"2026-11-21T21:00:00Z","conclusion":"failure"},
-            {"id":3,"created_at":"2026-11-21T20:00:00Z","conclusion":"failure"}]}
-        log_by_run={"2": first,"3":blocked}
-        self.assertEqual(module.github_recent_attempts(history,1,
-            dt.datetime(2026,11,22,tzinfo=dt.timezone.utc),
-            lambda run_id: module.gpu_session_attempted(log_by_run[run_id])),1)
+        sha="a"*40
+        self.assertTrue(module.duplicate_gpu_submission(first,sha,"NvidiaTeslaT4"))
+        self.assertFalse(module.duplicate_gpu_submission(blocked,sha,"NvidiaTeslaT4"))
+        self.assertFalse(module.duplicate_gpu_submission(skipped,sha,"NvidiaTeslaT4"))
+        self.assertFalse(module.duplicate_gpu_submission("",sha,"NvidiaTeslaT4"))
+        tagged=first+" accelerator=NvidiaTeslaT4"
+        self.assertTrue(module.duplicate_gpu_submission(tagged,sha,"NvidiaTeslaT4"))
+        self.assertFalse(module.duplicate_gpu_submission(tagged,sha,"NvidiaL4"))
+        self.assertFalse(module.duplicate_gpu_submission(
+            tagged.replace(sha,"b"*40),sha,"NvidiaTeslaT4"))
+        self.assertFalse(hasattr(module,"MAX_WEEKLY_RUNS"))
+        self.assertEqual(module.MIN_QUOTA_RESERVE_HOURS,0.0)
 
     def test_live_quota_units_and_gpu_tpu_separation(self):
         q = [{"resource":"GPU","remaining":"25.50h","total":"30h"},
@@ -53,15 +50,10 @@ class KaggleDispatchPolicy(unittest.TestCase):
         self.assertEqual(module.status_from_cli("KernelWorkerStatus.RUNNING"),"RUNNING")
         self.assertEqual(module.status_from_cli("INCOMPLETE"),"UNKNOWN")
         self.assertEqual(module.status_from_cli("unknown"),"UNKNOWN")
-    def test_weekly_limit_counts_cancelled_and_failed(self):
-        now=dt.datetime(2026,11,22,tzinfo=dt.timezone.utc)
-        data={"workflow_runs":[
-            {"id":1,"created_at":"2026-11-22T00:00:00Z"},
-            {"id":2,"created_at":"2026-11-21T10:00:00Z","conclusion":"cancelled"},
-            {"id":3,"created_at":"2026-11-16T10:00:00Z","conclusion":"failure"},
-            {"id":4,"created_at":"2026-11-01T00:00:00Z"}]}
-        self.assertEqual(module.github_recent_attempts(data,1,now),2)
-        self.assertEqual(module.MAX_WEEKLY_RUNS,2)
+    def test_no_weekly_quota_cap_and_session_timeout(self):
+        self.assertEqual(module.MIN_QUOTA_RESERVE_HOURS,0.0)
+        self.assertEqual(module.DUPLICATE_LOOKBACK_DAYS,7)
+        self.assertFalse(hasattr(module,"MAX_WEEKLY_RUNS"))
         self.assertEqual(module.MAX_SESSION_MINUTES,30)
     def test_private_legacy_json_and_raw_token(self):
         with tempfile.TemporaryDirectory() as temp:
