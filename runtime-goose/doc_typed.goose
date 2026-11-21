@@ -271,6 +271,56 @@ fn stabilize(nodes: State[:], values: Value[:], active: bool[:]) -> i64 {
     }
     return evaluations;
 }
+// Evaluate only the ancestor-closed subgraph selected by `needed`.
+// Unrelated pending values and even unrelated overflowing definitions stay
+// unmaterialized. This is a legal subset schedule of the finite DOC kernel.
+fn stabilize_demanded(nodes: State[:], values: Value[:], active: bool[:],
+                      needed: bool[:]) -> i64 {
+    var evaluations = 0;
+    loop {
+        var blocked: bool[>..] = [];
+        var frontier: i64[>..] = [];
+        for i in 0..nodes.len {
+            var blocked_here = false;
+            if nodes[i].derived {
+                for k in 0..nodes[i].count {
+                    let premise = nodes[i].premise[k];
+                    if active[premise] || blocked[premise] {
+                        blocked_here = true;
+                    }
+                }
+            }
+            blocked.push(blocked_here);
+            if active[i] && needed[i] && !blocked_here {
+                if !nodes[i].derived { fail(); }
+                frontier.push(i);
+            }
+        }
+        if frontier.len == 0 {
+            for i in 0..nodes.len { if active[i] && needed[i] { fail(); } }
+            break;
+        }
+        var candidates: Value[>..] = [];
+        for id in frontier { candidates.push(inspect(nodes,values,id,true)); }
+        // Complete frontier candidate evaluation precedes publication.
+        for k in 0..frontier.len {
+            let id = frontier[k];
+            let candidate = candidates[k];
+            active[id] = false;
+            if !equal(candidate,values[id]) {
+                values[id] = candidate;
+                for user in id + 1..nodes.len {
+                    if nodes[user].derived && needed[user] && uses(nodes[user],id) {
+                        active[user] = true;
+                    }
+                }
+            }
+        }
+        evaluations += frontier.len;
+    }
+    return evaluations;
+}
+
 fn show(nodes: State[:], values: Value[:]) {
     for i in 0..nodes.len {
         if values[i].kind == 0 {
@@ -471,6 +521,46 @@ fn main() {
     if arg_count() >= 3 {
         var mode: u8[>..] = [];
         arg(2,mode);
+        if starts_with(mode,"--demand=") {
+            let target = lookup(nodes,mode[9..]);
+            if target < 0 { fail(); }
+            var changes: Change[>..] = [];
+            for i in 3..arg_count() {
+                var raw: u8[>..] = [];
+                arg(i,raw);
+                let eq = find(raw,"=");
+                if eq <= 0 { fail(); }
+                let id = lookup(nodes,raw[..eq]);
+                if id < 0 || nodes[id].derived { fail(); }
+                let value = parse_value(raw[eq + 1..],nodes[id].kind);
+                for old in changes {
+                    if old.id == id { fail(); }
+                }
+                changes.push(Change { id: id, value: value, next: false });
+            }
+            for entry in changes {
+                update(nodes,values,active,entry.id,entry.value);
+            }
+            var needed: bool[>..] = [];
+            for i in 0..nodes.len { needed.push(false); }
+            needed[target] = true;
+            var cursor = nodes.len;
+            while cursor > 0 {
+                cursor--;
+                if needed[cursor] && nodes[cursor].derived {
+                    for p in 0..nodes[cursor].count {
+                        needed[nodes[cursor].premise[p]] = true;
+                    }
+                }
+            }
+            let _performed = stabilize_demanded(nodes,values,active,needed);
+            if values[target].kind == 0 {
+                print(nodes[target].name, ": ", values[target].flag);
+            } else {
+                print(nodes[target].name, ": ", values[target].number);
+            }
+            return;
+        }
         if starts_with(mode,"--through=") {
             let limit, ok = parse_int(mode[10..]);
             if !ok || limit < 0 { fail(); }
