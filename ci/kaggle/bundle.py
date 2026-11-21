@@ -139,21 +139,21 @@ def create_private_dataset(folder, owner,run_id,attempt,env):
          env=env,capture_output=True,text=True,timeout=180)
     if p.returncode:
         raise RuntimeError("Kaggle private native GPU binary dataset upload failed")
-    # A freshly uploaded private dataset can exist before the status API
-    # exposes its metadata. Do not turn the first 404/403 into an immediate
-    # submission attempt; keep GPU quota at zero until readiness is proven.
-    deadline=time.monotonic()+150
-    status_errors=0
+    # Kaggle controls dataset indexing; DOC has no fixed readiness deadline.
+    # Permanent permission failure is still actionable; transient delays retry.
     polls=0
-    while time.monotonic()<deadline:
+    while True:
         polls+=1
         status=subprocess.run(["kaggle","datasets","status",dataset,
             "--format","json"],env=env,capture_output=True,text=True,timeout=25)
         if status.returncode:
-            status_errors+=1
-            # No CLI stderr is emitted: it may contain account metadata.
-            # Errors may be transient 404 while Kaggle processes the upload,
-            # or permanent authorization failures requiring a token scope.
+            # Avoid printing CLI stderr, which may contain account metadata.
+            error=(status.stderr+"\n"+status.stdout).lower()
+            if any(term in error for term in (
+                    "401","403","forbidden","unauthorized","permission denied",
+                    "insufficient scope","invalid token")):
+                raise RuntimeError(
+                    "Kaggle private dataset status denied by API permissions")
             time.sleep(8)
             continue
         try:
@@ -167,12 +167,8 @@ def create_private_dataset(folder, owner,run_id,attempt,env):
             return dataset
         if any(word in state for word in ("ERROR","FAIL","CANCEL")):
             raise RuntimeError("Kaggle private GPU binary dataset failed processing")
+        # Back off between polls without imposing a DOC-defined time limit.
         time.sleep(8)
-    raise RuntimeError(
-        "Kaggle private GPU dataset readiness could not be verified without "
-        "starting a GPU session (polls="+str(polls)+", api_errors="+
-        str(status_errors)+"). Check dataset read/status API token scope, "
-        "dataset owner and processing status; no GPU kernel was submitted")
 
 def prepare_native_gpu_dataset(repo, token, spec, checkout, workdir, kaggle_env, owner):
     run_id=find_native_run(repo,token,spec["sha"],
