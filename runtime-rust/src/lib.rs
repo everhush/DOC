@@ -286,6 +286,7 @@ impl Graph {
         let base=Path::new(file).parent().unwrap_or(Path::new("."));
         let mut assembled=String::new();
         let mut modules=0usize;
+        let mut effects=0usize;
         for original in source.lines(){
             let line=original.split('#').next().unwrap_or("").trim();
             if let Some(path)=line.strip_prefix("import "){
@@ -309,6 +310,36 @@ impl Graph {
                 }
                 assembled.push_str(&body);
                 assembled.push('\n');
+            }else if let Some(effect)=line.strip_prefix("effect "){
+                // The named read is explicitly effectful; it is sampled once
+                // at the program boundary into an immutable DOC source fact.
+                // No filesystem operation runs inside a pure ready-frontier.
+                effects+=1;
+                if effects>64{return Err("DOC effect source limit exceeded".into());}
+                let (header,operation)=effect.split_once('=')
+                    .ok_or("effect source requires = read(\"path\")")?;
+                let (name,ty)=header.split_once(':')
+                    .ok_or("effect source requires a declared type")?;
+                let name=name.trim();
+                let ty=ty.trim();
+                let kind=Type::parse(ty)?;
+                let operand=operation.trim().strip_prefix("read(")
+                    .and_then(|s|s.strip_suffix(')'))
+                    .ok_or("effect requires read(\"relative-path\")")?;
+                let relative=operand.trim().strip_prefix('"')
+                    .and_then(|s|s.strip_suffix('"'))
+                    .ok_or("effect read path must be quoted")?;
+                if relative.is_empty() || relative.contains('"') ||
+                   relative.bytes().any(|c|c.is_ascii_whitespace()) ||
+                   Path::new(relative).is_absolute(){
+                    return Err("DOC effect read requires a relative ASCII path".into());
+                }
+                let file_path=base.join(relative);
+                let raw=std::fs::read_to_string(&file_path)
+                    .map_err(|e|format!("DOC read effect {}: {e}",file_path.display()))?;
+                if raw.len()>8_192{return Err("DOC read effect exceeds 8KiB".into());}
+                let typed=Value::parse_for_type(raw.trim(),kind)?;
+                assembled.push_str(&format!("source {name}: {ty} = {typed}\n"));
             }else{
                 assembled.push_str(original);
                 assembled.push('\n');
