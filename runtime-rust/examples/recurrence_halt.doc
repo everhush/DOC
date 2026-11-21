@@ -1,0 +1,5 @@
+# Demand-driven halt is a Boolean derived state, not a scheduler guess.
+source index: int = 0
+source step: int = 1
+derive successor: int (index,step) = add(index,step)
+derive halt: bool (index) = eq(index,3)
