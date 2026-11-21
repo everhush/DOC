@@ -54,6 +54,25 @@ jobs:
                       owner = expected_owner
               else:
                   env["KAGGLE_API_TOKEN"] = token
+              # Report credential SHAPE only, never any of its bytes.
+              print("DOC_KAGGLE_SECRET_SHAPE:",
+                    "legacy_json" if token.startswith("{") else "raw_token",
+                    "wrapped_in_quotes=" + str(token[:1] in ("'", '"')),
+                    "contains_newline=" + str(chr(10) in token),
+                    "env_assignment=" + str(token.startswith("KAGGLE_API_TOKEN=")))
+              # Distinguish an independently broken Kaggle CLI from a token
+              # that makes the CLI fail during its own module initialization.
+              baseline = dict(env)
+              for setting in ("KAGGLE_API_TOKEN","KAGGLE_KEY","KAGGLE_USERNAME",
+                              "KAGGLE_DOC_1"):
+                  baseline.pop(setting,None)
+              plain = subprocess.run(["kaggle","--version"],
+                  capture_output=True,text=True,env=baseline,timeout=20)
+              raw_error = plain.stdout + chr(10) + plain.stderr
+              klass = re.findall(r"(?m)^([A-Za-z_][A-Za-z_0-9]*(?:Error|Exception)):",raw_error)
+              print("DOC_KAGGLE_BASELINE_VERSION: ok=",
+                    plain.returncode == 0,
+                    "exception=" + (klass[-1] if klass else "none"))
               print("DOC_KAGGLE_OWNER_VARIABLE_PRESENT:", bool(owner))
               if not re.fullmatch(r"[a-z0-9_-]{2,60}", owner):
                   raise SystemExit("DOC_KAGGLE_PERMISSION_RESULT: invalid or absent username")
@@ -87,8 +106,13 @@ jobs:
                   try:
                       p = subprocess.run(command,capture_output=True,text=True,
                                          env=env,timeout=20)
+                      msg=p.stdout + chr(10) + p.stderr
+                      klass=re.findall(
+                          r"(?m)^([A-Za-z_][A-Za-z_0-9]*(?:Error|Exception)):",
+                          msg)
                       print(f"DOC_KAGGLE_AUTH_DIAG: {label} ok={p.returncode == 0}"
-                            f" category={classify(p.stdout + chr(10) + p.stderr) if p.returncode else 'OK'}")
+                            f" category={classify(msg) if p.returncode else 'OK'}"
+                            f" exception={klass[-1] if klass else 'none'}")
                   except subprocess.TimeoutExpired:
                       print(f"DOC_KAGGLE_AUTH_DIAG: {label} category=TIMEOUT")
               probes = [
@@ -107,8 +131,12 @@ jobs:
                       output=(p.stdout+"\n"+p.stderr)[-4000:]
                       http = re.search(r"(?<!\d)(401|403|404|429|500|503)(?!\d)",output)
                       statuses[name] = p.returncode == 0
+                      klass = re.findall(
+                          r"(?m)^([A-Za-z_][A-Za-z_0-9]*(?:Error|Exception)):",
+                          output)
                       print(f"DOC_KAGGLE_PROBE: {name} success={p.returncode == 0} "
                             f"rc={p.returncode} category={classify(output)} "
+                            f"exception={klass[-1] if klass else 'none'} "
                             f"http={http.group(1) if http else 'not_shown'}")
                   except subprocess.TimeoutExpired:
                       statuses[name]=False
