@@ -35,7 +35,7 @@ fn randomized_acyclic_graphs_multiple_frontier_schedules() {
                 let src=(next(&mut seed)%3) as usize;
                 let val=Value::Int((next(&mut seed)%9) as i64);
                 for rt in [&mut one,&mut four,&mut subset] {
-                    rt.update(&[(src,val)]).unwrap();
+                    rt.update(&[(src,val.clone())]).unwrap();
                 }
                 one.stabilize().unwrap();
                 four.stabilize().unwrap();
