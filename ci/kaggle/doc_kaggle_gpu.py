@@ -25,7 +25,6 @@ ROOT.mkdir(parents=True, exist_ok=True)
 LOGS = ROOT / "doc-kaggle-logs"
 LOGS.mkdir(parents=True, exist_ok=True)
 START = time.monotonic()
-DEADLINE = START + SPEC["minutes"] * 60 - 45
 METRICS = []
 ENV = dict(os.environ)
 ENV.update({
@@ -36,33 +35,19 @@ ENV.update({
     "DEBIAN_FRONTEND":"noninteractive", "APT_LISTCHANGES_FRONTEND":"none",
     "NEEDRESTART_MODE":"a"})
 
-def run(name, argv, cwd=None, env=None, max_seconds=None, path=None):
-    remaining = int(DEADLINE - time.monotonic())
-    if remaining <= 1:
-        raise RuntimeError("Exceeded Kaggle bounded GPU session")
+def run(name, argv, cwd=None, env=None, path=None):
+    """Execute a native check without DOC-imposed session or per-step caps.
+
+    Kaggle and the GitHub runner own their actual execution lifetimes. Native
+    errors retain raw diagnostic logs; wall-clock data is still measured.
+    """
     before = time.perf_counter()
     destination = LOGS / (path or (name + ".log"))
     destination.parent.mkdir(parents=True, exist_ok=True)
     argv = [str(x) for x in argv]
-    try:
-        proc = subprocess.run(argv, cwd=cwd, env=env or ENV,
-            capture_output=True, text=True, errors="replace",
-            timeout=min(max_seconds or remaining, remaining), check=False)
-    except subprocess.TimeoutExpired as error:
-        # Do not discard the diagnostic output for the interrupted step:
-        # the first Kaggle T4 attempt was blocked on apt-get update and its
-        # 260-second timeout otherwise left no actionable apt diagnostics.
-        def output(value):
-            if isinstance(value, bytes):
-                return value.decode("utf-8", errors="replace")
-            return value or ""
-        diagnostic = (output(error.stdout) + "\n" + output(error.stderr))[-262144:]
-        destination.write_text(diagnostic)
-        seconds = round(time.perf_counter() - before, 4)
-        METRICS.append({"step": name, "wall_seconds": seconds,
-                        "exit_code": "timeout"})
-        raise RuntimeError("Kaggle bootstrap " + name +
-                           " timed out after " + str(round(seconds)) + "s") from error
+    proc = subprocess.run(argv, cwd=cwd, env=env or ENV,
+                          capture_output=True, text=True, errors="replace",
+                          check=False)
     seconds = round(time.perf_counter() - before, 4)
     destination.write_text((proc.stdout + "\n" + proc.stderr)[-262144:])
     METRICS.append({"step": name, "wall_seconds": seconds, "exit_code": proc.returncode})
@@ -119,7 +104,7 @@ def load_verified_native_bundle():
 def preflight_hardware():
     # A CUDA-visible NVIDIA device is not enough: SDL3 and wgpu both require
     # a *physical* Vulkan ICD. Do not use llvmpipe or silently fall back.
-    output=run("nvidia-smi",["nvidia-smi","-L"],max_seconds=15)
+    output=run("nvidia-smi",["nvidia-smi","-L"])
     if "GPU" not in output:
         raise RuntimeError("INFRA_BLOCKED: Kaggle did not attach NVIDIA GPU")
     roots=("/usr/share/vulkan/icd.d","/etc/vulkan/icd.d",
@@ -148,7 +133,7 @@ def preflight_hardware():
             "driver ICD/library. No APT retries will consume GPU quota.")
     ENV["VK_DRIVER_FILES"]=":".join(map(str,drivers))
     ENV["VK_ICD_FILENAMES"]=ENV["VK_DRIVER_FILES"]
-    info=run("physical-vulkan",["vulkaninfo","--summary"],max_seconds=35)
+    info=run("physical-vulkan",["vulkaninfo","--summary"])
     if not re.search(r"PHYSICAL_DEVICE_TYPE_(?:DISCRETE|INTEGRATED)_GPU",info):
         raise RuntimeError("INFRA_BLOCKED: NVIDIA Vulkan physical GPU not exposed")
     print("DOC_KAGGLE_PHYSICAL_VULKAN_FOUND")
@@ -161,7 +146,7 @@ def test_physical_gpu(repo, goose_gpu, rust_signed, rust_bool):
     run("goose-native-sdl3-oracle", [
         "xvfb-run", "-a", "python3",
         "runtime-goose/check-doc-sdl3-gpu.py", goose_gpu,
-        goose_logs / "goose-sdl3"], cwd=repo, max_seconds=500)
+        goose_logs / "goose-sdl3"], cwd=repo)
     text = (goose_logs / "goose-sdl3/doc-goose-sdl3-summary.log").read_text()
     if "DOC_GOOSE_SDL3_NATIVE_PARITY_PASS: 77 checks" not in text:
         raise RuntimeError("Goose SDL3 CPU/GPU differential oracle failed")
@@ -170,12 +155,12 @@ def test_physical_gpu(repo, goose_gpu, rust_signed, rust_bool):
         for lanes in (1, 63, 64, 65, 129, 257, 1024):
             env = {**ENV, "DOC_GPU_LANES": str(lanes)}
             run(f"rust-{mode}-{lanes}", [rust_signed, *flags], cwd=repo,
-                env=env, max_seconds=80, path=f"rust/rust-{mode}-{lanes}.log")
+                env=env, path=f"rust/rust-{mode}-{lanes}.log")
     run("rust-staged-reduction", [rust_bool, "--staged-repair"], cwd=repo,
-        env={**ENV, "DOC_GPU_LANES": "257", "DOC_GPU_REDUCTION": "1"}, max_seconds=90)
+        env={**ENV, "DOC_GPU_LANES": "257", "DOC_GPU_REDUCTION": "1"})
     run("independent-doc-gpu-parity", ["python3",
         "runtime-goose/check-dual-gpu-parity.py",
-        rust_logs, goose_logs, LOGS / "report"], cwd=repo, max_seconds=50)
+        rust_logs, goose_logs, LOGS / "report"], cwd=repo)
     report = (LOGS / "report/native-gpu-equivalence.log").read_text()
     if "DOC_RUST_WGPU_GOOSE_SDL3_PARITY_PASS: 42 observed GPU episodes" not in report:
         raise RuntimeError("Rust wgpu versus Goose SDL3 GPU result parity mismatch")
@@ -190,9 +175,6 @@ def nearest_rank_p95(values):
 
 def benchmark_hardware_gpu(repo, goose_gpu, rust_signed):
     """Matched subprocess GPU timings; NOT isolated kernel-time comparisons."""
-    if DEADLINE - time.monotonic() < 240:
-        print("DOC_KAGGLE_GPU_BENCHMARK_SKIPPED: session reserve <240s")
-        return {"status": "skipped_time_budget", "samples": 0}
     source_results = LOGS / "report/native-gpu-equivalence.csv"
     with source_results.open(newline="") as handle:
         reference = {
@@ -221,7 +203,7 @@ def benchmark_hardware_gpu(repo, goose_gpu, rust_signed):
             cmd = ["xvfb-run", "-a", goose_gpu, source, mode, "1024"]
             env = ENV
         output = run("gpu-bench-{}-{}-{}".format(mode,runtime,repetition),
-                     cmd, cwd=repo, env=env, max_seconds=60,
+                     cmd, cwd=repo, env=env,
                      path="benchmark/{}-{}-{}.log".format(mode,runtime,repetition))
         if runtime == "rust":
             observed = {int(epoch):int(count)
@@ -242,9 +224,6 @@ def benchmark_hardware_gpu(repo, goose_gpu, rust_signed):
            for runtime in ("rust","goose") for index in range(9)]
     random.Random(0xD0C).shuffle(order)
     for mode,runtime,index in order:
-        if DEADLINE - time.monotonic() < 90:
-            print("DOC_KAGGLE_GPU_BENCHMARK_TRUNCATED: deadline reserve")
-            return {"status":"skipped_time_budget","samples":len(samples)}
         elapsed=execute(mode,runtime,index)
         samples.append({"mode":mode,"runtime":runtime,"sample":index,
                         "end_to_end_cli_ms":round(elapsed,4)})
@@ -293,7 +272,6 @@ def main():
         "accelerator": SPEC["accelerator"], "hardware": False,
         "backend": "unverified", "result": "failed",
         "goose_sdl3_checks": 0, "dual_backend_episodes": 0,
-        "max_gpu_minutes": SPEC["minutes"],
         "native_standard_ci_run_id": SPEC.get("standard_ci_run_id"),
         "bundle_dataset": SPEC.get("bundle_dataset"),
         "started_utc": dt.datetime.now(dt.timezone.utc).isoformat()}
