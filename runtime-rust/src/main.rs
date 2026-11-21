@@ -50,7 +50,7 @@ fn run() -> Result<(), String> {
                 if graph.states[source].definition.is_some() {
                     return Err("epoch fact cannot target a derived state".into());
                 }
-                let value = Value::parse(text)?;
+                let value = Value::parse_for_type(text, graph.states[source].kind)?;
                 if value.kind() != graph.states[source].kind {
                     return Err("epoch fact type mismatch".into());
                 }
@@ -119,7 +119,7 @@ fn run() -> Result<(), String> {
             let (name, text) = assignment.split_once('=')
                 .ok_or("expected source=value after --demand")?;
             let source = requested.graph.id(name).ok_or("unknown DOC source")?;
-            changes.push((source, Value::parse(text)?));
+            changes.push((source, Value::parse_for_type(text, requested.graph.states[source].kind)?));
         }
         requested.update(&changes)?;
         requested.stabilize_requested(&[target])?;
@@ -131,7 +131,7 @@ fn run() -> Result<(), String> {
     for arg in args {
         let (name, raw) = arg.split_once('=').ok_or("expected source=value")?;
         let id = rt.graph.id(name).ok_or_else(|| format!("unknown state {name}"))?;
-        changes.push((id, Value::parse(raw)?));
+        changes.push((id, Value::parse_for_type(raw, rt.graph.states[id].kind)?));
     }
     rt.update(&changes)?;
     rt.stabilize()?;
