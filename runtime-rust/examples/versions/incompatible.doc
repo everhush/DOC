@@ -1,4 +1,4 @@
-# Mismatched source type carries no old value; new default wins.
+# Both old source authorities change type: do not carry either value.
 source a: bool = true
-source b: ints = []
-derive size: int (b) = len(b)
+source b: bool = false
+derive size: bool (b) = eq(b,false)

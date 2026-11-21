@@ -45,7 +45,7 @@ for binary in (rust,goose):
                             capture_output=True,text=True,timeout=30)
     if mismatch.returncode:
         raise AssertionError(f"incompatible authority should use new default: {binary}")
-    if "DOC_GRAPH_GENERATION: 1\na: true\nb: []\nsize: 0" not in mismatch.stdout:
+    if "DOC_GRAPH_GENERATION: 1\na: true\nb: false\nsize: true" not in mismatch.stdout:
         raise AssertionError(f"incorrect role/type incompatible source migration: {binary}")
     cases+=1
 root.joinpath("doc-graph-replacements.log").write_text(
