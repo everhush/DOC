@@ -695,6 +695,112 @@ fn update(nodes: State[:], values: Value[:], active: bool[:],
         if nodes[j].derived && uses(nodes[j],id) { active[j] = true; }
     }
 }
+
+// Goose thread programs are isolated: only copied flat Boolean tasks cross
+// typed queues. The main DOC worker remains the ONLY publisher. Restrict
+// worker jobs to total pure Boolean expressions: no memory-pool use and no
+// potentially overflowing arithmetic in a worker's native fail-stop path.
+struct BoolJob {
+    position: i64,
+    node: State,
+    premises: State[16],
+    inputs: Value[16],
+}
+struct BoolReply { position: i64, value: bool }
+fn boolean_worker_eligible(nodes: State[:], frontier: i64[:]) -> bool {
+    for id in frontier {
+        if !nodes[id].derived || nodes[id].kind != 0 { return false; }
+        let body = nodes[id].expression[..];
+        for forbidden in ["nat","empty","append","get","len","tail",
+                          "add","sub","mul"] {
+            if find(body,forbidden) >= 0 { return false; }
+        }
+        for k in 0..nodes[id].count {
+            if nodes[nodes[id].premise[k]].kind != 0 { return false; }
+        }
+    }
+    return true;
+}
+thread_fn boolean_worker() {
+    loop {
+        let job = qget<BoolJob>();
+        if job.position < 0 { break; }
+        var local_nodes: State[>..] = [];
+        var local_values: Value[>..] = [];
+        var derived = job.node;
+        for k in 0..derived.count {
+            local_nodes.push(job.premises[k]);
+            local_values.push(job.inputs[k]);
+            derived.premise[k] = k;
+        }
+        local_nodes.push(derived);
+        local_values.push(boolean(false));
+        let result = inspect(local_nodes,local_values,derived.count,true);
+        if result.kind != 0 { fail(); }
+        qput(BoolReply { position: job.position, value: result.flag });
+    }
+}
+fn evaluate_ready_frontier(nodes: State[:], values: Value[:],
+                           frontier: i64[:]) -> Value[>..] {
+    var candidates: Value[>..] = [];
+    var setting: u8[>..] = [];
+    var workers = min(4,max(1,hardware_threads()));
+    if env("DOC_GOOSE_WORKERS",setting) {
+        let requested,ok=parse_int(setting);
+        if !ok || requested < 1 || requested > 16 { fail(); }
+        workers = requested;
+    }
+    if workers <= 1 || frontier.len < 64 ||
+       !boolean_worker_eligible(nodes,frontier) {
+        for id in frontier { candidates.push(inspect(nodes,values,id,true)); }
+        return candidates;
+    }
+    workers = min(workers,frontier.len);
+    candidates.resize(frontier.len,boolean(false));
+    let blank = State {
+        name: "", expression: "", premise: [0;16],
+        count: 0, kind: 0, derived: false,
+    };
+    for position in 0..frontier.len {
+        let id=frontier[position];
+        var task = BoolJob {
+            position: position,
+            node: nodes[id],
+            premises: [blank;16],
+            inputs: [boolean(false);16],
+        };
+        for k in 0..nodes[id].count {
+            let original=nodes[id].premise[k];
+            task.premises[k]=nodes[original];
+            task.inputs[k]=values[original];
+        }
+        qput(task);
+    }
+    for i in 0..workers {
+        qput(BoolJob {
+            position: -1, node: blank, premises: [blank;16],
+            inputs: [boolean(false);16],
+        });
+    }
+    var ids: i64[>..] = [];
+    for i in 0..workers { ids.push(thread_spawn(boolean_worker)); }
+    var seen: bool[>..] = [];
+    seen.resize(frontier.len,false);
+    for i in 0..frontier.len {
+        let reply = qget<BoolReply>();
+        if reply.position < 0 || reply.position >= frontier.len ||
+           seen[reply.position] { fail(); }
+        seen[reply.position] = true;
+        candidates[reply.position]=boolean(reply.value);
+    }
+    for id in ids { thread_wait(id); }
+    var message: u8[>..] = [];
+    format(message,"DOC_GOOSE_PARALLEL_FRONTIER: workers=",workers,
+           " candidates=",frontier.len,"\n");
+    write_stderr(message);
+    return candidates;
+}
+
 fn stabilize(nodes: State[:], values: Value[:], active: bool[:]) -> i64 {
     var evaluations = 0;
     loop {
@@ -720,8 +826,7 @@ fn stabilize(nodes: State[:], values: Value[:], active: bool[:]) -> i64 {
             for a in active { if a { fail(); } }
             break;
         }
-        var candidates: Value[>..] = [];
-        for id in frontier { candidates.push(inspect(nodes,values,id,true)); }
+        let candidates = evaluate_ready_frontier(nodes,values,frontier);
         // Complete frontier candidate evaluation precedes publication.
         for k in 0..frontier.len {
             let id = frontier[k];
@@ -769,8 +874,7 @@ fn stabilize_demanded(nodes: State[:], values: Value[:], active: bool[:],
             for i in 0..nodes.len { if active[i] && needed[i] { fail(); } }
             break;
         }
-        var candidates: Value[>..] = [];
-        for id in frontier { candidates.push(inspect(nodes,values,id,true)); }
+        let candidates = evaluate_ready_frontier(nodes,values,frontier);
         // Complete frontier candidate evaluation precedes publication.
         for k in 0..frontier.len {
             let id = frontier[k];
