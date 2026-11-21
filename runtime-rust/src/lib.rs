@@ -2,18 +2,25 @@
 //! The finite-core proof excludes recurrence, placement and effects.
 pub mod recurrence;
 pub mod wgsl;
+pub mod nat;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::thread;
 
 pub type StateId = usize;
 pub type Result<T> = std::result::Result<T,String>;
 
+#[derive(Clone,Debug,PartialEq,Eq)]
+pub enum Value { Int(i64), Bool(bool), Nat(String) }
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
-pub enum Value { Int(i64), Bool(bool) }
-#[derive(Clone,Copy,Debug,PartialEq,Eq)]
-pub enum Type { Int, Bool }
+pub enum Type { Int, Bool, Nat }
 impl Value {
-    pub fn kind(self)->Type { match self {Self::Int(_)=>Type::Int,Self::Bool(_)=>Type::Bool} }
+    pub fn kind(&self)->Type { match self {Self::Int(_)=>Type::Int,Self::Bool(_)=>Type::Bool,Self::Nat(_)=>Type::Nat} }
+    pub fn parse_for_type(s:&str,kind:Type)->Result<Self>{
+        if kind==Type::Nat {return Ok(Self::Nat(nat::canonical(s.trim())?));}
+        let value=Self::parse(s)?;
+        if value.kind()!=kind{return Err("source value type mismatch".into());}
+        Ok(value)
+    }
     pub fn parse(s:&str)->Result<Self>{
         match s.trim() {
             "true"=>Ok(Self::Bool(true)), "false"=>Ok(Self::Bool(false)),
@@ -22,11 +29,11 @@ impl Value {
     }
 }
 impl Type { pub fn parse(s:&str)->Result<Self>{
-    match s.trim() {"int"=>Ok(Self::Int),"bool"=>Ok(Self::Bool),_=>Err(format!("invalid type: {s}"))}
+    match s.trim() {"int"=>Ok(Self::Int),"bool"=>Ok(Self::Bool),"nat"=>Ok(Self::Nat),_=>Err(format!("invalid type: {s}"))}
 }}
 impl std::fmt::Display for Value {
     fn fmt(&self,f:&mut std::fmt::Formatter<'_>)->std::fmt::Result {
-        match self {Self::Int(x)=>write!(f,"{x}"),Self::Bool(x)=>write!(f,"{x}")}
+        match self {Self::Int(x)=>write!(f,"{x}"),Self::Bool(x)=>write!(f,"{x}"),Self::Nat(x)=>write!(f,"{x}")}
     }
 }
 #[derive(Clone,Debug)]
@@ -43,8 +50,9 @@ impl Expr {
             Lit(v)=>Ok(v.kind()),
             Arg(i)=>args.get(*i).copied().ok_or_else(||"missing formal parameter".into()),
             Add(a,b)|Sub(a,b)|Mul(a,b)=>{
-                if a.kind(args)?==Type::Int && b.kind(args)?==Type::Int {Ok(Type::Int)}
-                else {Err("arithmetic expects integers".into())}
+                let at=a.kind(args)?;let bt=b.kind(args)?;
+                if at==bt && (at==Type::Int || at==Type::Nat){Ok(at)}
+                else{Err("arithmetic requires matching int or nat operands".into())}
             }
             Eq(a,b)=>{
                 if a.kind(args)?==b.kind(args)? {Ok(Type::Bool)}
@@ -60,17 +68,29 @@ impl Expr {
     pub fn eval(&self,args:&[Value])->Result<Value>{
         use Expr::*;
         match self {
-            Lit(v)=>Ok(*v),
-            Arg(i)=>args.get(*i).copied().ok_or_else(||"missing parameter".into()),
+            Lit(v)=>Ok(v.clone()),
+            Arg(i)=>args.get(*i).cloned().ok_or_else(||"missing parameter".into()),
             Add(a,b)|Sub(a,b)|Mul(a,b)=>{
-                let x=match a.eval(args)? {Value::Int(x)=>x,_=>return Err("integer expected".into())};
-                let y=match b.eval(args)? {Value::Int(y)=>y,_=>return Err("integer expected".into())};
-                let v=match self {
-                    Add(_,_)=>x.checked_add(y),
-                    Sub(_,_)=>x.checked_sub(y),
-                    _=>x.checked_mul(y)
-                };
-                v.map(Value::Int).ok_or_else(||"integer overflow; no frontier publication".into())
+                match (a.eval(args)?,b.eval(args)?) {
+                    (Value::Int(x),Value::Int(y))=>{
+                        let v=match self{
+                            Add(_,_)=>x.checked_add(y),
+                            Sub(_,_)=>x.checked_sub(y),
+                            _=>x.checked_mul(y)
+                        };
+                        v.map(Value::Int).ok_or_else(||
+                            "integer overflow; no frontier publication".into())
+                    }
+                    (Value::Nat(x),Value::Nat(y))=>{
+                        let result=match self{
+                            Add(_,_)=>nat::add(&x,&y),
+                            Sub(_,_)=>nat::sub(&x,&y)?,
+                            _=>nat::mul(&x,&y)
+                        };
+                        Ok(Value::Nat(result))
+                    }
+                    _=>Err("arithmetic requires matching numeric kinds".into())
+                }
             }
             Eq(a,b)=>Ok(Value::Bool(a.eval(args)?==b.eval(args)?)),
             If(c,a,b)=>match c.eval(args)? {
@@ -147,8 +167,7 @@ impl Graph {
             let parsed=if let Some(rest)=line.strip_prefix("source "){
                 let (header,v)=rest.split_once('=').ok_or("source requires =")?;
                 let (name,t)=header.split_once(':').ok_or("source requires type")?;
-                let value=Value::parse(v)?;
-                if Type::parse(t)?!=value.kind(){return Err("source value type mismatch".into());}
+                let value=Value::parse_for_type(v,Type::parse(t)?)?;
                 State::source(name.trim(),value)
             }else if let Some(rest)=line.strip_prefix("derive "){
                 let (header,body)=rest.split_once('=').ok_or("definition requires =")?;
@@ -217,6 +236,11 @@ impl Parser<'_>{
         let token=self.next()?;
         if self.tokens.get(self.pos).map(String::as_str)==Some("("){
             self.eat("(")?;
+            if token=="nat"{
+                let digits=self.next()?;
+                self.eat(")")?;
+                return Ok(Expr::Lit(Value::Nat(nat::canonical(&digits)?)));
+            }
             let expr=if token=="if"{
                 let c=Box::new(self.expr()?);self.eat(",")?;
                 let a=Box::new(self.expr()?);self.eat(",")?;
@@ -262,11 +286,11 @@ pub struct Runtime {
 }
 impl Runtime {
     pub fn new(graph:Graph,workers:usize,cutoff:Cutoff)->Self{
-        let values=graph.states.iter().map(|s|s.initial).collect();
+        let values=graph.states.iter().map(|s|s.initial.clone()).collect();
         let active=graph.states.iter().map(|s|s.definition.is_some()).collect();
         Self{graph,values,active,cutoff,workers:workers.max(1),stats:Stats::default(),generation:0,source_epoch:0}
     }
-    pub fn value(&self,id:StateId)->Option<Value>{self.values.get(id).copied().flatten()}
+    pub fn value(&self,id:StateId)->Option<Value>{self.values.get(id).cloned().flatten()}
     pub fn snapshot(&self)->Vec<Option<Value>>{self.values.clone()}
     pub fn stable(&self)->bool{!self.active.iter().any(|v|*v)}
     pub fn observation_token(&self)->ObservationToken{
@@ -304,7 +328,7 @@ impl Runtime {
             if let Some(old_id)=self.graph.id(&state.name){
                 let old=&self.graph.states[old_id];
                 if old.definition.is_none() && old.kind==state.kind {
-                    state.initial=Some(self.values[old_id].ok_or("missing source fact")?);
+                    state.initial=Some(self.values[old_id].clone().ok_or("missing source fact")?);
                 }
             }
         }
@@ -332,23 +356,23 @@ impl Runtime {
 
     pub fn update(&mut self,changes:&[(StateId,Value)])->Result<()>{
         let mut ids=HashSet::new();
-        for &(id,v) in changes{
-            let s=self.graph.states.get(id).ok_or("unknown state")?;
+        for (id,v) in changes{
+            let s=self.graph.states.get(*id).ok_or("unknown state")?;
             if s.definition.is_some(){return Err("cannot update derived state".into());}
             if s.kind!=v.kind(){return Err("source update type mismatch".into());}
-            if !ids.insert(id){return Err("duplicate source assignment".into());}
+            if !ids.insert(*id){return Err("duplicate source assignment".into());}
         }
         // One atomic source batch advances exactly one source epoch, not
         // one epoch per updated state. Validate epoch overflow before writes.
-        let changed=changes.iter().any(|&(id,v)|
-            self.cutoff!=Cutoff::Exact || self.values[id]!=Some(v));
+        let changed=changes.iter().any(|(id,v)|
+            self.cutoff!=Cutoff::Exact || self.values[*id].as_ref()!=Some(v));
         let next=if changed {
             self.source_epoch.checked_add(1).ok_or("source epoch overflow")?
         }else{self.source_epoch};
-        for &(id,v) in changes{
-            if self.cutoff==Cutoff::Exact && self.values[id]==Some(v){continue;}
-            self.values[id]=Some(v);self.stats.updates+=1;
-            for &u in &self.graph.users[id]{self.active[u]=true;}
+        for (id,v) in changes{
+            if self.cutoff==Cutoff::Exact && self.values[*id].as_ref()==Some(v){continue;}
+            self.values[*id]=Some(v.clone());self.stats.updates+=1;
+            for &u in &self.graph.users[*id]{self.active[u]=true;}
         }
         self.source_epoch=next;
         Ok(())
@@ -442,16 +466,16 @@ impl Runtime {
         self.stats.frontiers+=1;
         self.stats.evaluations+=candidates.len() as u64;
         // Apply the logical publication barrier only after all candidates succeed.
-        for &(id,v) in &candidates{
-            if self.cutoff==Cutoff::Exact && self.values[id]==Some(v){
+        for (id,v) in &candidates{
+            if self.cutoff==Cutoff::Exact && self.values[*id].as_ref()==Some(v){
                 self.stats.cutoffs+=1;
             }else{
-                self.values[id]=Some(v);
+                self.values[*id]=Some(v.clone());
                 self.stats.publications+=1;
-                for &u in &self.graph.users[id]{self.active[u]=true;}
+                for &u in &self.graph.users[*id]{self.active[u]=true;}
             }
         }
-        for &(id,_) in &candidates{self.active[id]=false;}
+        for (id,_) in &candidates{self.active[*id]=false;}
         Ok(())
     }
     pub fn stabilize(&mut self)->Result<()>{
@@ -474,7 +498,7 @@ impl Runtime {
                 let inputs:Result<Vec<Value>>=d.premises.iter()
                     .map(|p|vals[*p].ok_or("missing oracle premise".into())).collect();
                 vals[id]=Some(d.expr.eval(&inputs?)?);
-            }else{vals[id]=self.values[id];}
+            }else{vals[id]=self.values[id].clone();}
         }
         vals.into_iter().map(|v|v.ok_or("missing oracle result".into())).collect()
     }
