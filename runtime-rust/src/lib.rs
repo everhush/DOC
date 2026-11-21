@@ -138,6 +138,104 @@ pub struct Graph {
     pub states:Vec<State>,pub users:Vec<Vec<StateId>>,pub topo:Vec<StateId>,
     names:HashMap<String,StateId>,
 }
+// Bounded, compile-time, hygienic-by-name pure DOC functions. Definitions
+// may refer to earlier functions; calls are lowered inside the DOC frontend
+// to existing typed Expr nodes, NOT handed to a foreign transpiler/runtime.
+// Formal replacement only touches full identifier tokens, never substrings.
+#[derive(Clone)]
+struct UserFn { params: Vec<String>, body: String }
+fn valid_user_ident(s:&str)->bool {
+    let mut bytes=s.bytes();
+    matches!(bytes.next(), Some(c) if c.is_ascii_alphabetic() || c==b'_')
+        && bytes.all(|c|c.is_ascii_alphanumeric() || c==b'_')
+}
+fn reserved_user_ident(s:&str)->bool {
+    matches!(s,"add"|"sub"|"mul"|"eq"|"if"|"lt"|"le"|"nat"|
+        "true"|"false"|"source"|"derive"|"fn")
+}
+fn replace_function_formals(body:&str,params:&[String],args:&[String])->String {
+    let bytes=body.as_bytes();
+    let mut out=String::new();
+    let mut i=0;
+    while i<bytes.len() {
+        if bytes[i].is_ascii_alphabetic() || bytes[i]==b'_' {
+            let mut j=i+1;
+            while j<bytes.len() &&
+                (bytes[j].is_ascii_alphanumeric() || bytes[j]==b'_') {j+=1;}
+            let name=&body[i..j];
+            if let Some(idx)=params.iter().position(|s|s==name) {
+                out.push_str(&args[idx]);
+            }else{out.push_str(name);}
+            i=j;
+        } else {
+            out.push(bytes[i] as char);i+=1;
+        }
+    }
+    out
+}
+fn expand_function_calls(input:&str,functions:&HashMap<String,UserFn>,depth:usize)
+    ->Result<String>
+{
+    if depth>32 || input.len()>4096 {
+        return Err("DOC function expansion exceeded resource bounds".into());
+    }
+    if !input.is_ascii(){return Err("DOC function expressions must be ASCII".into());}
+    let bytes=input.as_bytes();
+    let mut out=String::new();
+    let mut i=0;
+    while i<bytes.len(){
+        if bytes[i].is_ascii_alphabetic() || bytes[i]==b'_'{
+            let mut end=i+1;
+            while end<bytes.len() &&
+                (bytes[end].is_ascii_alphanumeric() || bytes[end]==b'_'){end+=1;}
+            let name=&input[i..end];
+            let mut open=end;
+            while open<bytes.len() && bytes[open].is_ascii_whitespace(){open+=1;}
+            if let Some(function)=functions.get(name).filter(|_|open<bytes.len()&&bytes[open]==b'('){
+                let mut args=Vec::new();let mut cursor=open+1;let mut start=cursor;let mut nesting=0usize;
+                let after_close=loop {
+                    if cursor>=bytes.len(){return Err("unterminated DOC function call".into());}
+                    match bytes[cursor] {
+                        b'('=>nesting+=1,
+                        b')' if nesting>0=>nesting-=1,
+                        b')'=>{
+                            if cursor>start {
+                                let argument=input[start..cursor].trim();
+                                if argument.is_empty(){return Err("empty DOC function argument".into());}
+                                args.push(expand_function_calls(argument,functions,depth+1)?);
+                            } else if !args.is_empty(){
+                                return Err("empty trailing DOC function argument".into());
+                            }
+                            break cursor+1;
+                        }
+                        b',' if nesting==0=>{
+                            let argument=input[start..cursor].trim();
+                            if argument.is_empty(){return Err("empty DOC function argument".into());}
+                            args.push(expand_function_calls(argument,functions,depth+1)?);
+                            start=cursor+1;
+                        }
+                        _=>{}
+                    }
+                    cursor+=1;
+                };
+                if args.len()!=function.params.len(){
+                    return Err(format!("wrong number of DOC function arguments for {name}"));
+                }
+                let substituted=replace_function_formals(&function.body,&function.params,&args);
+                let expanded=expand_function_calls(&substituted,functions,depth+1)?;
+                out.push_str(&expanded);
+                i=after_close;
+            }else{
+                out.push_str(name);i=end;
+            }
+        }else{
+            out.push(bytes[i] as char);i+=1;
+        }
+        if out.len()>512{return Err("expanded DOC expression exceeds 512 bytes".into());}
+    }
+    Ok(out)
+}
+
 impl Graph {
     pub fn new(states:Vec<State>)->Result<Self>{
         let n=states.len();
@@ -180,9 +278,42 @@ impl Graph {
     pub fn parse(src:&str)->Result<Self>{
         let mut states=Vec::new();
         let mut names=HashMap::new();
+        let mut functions:HashMap<String,UserFn>=HashMap::new();
         for (line_no,original) in src.lines().enumerate(){
             let line=original.split('#').next().unwrap_or("").trim();
             if line.is_empty(){continue;}
+            if let Some(rest)=line.strip_prefix("fn "){
+                let (signature,body)=rest.split_once('=').ok_or("function requires =")?;
+                let (name,arguments)=signature.split_once('(')
+                    .ok_or("function requires arguments")?;
+                let name=name.trim();
+                let arguments=arguments.trim().strip_suffix(')')
+                    .ok_or("function signature requires )")?;
+                if !valid_user_ident(name) || reserved_user_ident(name) ||
+                    names.contains_key(name) || functions.contains_key(name) {
+                    return Err(format!("invalid or duplicate DOC function: {name}"));
+                }
+                if body.trim().is_empty() || body.len()>512 {
+                    return Err("DOC function body must have 1..=512 bytes".into());
+                }
+                let mut params=Vec::new();
+                if !arguments.trim().is_empty() {
+                    for raw in arguments.split(','){
+                        let param=raw.trim();
+                        if !valid_user_ident(param) || reserved_user_ident(param) ||
+                           params.iter().any(|p|p==param) {
+                            return Err("invalid or duplicate function formal".into());
+                        }
+                        params.push(param.to_string());
+                    }
+                }
+                if params.len()>4 {
+                    return Err("DOC function arity exceeds four".into());
+                }
+                let _=lex(body)?;
+                functions.insert(name.to_string(),UserFn{params,body:body.trim().into()});
+                continue;
+            }
             let parsed=if let Some(rest)=line.strip_prefix("source "){
                 let (header,v)=rest.split_once('=').ok_or("source requires =")?;
                 let (name,t)=header.split_once(':').ok_or("source requires type")?;
@@ -205,13 +336,15 @@ impl Graph {
                         premises.push(id);
                     }
                 }
-                let tokens=lex(body)?;
+                let expanded=expand_function_calls(body,&functions,0)?;
+                let tokens=lex(&expanded)?;
                 let mut parser=Parser{tokens:&tokens,pos:0,args:&args,depth:0};
                 let expr=parser.expr()?;
                 if parser.pos!=tokens.len(){return Err("trailing tokens".into());}
                 State::derived(name.trim(),Type::parse(t)?,premises,expr)
             }else{return Err(format!("line {}: expected source or derive",line_no+1));};
-            if names.insert(parsed.name.clone(),states.len()).is_some(){
+            if functions.contains_key(&parsed.name) ||
+               names.insert(parsed.name.clone(),states.len()).is_some(){
                 return Err(format!("duplicate name {}",parsed.name));
             }
             states.push(parsed);
