@@ -1,0 +1,13 @@
+# Pure, bounded reusable functions; parsed and evaluated independently in Rust and Goose.
+fn lowest(x,y) = if(le(x,y),x,y)
+fn highest(x,y) = if(le(x,y),y,x)
+fn clamp(x,lo,hi) = lowest(highest(x,lo),hi)
+fn times_two(x) = add(x,x)
+fn times_four(x) = times_two(times_two(x))
+source x: int = -42
+source lo: int = -7
+source hi: int = 11
+derive clamped: int (x,lo,hi) = clamp(x,lo,hi)
+derive quadruple: int (clamped) = times_four(clamped)
+derive at_low: bool (clamped,lo) = eq(clamped,lo)
+derive at_high: bool (clamped,hi) = eq(clamped,hi)
