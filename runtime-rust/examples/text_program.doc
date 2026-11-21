@@ -1,0 +1,8 @@
+# Immutable UTF-8 text and pure string operations directly in DOC.
+source name: text = "世界"
+source prefix: text = "Hello, "
+derive joined: text (prefix,name) = concat(prefix,name)
+derive byte_count: int (joined) = len(joined)
+derive is_greeting: bool (joined) = starts_with(joined,text("Hello"))
+derive is_cjk: bool (name) = eq(name,text("世界"))
+derive selected: text (joined,is_greeting) = if(is_greeting,joined,text("no"))

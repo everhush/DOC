@@ -1,0 +1,5 @@
+# UTF-8 text growth through forward DOC recurrence and bounded epochs.
+source text_value: text = "🙂"
+derive next: text (text_value) = concat(text_value,text("🙂"))
+derive bytes: int (text_value) = len(text_value)
+derive starts: bool (text_value) = starts_with(text_value,text("🙂"))
