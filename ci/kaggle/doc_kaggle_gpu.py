@@ -53,11 +53,35 @@ def preflight_hardware():
     output = run("nvidia-smi", ["nvidia-smi", "-L"], max_seconds=20)
     if "GPU" not in output:
         raise RuntimeError("INFRA_BLOCKED: no NVIDIA GPU attached by Kaggle")
-    nvidia = sorted(path for root in ("/usr/share/vulkan/icd.d", "/etc/vulkan/icd.d", "/usr/local/share/vulkan/icd.d")
-                    for path in Path(root).glob("*nvidia*.json"))
+    def nvidia_icds():
+        return sorted(path for root in (
+                "/usr/share/vulkan/icd.d", "/etc/vulkan/icd.d",
+                "/usr/local/share/vulkan/icd.d")
+            for path in Path(root).glob("*nvidia*.json"))
+    nvidia = nvidia_icds()
+    if not nvidia:
+        # Kaggle often exposes CUDA without a Vulkan ICD. Install only the
+        # matching NVIDIA user-space GL/Vulkan ICD; do not replace its running
+        # host kernel driver, install DKMS, or fall back to llvmpipe.
+        version = run("nvidia-driver-version", [
+            "nvidia-smi", "--query-gpu=driver_version",
+            "--format=csv,noheader"], max_seconds=15).strip().splitlines()[0]
+        match = re.fullmatch(r"(\\d{3})\\.\\d+(?:\\.\\d+)*", version)
+        if not match:
+            raise RuntimeError("INFRA_BLOCKED: unrecognized NVIDIA kernel driver version")
+        major = match.group(1)
+        apt = ["apt-get"] if os.geteuid() == 0 else ["sudo", "-n", "apt-get"]
+        try:
+            run("install-matching-nvidia-vulkan-icd", [
+                *apt, "install", "-y", "-qq", "--no-install-recommends",
+                "libnvidia-gl-" + major], max_seconds=220)
+        except Exception as err:
+            raise RuntimeError(
+                "INFRA_BLOCKED: matching NVIDIA Vulkan ICD unavailable in Kaggle APT") from err
+        nvidia = nvidia_icds()
     if not nvidia:
         raise RuntimeError(
-            "INFRA_BLOCKED: Kaggle exposed CUDA but not the NVIDIA Vulkan ICD; "
+            "INFRA_BLOCKED: Kaggle exposed CUDA but not the matching NVIDIA Vulkan ICD; "
             "software llvmpipe is not acceptable hardware DOC parity")
     ENV["VK_DRIVER_FILES"] = ":".join(map(str, nvidia))
     ENV["VK_ICD_FILENAMES"] = ENV["VK_DRIVER_FILES"]
