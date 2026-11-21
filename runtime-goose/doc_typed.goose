@@ -5,7 +5,11 @@
 import std;
 import os;
 
-struct Value { kind: i64, number: i64, flag: bool }
+// Growable, append-only native Goose digit arena. DOC values hold stable
+// offsets rather than raw pointers; an offset stays valid after pool growth.
+// Physical compaction/reclamation across protected readers is a separate gate.
+var nat_pool: u8[>..];
+struct Value { kind: i64, number: i64, flag: bool, start: i64, length: i64 }
 struct State {
     name: u8[..64],
     expression: u8[..512],
@@ -17,18 +21,119 @@ struct State {
 struct Change { id: i64, value: Value, next: bool }
 
 fn fail() { print("DOC_TYPED_ERROR"); exit(1); }
-fn boolean(v: bool) -> Value { return Value { kind: 0, number: 0, flag: v }; }
-fn integer(v: i64) -> Value { return Value { kind: 1, number: v, flag: false }; }
+
+fn nat_zero() -> Value {
+    return Value { kind: 2, number: 0, flag: false, start: 0, length: 0 };
+}
+fn nat_digit(v: Value, index: i64) -> i64 {
+    return if index >= 0 && index < v.length {
+        nat_pool[v.start + index] as i64
+    } else { 0 };
+}
+fn nat_store(digits: u8[:]) -> Value {
+    var count = digits.len;
+    while count > 0 && digits[count - 1] == 0 { count--; }
+    if count == 0 { return nat_zero(); }
+    let start = nat_pool.len;
+    for i in 0..count {
+        if digits[i] > 9 { fail(); }
+        nat_pool.push(digits[i]);
+    }
+    return Value { kind: 2, number: 0, flag: false, start: start, length: count };
+}
+fn nat_parse(raw: u8[:]) -> Value {
+    if raw.len == 0 { fail(); }
+    var digits: u8[>..] = [];
+    for c in raw {
+        if c < '0' || c > '9' { fail(); }
+    }
+    var i = raw.len;
+    while i > 0 {
+        i--;
+        digits.push(raw[i] - '0');
+    }
+    return nat_store(digits);
+}
+fn nat_text(v: Value) -> u8[>..] {
+    var out: u8[>..] = [];
+    if v.length == 0 { out.push('0'); return out; }
+    var i = v.length;
+    while i > 0 {
+        i--;
+        out.push((nat_digit(v, i) as! u8) + '0');
+    }
+    return out;
+}
+fn nat_compare(a: Value, b: Value) -> i64 {
+    if a.length < b.length { return -1; }
+    if a.length > b.length { return 1; }
+    var i = a.length;
+    while i > 0 {
+        i--;
+        let ad = nat_digit(a, i);
+        let bd = nat_digit(b, i);
+        if ad < bd { return -1; }
+        if ad > bd { return 1; }
+    }
+    return 0;
+}
+fn nat_add(a: Value, b: Value) -> Value {
+    var digits: u8[>..] = [];
+    var carry = 0;
+    for i in 0..max(a.length, b.length) {
+        let sum = nat_digit(a,i) + nat_digit(b,i) + carry;
+        digits.push((sum % 10) as! u8);
+        carry = sum / 10;
+    }
+    if carry > 0 { digits.push(carry as! u8); }
+    return nat_store(digits);
+}
+fn nat_sub(a: Value, b: Value) -> Value {
+    if nat_compare(a,b) < 0 { fail(); }
+    var digits: u8[>..] = [];
+    var borrow = 0;
+    for i in 0..a.length {
+        var delta = nat_digit(a,i) - nat_digit(b,i) - borrow;
+        if delta < 0 { delta += 10; borrow = 1; }
+        else { borrow = 0; }
+        digits.push(delta as! u8);
+    }
+    if borrow != 0 { fail(); }
+    return nat_store(digits);
+}
+fn nat_mul(a: Value, b: Value) -> Value {
+    if a.length == 0 || b.length == 0 { return nat_zero(); }
+    var digits: u8[>..] = [];
+    digits.resize(a.length + b.length, 0);
+    for i in 0..a.length {
+        var carry = 0;
+        for j in 0..b.length {
+            let total = digits[i+j] as i64 +
+                nat_digit(a,i) * nat_digit(b,j) + carry;
+            digits[i+j] = (total % 10) as! u8;
+            carry = total / 10;
+        }
+        let total = digits[i+b.length] as i64 + carry;
+        digits[i+b.length] = total as! u8;
+    }
+    return nat_store(digits);
+}
+
+fn boolean(v: bool) -> Value { return Value { kind: 0, number: 0, flag: v, start: 0, length: 0 }; }
+fn integer(v: i64) -> Value { return Value { kind: 1, number: v, flag: false, start: 0, length: 0 }; }
 fn zero(k: i64) -> Value {
-    return if k == 0 { boolean(false) } else { integer(0) };
+    return if k == 0 { boolean(false) } else if k == 1 { integer(0) } else { nat_zero() };
 }
 fn equal(a: Value, b: Value) -> bool {
     if a.kind != b.kind { return false; }
-    return if a.kind == 0 { a.flag == b.flag } else { a.number == b.number };
+    if a.kind == 0 { return a.flag == b.flag; }
+    if a.kind == 1 { return a.number == b.number; }
+    return nat_compare(a,b) == 0;
 }
 fn type_name(t: u8[:]) -> i64 {
     if t == "bool" { return 0; }
     if t == "int" { return 1; }
+    if t == "nat" { return 2; }
     fail();
     return -1;
 }
@@ -36,9 +141,11 @@ fn parse_value(raw: u8[:], kind: i64) -> Value {
     if kind == 0 {
         if raw == "true" { return boolean(true); }
         if raw == "false" { return boolean(false); }
-    } else {
+    } else if kind == 1 {
         let number, ok = parse_int(raw);
         if ok { return integer(number); }
+    } else if kind == 2 {
+        return nat_parse(raw);
     }
     fail();
     return zero(kind);
@@ -111,6 +218,15 @@ recursive fn expression(s: u8[:], p: i64, nodes: State[:],
     if word == "false" { return boolean(false), after; }
     let n, is_number = parse_int(word);
     if is_number { return integer(if execute { n } else { 0 }), after; }
+    if word == "nat" {
+        let begin = expect(s,after,'(');
+        var end_lit = begin;
+        while end_lit < s.len && s[end_lit] != ')' { end_lit++; }
+        if end_lit >= s.len { fail(); }
+        // Validate the literal even when only typechecking an inactive branch.
+        let value = nat_parse(trim(s[begin..end_lit]));
+        return if execute { value } else { nat_zero() }, end_lit + 1;
+    }
     if after >= s.len || s[after] != '(' {
         let id = lookup(nodes,word);
         if id < 0 { fail(); }
@@ -142,8 +258,14 @@ recursive fn expression(s: u8[:], p: i64, nodes: State[:],
         if a.kind != b.kind { fail(); }
         return boolean(execute && equal(a,b)), close;
     }
-    if a.kind != 1 || b.kind != 1 { fail(); }
-    if !execute { return integer(0), close; }
+    if a.kind != b.kind || (a.kind != 1 && a.kind != 2) { fail(); }
+    if !execute { return zero(a.kind), close; }
+    if a.kind == 2 {
+        let result = if word == "add" { nat_add(a,b) }
+            else if word == "sub" { nat_sub(a,b) }
+            else { nat_mul(a,b) };
+        return result, close;
+    }
     return integer(arithmetic(word,a.number,b.number)), close;
 }
 fn inspect(nodes: State[:], values: Value[:], id: i64, execute: bool) -> Value {
@@ -325,8 +447,10 @@ fn show(nodes: State[:], values: Value[:]) {
     for i in 0..nodes.len {
         if values[i].kind == 0 {
             print(nodes[i].name, ": ", values[i].flag);
-        } else {
+        } else if values[i].kind == 1 {
             print(nodes[i].name, ": ", values[i].number);
+        } else {
+            print(nodes[i].name, ": ", nat_text(values[i]));
         }
     }
 }
@@ -556,8 +680,10 @@ fn main() {
             let _performed = stabilize_demanded(nodes,values,active,needed);
             if values[target].kind == 0 {
                 print(nodes[target].name, ": ", values[target].flag);
-            } else {
+            } else if values[target].kind == 1 {
                 print(nodes[target].name, ": ", values[target].number);
+            } else {
+                print(nodes[target].name, ": ", nat_text(values[target]));
             }
             return;
         }
