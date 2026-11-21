@@ -727,10 +727,11 @@ fn boolean_worker_eligible(nodes: State[:], frontier: i64[:]) -> bool {
     for id in frontier {
         if !nodes[id].derived || nodes[id].kind != 0 { return false; }
         let body = nodes[id].expression[..];
-        for forbidden in ["nat","empty","append","get","len","tail",
-                          "add","sub","mul"] {
-            if find(body,forbidden) >= 0 { return false; }
-        }
+        if find(body,"nat")>=0 || find(body,"empty")>=0 ||
+           find(body,"append")>=0 || find(body,"get")>=0 ||
+           find(body,"len")>=0 || find(body,"tail")>=0 ||
+           find(body,"add")>=0 || find(body,"sub")>=0 ||
+           find(body,"mul")>=0 { return false; }
         for k in 0..nodes[id].count {
             if nodes[nodes[id].premise[k]].kind != 0 { return false; }
         }
