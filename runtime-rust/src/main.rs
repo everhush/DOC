@@ -125,6 +125,20 @@ fn run() -> Result<(), String> {
         println!("{target_name}: {}", requested.value(target).ok_or("missing demanded value")?);
         return Ok(());
     }
+    if let Some(spec)=args.peek()
+        .and_then(|arg|arg.strip_prefix("--emit=")).map(str::to_owned) {
+        args.next();
+        if args.next().is_some(){return Err("DOC emit accepts one name:path".into());}
+        let (name,relative)=spec.split_once(':')
+            .ok_or("DOC emit expects --emit=STATE:relative/path")?;
+        let target=graph.id(name).ok_or("unknown DOC emit state")?;
+        let mut rt=Runtime::new(graph,workers,Cutoff::Exact);
+        rt.stabilize_requested(&[target])?;
+        let value=rt.value(target).ok_or("DOC emit value unavailable")?;
+        doc_runtime::write_doc_output(&file,relative,&value)?;
+        println!("DOC_EFFECT_WRITE_PASS: {name}: {value}");
+        return Ok(());
+    }
     if let Some(next_file)=args.peek()
         .and_then(|arg|arg.strip_prefix("--replace=")).map(str::to_owned) {
         args.next();
