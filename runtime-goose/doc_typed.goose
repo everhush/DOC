@@ -183,22 +183,45 @@ fn ints_equal(a: Value, b: Value) -> bool {
     return true;
 }
 
+
+// Explicit, typed, immutable failure/absence data. A failed bounds probe
+// stays in the value domain and can be handled by DOC conditional logic.
+fn maybe_none() -> Value {
+    return Value {kind:4,number:0,flag:false,start:0,length:0};
+}
+fn maybe_some(number:i64) -> Value {
+    return Value {kind:4,number:number,flag:true,start:0,length:0};
+}
+fn maybe_text(v:Value) -> u8[>..] {
+    var out:u8[>..]=[];
+    if !v.flag {out.append("none");}
+    else {
+        out.append("some(");
+        format_int(out,v.number,10,0,' ');
+        out.push(')');
+    }
+    return out;
+}
+
 fn zero(k: i64) -> Value {
     return if k == 0 { boolean(false) } else if k == 1 { integer(0) }
-           else if k == 2 { nat_zero() } else { ints_zero() };
+           else if k == 2 { nat_zero() }
+           else if k == 3 { ints_zero() } else { maybe_none() };
 }
 fn equal(a: Value, b: Value) -> bool {
     if a.kind != b.kind { return false; }
     if a.kind == 0 { return a.flag == b.flag; }
     if a.kind == 1 { return a.number == b.number; }
     if a.kind == 2 { return nat_compare(a,b) == 0; }
-    return ints_equal(a,b);
+    if a.kind == 3 { return ints_equal(a,b); }
+    return a.flag == b.flag && (!a.flag || a.number == b.number);
 }
 fn type_name(t: u8[:]) -> i64 {
     if t == "bool" { return 0; }
     if t == "int" { return 1; }
     if t == "nat" { return 2; }
     if t == "ints" { return 3; }
+    if t == "maybe_int" { return 4; }
     fail();
     return -1;
 }
@@ -213,6 +236,13 @@ fn parse_value(raw: u8[:], kind: i64) -> Value {
         return nat_parse(raw);
     } else if kind == 3 {
         return ints_parse(raw);
+    } else if kind == 4 {
+        if raw == "none" {return maybe_none();}
+        if raw.len >= 7 && starts_with(raw,"some(") &&
+           raw[raw.len-1] == ')' {
+            let num,ok=parse_int(trim(raw[5..raw.len-1]));
+            if ok {return maybe_some(num);}
+        }
     }
     fail();
     return zero(kind);
@@ -294,9 +324,10 @@ recursive fn expression(s: u8[:], p: i64, nodes: State[:],
         let value = nat_parse(trim(s[begin..end_lit]));
         return if execute { value } else { nat_zero() }, end_lit + 1;
     }
-    if word == "empty" {
-        let end_empty = expect(s,after,'(');
-        return ints_zero(), expect(s,end_empty,')');
+    if word == "empty" || word == "none" {
+        let close=expect(s,after,'(');
+        return if word=="empty" {ints_zero()} else {maybe_none()},
+            expect(s,close,')');
     }
     if after >= s.len || s[after] != '(' {
         let id = lookup(nodes,word);
@@ -309,9 +340,16 @@ recursive fn expression(s: u8[:], p: i64, nodes: State[:],
     if word != "if" && word != "eq" && word != "lt" && word != "le" &&
        word != "add" && word != "sub" && word != "mul" &&
        word != "append" && word != "get" &&
-       word != "len" && word != "tail" { fail(); }
+       word != "len" && word != "tail" &&
+       word != "some" && word != "try_get" &&
+       word != "unwrap_or" { fail(); }
     let open = after + 1;
     let a, next = expression(s,open,nodes,values,premises,execute,depth - 1);
+    if word == "some" {
+        if a.kind != 1 { fail(); }
+        let close=expect(s,next,')');
+        return if execute {maybe_some(a.number)} else {maybe_none()},close;
+    }
     if word == "len" || word == "tail" {
         if a.kind != 3 { fail(); }
         let close = expect(s,next,')');
@@ -358,6 +396,17 @@ recursive fn expression(s: u8[:], p: i64, nodes: State[:],
         if !execute { return integer(0), close; }
         return integer(ints_at(a,b.number)),close;
     }
+    if word == "try_get" {
+        if a.kind != 3 || b.kind != 1 { fail(); }
+        if !execute || b.number < 0 || b.number >= a.length {
+            return maybe_none(),close;
+        }
+        return maybe_some(ints_at(a,b.number)),close;
+    }
+    if word == "unwrap_or" {
+        if a.kind != 4 || b.kind != 1 { fail(); }
+        return integer(if execute && a.flag { a.number } else { b.number }),close;
+    }
     if a.kind != b.kind || (a.kind != 1 && a.kind != 2) { fail(); }
     if !execute { return zero(a.kind), close; }
     if a.kind == 2 {
@@ -397,6 +446,8 @@ fn function_reserved(name: u8[:]) -> bool {
            name == "nat" || name == "if" || name == "fn" ||
            name == "empty" || name == "append" || name == "get" ||
            name == "len" || name == "tail" ||
+           name == "none" || name == "some" ||
+           name == "try_get" || name == "unwrap_or" ||
            name == "source" || name == "derive";
 }
 // Iterative expansion is required by Goose's strict scope checks: no
@@ -923,8 +974,10 @@ fn show(nodes: State[:], values: Value[:]) {
             print(nodes[i].name, ": ", values[i].number);
         } else if values[i].kind == 2 {
             print(nodes[i].name, ": ", nat_text(values[i]));
-        } else {
+        } else if values[i].kind == 3 {
             print(nodes[i].name, ": ", ints_printable(values[i]));
+        } else {
+            print(nodes[i].name, ": ", maybe_text(values[i]));
         }
     }
 }
@@ -1256,8 +1309,10 @@ fn main() {
                 print(nodes[target].name, ": ", values[target].number);
             } else if values[target].kind == 2 {
                 print(nodes[target].name, ": ", nat_text(values[target]));
-            } else {
+            } else if values[target].kind == 3 {
                 print(nodes[target].name, ": ", ints_printable(values[target]));
+            } else {
+                print(nodes[target].name, ": ", maybe_text(values[target]));
             }
             return;
         }
