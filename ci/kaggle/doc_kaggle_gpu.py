@@ -6,6 +6,7 @@ is owned by Rust wgpu; Goose GPU execution is owned by Goose SDL3 gfx.
 Neither is dispatched through the other. No secrets are uploaded here.
 """
 import csv
+import hashlib
 import datetime as dt
 import json
 import os
@@ -13,7 +14,6 @@ from pathlib import Path
 import re
 import random
 import statistics
-import shutil
 import subprocess
 import tarfile
 import time
@@ -32,7 +32,9 @@ ENV.update({
     "DOC_GPU_REQUIRE_HARDWARE": "1", "DOC_GPU_EXECUTION": "gpu",
     "GOOSE_GFX_HEADLESS": "1", "GOOSE_GFX_DEBUG": "0",
     "SDL_VIDEODRIVER": "x11", "SDL_GPU_DRIVER": "vulkan",
-    "WGPU_BACKEND": "vulkan", "SDL_LOGGING": "*=warn"})
+    "WGPU_BACKEND": "vulkan", "SDL_LOGGING": "*=warn",
+    "DEBIAN_FRONTEND":"noninteractive", "APT_LISTCHANGES_FRONTEND":"none",
+    "NEEDRESTART_MODE":"a"})
 
 def run(name, argv, cwd=None, env=None, max_seconds=None, path=None):
     remaining = int(DEADLINE - time.monotonic())
@@ -68,149 +70,88 @@ def run(name, argv, cwd=None, env=None, max_seconds=None, path=None):
         raise RuntimeError(name + " failed: " + (proc.stdout + proc.stderr)[-1200:])
     return proc.stdout
 
+def load_verified_native_bundle():
+    """Unpack independent GPU binaries compiled by successful GitHub CPU CI."""
+    dataset = SPEC.get("bundle_dataset", "")
+    expected_hash = SPEC.get("bundle_sha256", "")
+    if not re.fullmatch(r"[a-z0-9_-]+/doc-gpu-[0-9]+-[0-9]+-bundle", dataset):
+        raise RuntimeError("DOC GPU session has no trusted private binary dataset")
+    if not re.fullmatch(r"[0-9a-f]{64}", expected_hash):
+        raise RuntimeError("DOC GPU binary dataset missing pinned SHA256")
+    slug = dataset.split("/")[1]
+    bundle = Path("/kaggle/input") / slug / "doc-gpu-bundle.tar.gz"
+    if not bundle.is_file() or bundle.stat().st_size > 100_000_000:
+        raise RuntimeError("INFRA_BLOCKED: precompiled native GPU dataset not mounted")
+    if hashlib.sha256(bundle.read_bytes()).hexdigest() != expected_hash:
+        raise RuntimeError("DOC GPU artifact integrity check failed")
+    with tarfile.open(bundle, "r:gz") as archive:
+        members = archive.getmembers()
+        if len(members) > 50:
+            raise RuntimeError("Unexpected DOC GPU bundle archive contents")
+        for entry in members:
+            path=Path(entry.name)
+            if entry.name.startswith("/") or ".." in path.parts or \
+                    not entry.isfile() or entry.issym() or entry.islnk():
+                raise RuntimeError("Unsafe DOC GPU artifact bundle entry")
+        archive.extractall(path=ROOT, filter="data")
+    manifest = json.loads((ROOT / "manifest.json").read_text())
+    if manifest.get("sha") != SPEC["sha"] or \
+       str(manifest.get("standard_ci_run_id")) != str(SPEC["standard_ci_run_id"]):
+        raise RuntimeError("DOC GPU artifact source SHA/build mismatch")
+    for path, digest in manifest.get("files",{}).items():
+        destination = ROOT / path
+        if not destination.is_file() or \
+           hashlib.sha256(destination.read_bytes()).hexdigest() != digest:
+            raise RuntimeError("DOC native GPU bundle file hash mismatch: " + path)
+    for name in ("webgpu_bool","webgpu_integer_eq","doc-goose-sdl3",
+                 "vulkaninfo","Xvfb","xvfb-run","xauth"):
+        path=ROOT/"bin"/name
+        if not path.is_file():
+            raise RuntimeError("Missing preverified GPU binary: " + name)
+        path.chmod(0o755)
+    ENV["PATH"]=str(ROOT/"bin")+os.pathsep+ENV.get("PATH","")
+    ENV["LD_LIBRARY_PATH"]=str(ROOT/"lib")+os.pathsep+ENV.get("LD_LIBRARY_PATH","")
+    print("DOC_KAGGLE_CPU_COMPILED_BUNDLE_PASS: sha="+SPEC["sha"]+
+          " standard_ci_run="+str(SPEC["standard_ci_run_id"]))
+    return (ROOT/"DOC",ROOT/"bin/doc-goose-sdl3",
+            ROOT/"bin/webgpu_integer_eq",ROOT/"bin/webgpu_bool")
+
 def preflight_hardware():
-    # A CUDA-visible GPU is NOT proof of usable Vulkan/SDL3/wgpu acceleration.
-    output = run("nvidia-smi", ["nvidia-smi", "-L"], max_seconds=20)
+    # A CUDA-visible NVIDIA device is not enough: SDL3 and wgpu both require
+    # a *physical* Vulkan ICD. Do not use llvmpipe or silently fall back.
+    output=run("nvidia-smi",["nvidia-smi","-L"],max_seconds=15)
     if "GPU" not in output:
-        raise RuntimeError("INFRA_BLOCKED: no NVIDIA GPU attached by Kaggle")
-    def nvidia_icds():
-        return sorted(path for root in (
-                "/usr/share/vulkan/icd.d", "/etc/vulkan/icd.d",
-                "/usr/local/share/vulkan/icd.d")
-            for path in Path(root).glob("*nvidia*.json"))
-    nvidia = nvidia_icds()
-    if not nvidia:
-        # Kaggle often exposes CUDA without a Vulkan ICD. Install only the
-        # matching NVIDIA user-space GL/Vulkan ICD; do not replace its running
-        # host kernel driver, install DKMS, or fall back to llvmpipe.
-        version = run("nvidia-driver-version", [
-            "nvidia-smi", "--query-gpu=driver_version",
-            "--format=csv,noheader"], max_seconds=15).strip().splitlines()[0]
-        match = re.fullmatch(r"(\d{3})\.\d+(?:\.\d+)*", version)
-        if not match:
-            raise RuntimeError("INFRA_BLOCKED: unrecognized NVIDIA kernel driver version")
-        major = match.group(1)
-        apt = ["apt-get"] if os.geteuid() == 0 else ["sudo", "-n", "apt-get"]
-        try:
-            run("install-matching-nvidia-vulkan-icd", [
-                *apt, "install", "-y", "-qq", "--no-install-recommends",
-                "libnvidia-gl-" + major], max_seconds=220)
-        except Exception as err:
-            raise RuntimeError(
-                "INFRA_BLOCKED: matching NVIDIA Vulkan ICD unavailable in Kaggle APT") from err
-        nvidia = nvidia_icds()
-    if not nvidia:
+        raise RuntimeError("INFRA_BLOCKED: Kaggle did not attach NVIDIA GPU")
+    roots=("/usr/share/vulkan/icd.d","/etc/vulkan/icd.d",
+           "/usr/local/share/vulkan/icd.d")
+    drivers=sorted(path for root in roots
+                   for path in Path(root).glob("*nvidia*.json"))
+    if not drivers:
+        # NVIDIA's native Vulkan ICD normally loads libGLX_nvidia.so.0.
+        # Some CUDA images include the driver library but omit its JSON
+        # registration. Add a local registration only if the shared object
+        # actually exists; vulkaninfo must then confirm hardware execution.
+        libraries=sorted(path for root in (
+                "/usr/lib/x86_64-linux-gnu","/usr/local/nvidia/lib64",
+                "/usr/lib/nvidia","/usr/local/cuda/compat")
+            for path in Path(root).glob("libGLX_nvidia.so*") if path.is_file())
+        if libraries:
+            icd=ROOT/"doc-kaggle-nvidia-icd.json"
+            icd.write_text(json.dumps({
+                "file_format_version":"1.0.0",
+                "ICD":{"library_path":str(libraries[0]),
+                       "api_version":"1.3.0"}}))
+            drivers=[icd]
+    if not drivers:
         raise RuntimeError(
-            "INFRA_BLOCKED: Kaggle exposed CUDA but not the matching NVIDIA Vulkan ICD; "
-            "software llvmpipe is not acceptable hardware DOC parity")
-    ENV["VK_DRIVER_FILES"] = ":".join(map(str, nvidia))
-    ENV["VK_ICD_FILENAMES"] = ENV["VK_DRIVER_FILES"]
-    info = run("physical-vulkan", ["vulkaninfo", "--summary"], max_seconds=45)
-    if not re.search(r"PHYSICAL_DEVICE_TYPE_(?:DISCRETE|INTEGRATED)_GPU", info):
-        raise RuntimeError("INFRA_BLOCKED: no physical Vulkan adapter for SDL3/wgpu")
+            "INFRA_BLOCKED: Kaggle attached CUDA hardware but no NVIDIA Vulkan "
+            "driver ICD/library. No APT retries will consume GPU quota.")
+    ENV["VK_DRIVER_FILES"]=":".join(map(str,drivers))
+    ENV["VK_ICD_FILENAMES"]=ENV["VK_DRIVER_FILES"]
+    info=run("physical-vulkan",["vulkaninfo","--summary"],max_seconds=35)
+    if not re.search(r"PHYSICAL_DEVICE_TYPE_(?:DISCRETE|INTEGRATED)_GPU",info):
+        raise RuntimeError("INFRA_BLOCKED: NVIDIA Vulkan physical GPU not exposed")
     print("DOC_KAGGLE_PHYSICAL_VULKAN_FOUND")
-
-def installed_packages(packages):
-    # Kaggle notebook images include many development libraries already.
-    # Avoid gratuitous apt-get update: its default Ubuntu mirror stalled
-    # for 260 seconds in real hardware attempt 44950662134.
-    missing = []
-    for package in packages:
-        completed = subprocess.run(
-            ["dpkg-query", "-W", "-f=${Status}", package],
-            capture_output=True, text=True, errors="replace", timeout=8)
-        if completed.returncode or completed.stdout.strip() != "install ok installed":
-            missing.append(package)
-    return missing
-
-def install_dependencies():
-    # Preflight GPU first to avoid spending minutes of quota apt-installing
-    # non-GPU Kaggle containers. A CUDA-visible GPU does not yet prove Vulkan.
-    output = run("nvidia-smi", ["nvidia-smi", "-L"], max_seconds=15)
-    if "GPU" not in output:
-        raise RuntimeError("INFRA_BLOCKED: Kaggle did not attach NVIDIA CUDA hardware")
-    packages = [
-        "cmake", "ninja-build", "pkg-config", "git", "curl", "ca-certificates",
-        "build-essential", "libx11-dev", "libxext-dev", "libxrandr-dev",
-        "libxinerama-dev", "libxcursor-dev", "libxi-dev",
-        "libxkbcommon-dev", "libxss-dev", "libxfixes-dev",
-        "libx11-xcb-dev", "libxtst-dev", "libxdamage-dev",
-        "libxshmfence-dev", "libxrender-dev", "libasound2-dev",
-        "xvfb", "xauth", "libvulkan-dev", "libvulkan1", "vulkan-tools"]
-    missing = installed_packages(packages)
-    (LOGS/"kaggle-packages-required.json").write_text(
-        json.dumps({"requested":packages,"missing":missing},indent=2)+"\n")
-    apt = ["apt-get"] if os.geteuid() == 0 else ["sudo", "-n", "apt-get"]
-    options = [
-        "-o", "Acquire::Retries=0",
-        "-o", "Acquire::http::Timeout=12",
-        "-o", "Acquire::https::Timeout=12",
-        "-o", "Acquire::ForceIPv4=true",
-        "-o", "Dpkg::Use-Pty=0"]
-    if missing:
-        # Use the image's existing APT metadata first. Update only when the
-        # first install attempt fails and cap ALL attempted network work.
-        def install():
-            return run("apt-install-missing",[
-                *apt,*options,"install","-y","-qq","--no-install-recommends",
-                *missing],max_seconds=105)
-        try:
-            install()
-        except (RuntimeError,subprocess.TimeoutExpired):
-            try:
-                run("apt-update-bounded",[*apt,*options,"update","-qq"],
-                    max_seconds=50)
-                install()
-            except (RuntimeError,subprocess.TimeoutExpired) as error:
-                raise RuntimeError(
-                    "INFRA_BLOCKED: Kaggle APT bootstrap failed under bounded "
-                    "network timeouts; see retained apt diagnostics") from error
-        unresolved=installed_packages(missing)
-        if unresolved:
-            raise RuntimeError("INFRA_BLOCKED: missing native SDL3/Vulkan build dependencies: "+
-                               ",".join(unresolved))
-    else:
-        print("DOC_KAGGLE_APT_CACHE_HIT: required build libraries already installed")
-    if not shutil.which("cargo"):
-        install = ROOT / "rustup-init.sh"
-        run("rustup-fetch", ["curl", "-fsSL", "https://sh.rustup.rs", "-o", install], max_seconds=90)
-        run("rustup-install", ["sh", install, "-y", "--profile", "minimal"], max_seconds=170)
-        ENV["PATH"] = str(Path.home() / ".cargo/bin") + os.pathsep + ENV.get("PATH", "")
-    preflight_hardware()
-
-def checkout_exact(folder, url, sha, label):
-    folder.mkdir(exist_ok=True, parents=True)
-    run(label + "-init", ["git", "-C", folder, "init", "-q"], max_seconds=20)
-    run(label + "-fetch", ["git", "-C", folder, "fetch", "--depth", "1", url, sha], max_seconds=125)
-    run(label + "-checkout", ["git", "-C", folder, "checkout", "--detach", "-q", "FETCH_HEAD"], max_seconds=25)
-    got = run(label + "-sha", ["git", "-C", folder, "rev-parse", "HEAD"], max_seconds=15).strip()
-    if got != sha:
-        raise RuntimeError("Repository SHA mismatch, refusing untrusted GPU result")
-
-def build():
-    repo = ROOT / "DOC"
-    checkout_exact(repo, "https://github.com/" + SPEC["repo"] + ".git", SPEC["sha"], "doc")
-    goose = ROOT / "goose-src"
-    checkout_exact(goose, "https://github.com/aardappel/goose.git", GOOSE_SHA, "goose")
-    builddir = ROOT / "goose-build"
-    run("goose-cmake", ["cmake", "-S", goose, "-B", builddir,
-        "-DCMAKE_BUILD_TYPE=Release", "-DGOOSE_BUILTIN_LIBS=gfx"], max_seconds=160)
-    run("goose-compiler", ["cmake", "--build", builddir, "--parallel", "2"], max_seconds=750)
-    compiler = builddir / "goose"
-    goose_gpu = ROOT / "doc-goose-sdl3"
-    run("goose-doc-check", [compiler, "check", "runtime-goose/doc_sdl3_gpu.goose"],
-        cwd=repo, max_seconds=120)
-    run("goose-doc-build", [compiler, "build", "runtime-goose/doc_sdl3_gpu.goose",
-        "--offline", "-o", goose_gpu], cwd=repo, max_seconds=200)
-    run("rust-wgpu-build", ["cargo", "build", "--release",
-        "--manifest-path", "runtime-rust/Cargo.toml",
-        "--features", "webgpu", "--examples"], cwd=repo, max_seconds=850)
-    signed = repo / "runtime-rust/target/release/examples/webgpu_integer_eq"
-    boolean = repo / "runtime-rust/target/release/examples/webgpu_bool"
-    for exe in (goose_gpu, signed, boolean):
-        if not exe.is_file():
-            raise RuntimeError("Native DOC GPU binary missing: " + str(exe))
-    return repo, goose_gpu, signed, boolean
 
 def test_physical_gpu(repo, goose_gpu, rust_signed, rust_bool):
     goose_logs = LOGS / "goose"
@@ -353,10 +294,12 @@ def main():
         "backend": "unverified", "result": "failed",
         "goose_sdl3_checks": 0, "dual_backend_episodes": 0,
         "max_gpu_minutes": SPEC["minutes"],
+        "native_standard_ci_run_id": SPEC.get("standard_ci_run_id"),
+        "bundle_dataset": SPEC.get("bundle_dataset"),
         "started_utc": dt.datetime.now(dt.timezone.utc).isoformat()}
     try:
-        install_dependencies()
-        repo, goose, signed, boolean = build()
+        repo, goose, signed, boolean = load_verified_native_bundle()
+        preflight_hardware()
         n_goose, n_dual = test_physical_gpu(repo, goose, signed, boolean)
         summary.update({
             "result": "pass", "hardware": True, "backend": "vulkan",

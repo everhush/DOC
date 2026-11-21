@@ -171,7 +171,8 @@ def prepare_kernel(folder, template, spec, username):
         "language": "python", "kernel_type": "script",
         "is_private": "true", "enable_gpu": "true", "enable_internet": "true",
         "machine_shape": spec["accelerator"],
-        "dataset_sources": [], "competition_sources": [],
+        "dataset_sources": [spec["bundle_dataset"]] if "bundle_dataset" in spec else [],
+        "competition_sources": [],
         "kernel_sources": [], "model_sources": []
     }
     (folder / "kernel-metadata.json").write_text(json.dumps(metadata, indent=2) + "\n")
@@ -183,6 +184,9 @@ def verify_result(folder, spec):
                 "result": "pass", "backend": "vulkan", "hardware": True,
                 "accelerator": spec["accelerator"], "max_gpu_minutes": spec["minutes"],
                 "goose_sdl3_checks": 77, "dual_backend_episodes": 42}
+    if "bundle_dataset" in spec:
+        expected["bundle_dataset"] = spec["bundle_dataset"]
+        expected["native_standard_ci_run_id"] = spec["standard_ci_run_id"]
     for key, value in expected.items():
         if result.get(key) != value:
             raise AssertionError("Missing or stale Kaggle GPU parity evidence: " + key)
@@ -258,8 +262,20 @@ def main():
         if remaining < required:
             print(f"DOC_KAGGLE_QUOTA_SKIP: remaining {remaining:.2f}h, needed {required:.2f}h")
             return 0
+        # Native binary compilation is entirely on GitHub's CPU runner.
+        # Upload a private SHA-verified input dataset BEFORE the GPU kernel is
+        # launched; GPU time is only spent on real native device execution.
+        from bundle import prepare_native_gpu_dataset
+        bundle = prepare_native_gpu_dataset(
+            spec["repo"],os.environ.get("GITHUB_TOKEN",""),spec,
+            Path(os.environ.get("GITHUB_WORKSPACE",".")),
+            Path(temp),env,owner)
+        spec.update(bundle)
+        (out/"doc-kaggle-bundle-provenance.json").write_text(
+            json.dumps({"sha":spec["sha"],**bundle},indent=2)+"\n")
         name = prepare_kernel(Path(temp) / "kernel", Path(args.template), spec, owner)
-        print(f"DOC_KAGGLE_DISPATCH: notebook={name} sha={spec['sha']} minutes={args.minutes}")
+        print(f"DOC_KAGGLE_DISPATCH: notebook={name} sha={spec['sha']} minutes={args.minutes} "
+              f"dataset={bundle['bundle_dataset']} built-on-github-cpu={bundle['standard_ci_run_id']}")
         kaggle(["kernels", "push", "-p", str(Path(temp) / "kernel"),
                 "--accelerator", args.accelerator, "--timeout", str(args.minutes * 60)], env, timeout=180)
         deadline = time.monotonic() + args.minutes * 60 + 1200

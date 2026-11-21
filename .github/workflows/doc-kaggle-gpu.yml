@@ -74,6 +74,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           DOC_KAGGLE_USERNAME: ${{ vars.DOC_KAGGLE_USERNAME }}
           DOC_TARGET_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+          DOC_SOURCE_WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id || '' }}
           DOC_KAGGLE_ACCELERATOR: ${{ inputs.accelerator || 'NvidiaTeslaT4' }}
           DOC_KAGGLE_MINUTES: ${{ inputs.minutes || '30' }}
         run: |
