@@ -10,13 +10,32 @@ pub type StateId = usize;
 pub type Result<T> = std::result::Result<T,String>;
 
 #[derive(Clone,Debug,PartialEq,Eq)]
-pub enum Value { Int(i64), Bool(bool), Nat(String) }
+pub enum Value { Int(i64), Bool(bool), Nat(String), Ints(Vec<i64>) }
 #[derive(Clone,Copy,Debug,PartialEq,Eq)]
-pub enum Type { Int, Bool, Nat }
+pub enum Type { Int, Bool, Nat, Ints }
 impl Value {
-    pub fn kind(&self)->Type { match self {Self::Int(_)=>Type::Int,Self::Bool(_)=>Type::Bool,Self::Nat(_)=>Type::Nat} }
+    pub fn kind(&self)->Type {
+        match self {Self::Int(_)=>Type::Int,Self::Bool(_)=>Type::Bool,
+            Self::Nat(_)=>Type::Nat,Self::Ints(_)=>Type::Ints}
+    }
     pub fn parse_for_type(s:&str,kind:Type)->Result<Self>{
         if kind==Type::Nat {return Ok(Self::Nat(nat::canonical(s.trim())?));}
+        if kind==Type::Ints {
+            let raw=s.trim();
+            let body=raw.strip_prefix('[').and_then(|r|r.strip_suffix(']'))
+                .ok_or("ints source literal must have [..]")?;
+            let mut values=Vec::new();
+            if !body.trim().is_empty() {
+                for item in body.split(',') {
+                    if values.len()>=4096 {
+                        return Err("DOC ints collection capacity exceeded".into());
+                    }
+                    values.push(item.trim().parse::<i64>().map_err(|_|
+                        format!("invalid ints item: {item}"))?);
+                }
+            }
+            return Ok(Self::Ints(values));
+        }
         let value=Self::parse(s)?;
         if value.kind()!=kind{return Err("source value type mismatch".into());}
         Ok(value)
@@ -29,11 +48,22 @@ impl Value {
     }
 }
 impl Type { pub fn parse(s:&str)->Result<Self>{
-    match s.trim() {"int"=>Ok(Self::Int),"bool"=>Ok(Self::Bool),"nat"=>Ok(Self::Nat),_=>Err(format!("invalid type: {s}"))}
+    match s.trim() {"int"=>Ok(Self::Int),"bool"=>Ok(Self::Bool),"nat"=>Ok(Self::Nat),"ints"=>Ok(Self::Ints),_=>Err(format!("invalid type: {s}"))}
 }}
 impl std::fmt::Display for Value {
     fn fmt(&self,f:&mut std::fmt::Formatter<'_>)->std::fmt::Result {
-        match self {Self::Int(x)=>write!(f,"{x}"),Self::Bool(x)=>write!(f,"{x}"),Self::Nat(x)=>write!(f,"{x}")}
+        match self {
+            Self::Int(x)=>write!(f,"{x}"),Self::Bool(x)=>write!(f,"{x}"),
+            Self::Nat(x)=>write!(f,"{x}"),
+            Self::Ints(xs)=>{
+                write!(f,"[")?;
+                for (idx,x) in xs.iter().enumerate(){
+                    if idx>0 {write!(f,",")?;}
+                    write!(f,"{x}")?;
+                }
+                write!(f,"]")
+            }
+        }
     }
 }
 #[derive(Clone,Debug)]
@@ -42,6 +72,8 @@ pub enum Expr {
     Add(Box<Self>,Box<Self>), Sub(Box<Self>,Box<Self>),
     Mul(Box<Self>,Box<Self>), Eq(Box<Self>,Box<Self>),
     Lt(Box<Self>,Box<Self>), Le(Box<Self>,Box<Self>),
+    Empty, Append(Box<Self>,Box<Self>),
+    Length(Box<Self>), Get(Box<Self>,Box<Self>), Tail(Box<Self>),
     If(Box<Self>,Box<Self>,Box<Self>),
 }
 impl Expr {
@@ -50,6 +82,25 @@ impl Expr {
         match self {
             Lit(v)=>Ok(v.kind()),
             Arg(i)=>args.get(*i).copied().ok_or_else(||"missing formal parameter".into()),
+            Empty=>Ok(Type::Ints),
+            Append(list,value)=>{
+                if list.kind(args)?==Type::Ints && value.kind(args)?==Type::Int {
+                    Ok(Type::Ints)
+                }else{Err("append requires (ints,int)".into())}
+            }
+            Get(list,index)=>{
+                if list.kind(args)?==Type::Ints && index.kind(args)?==Type::Int{
+                    Ok(Type::Int)
+                }else{Err("get requires (ints,int)".into())}
+            }
+            Length(list)=>{
+                if list.kind(args)?==Type::Ints {Ok(Type::Int)}
+                else{Err("len requires ints".into())}
+            }
+            Tail(list)=>{
+                if list.kind(args)?==Type::Ints {Ok(Type::Ints)}
+                else{Err("tail requires ints".into())}
+            }
             Add(a,b)|Sub(a,b)|Mul(a,b)=>{
                 let at=a.kind(args)?;let bt=b.kind(args)?;
                 if at==bt && (at==Type::Int || at==Type::Nat){Ok(at)}
@@ -79,6 +130,32 @@ impl Expr {
         match self {
             Lit(v)=>Ok(v.clone()),
             Arg(i)=>args.get(*i).cloned().ok_or_else(||"missing parameter".into()),
+            Empty=>Ok(Value::Ints(Vec::new())),
+            Append(list,value)=>match (list.eval(args)?,value.eval(args)?) {
+                (Value::Ints(mut xs),Value::Int(x))=>{
+                    if xs.len()>=4096 {return Err("DOC ints collection capacity exceeded".into());}
+                    xs.push(x);
+                    Ok(Value::Ints(xs))
+                }
+                _=>Err("append expects ints collection and int value".into())
+            },
+            Get(list,index)=>match (list.eval(args)?,index.eval(args)?) {
+                (Value::Ints(xs),Value::Int(index))=>{
+                    let index=usize::try_from(index)
+                        .map_err(|_|"negative collection index")?;
+                    xs.get(index).copied().map(Value::Int)
+                        .ok_or_else(||"DOC collection index out of range".into())
+                }
+                _=>Err("get expects ints collection and int index".into())
+            },
+            Length(list)=>match list.eval(args)?{
+                Value::Ints(xs)=>Ok(Value::Int(xs.len() as i64)),
+                _=>Err("len expects ints collection".into())
+            },
+            Tail(list)=>match list.eval(args)?{
+                Value::Ints(xs)=>Ok(Value::Ints(xs.into_iter().skip(1).collect())),
+                _=>Err("tail expects ints collection".into())
+            },
             Add(a,b)|Sub(a,b)|Mul(a,b)=>{
                 match (a.eval(args)?,b.eval(args)?) {
                     (Value::Int(x),Value::Int(y))=>{
@@ -151,6 +228,7 @@ fn valid_user_ident(s:&str)->bool {
 }
 fn reserved_user_ident(s:&str)->bool {
     matches!(s,"add"|"sub"|"mul"|"eq"|"if"|"lt"|"le"|"nat"|
+        "empty"|"append"|"get"|"len"|"tail"|
         "true"|"false"|"source"|"derive"|"fn")
 }
 fn replace_function_formals(body:&str,params:&[String],args:&[String])->String {
@@ -472,6 +550,16 @@ impl Parser<'_>{
                 self.eat(")")?;
                 return Ok(Expr::Lit(Value::Nat(nat::canonical(&digits)?)));
             }
+            if token=="empty" {
+                self.eat(")")?;
+                return Ok(Expr::Empty);
+            }
+            if token=="len" || token=="tail"{
+                let argument=Box::new(self.expr()?);
+                self.eat(")")?;
+                return Ok(if token=="len"{Expr::Length(argument)}
+                    else{Expr::Tail(argument)});
+            }
             let expr=if token=="if"{
                 let c=Box::new(self.expr()?);self.eat(",")?;
                 let a=Box::new(self.expr()?);self.eat(",")?;
@@ -483,6 +571,7 @@ impl Parser<'_>{
                     "add"=>Expr::Add(a,b),"sub"=>Expr::Sub(a,b),
                     "mul"=>Expr::Mul(a,b),"eq"=>Expr::Eq(a,b),
                     "lt"=>Expr::Lt(a,b),"le"=>Expr::Le(a,b),
+                    "append"=>Expr::Append(a,b),"get"=>Expr::Get(a,b),
                     _=>return Err(format!("unknown operator {token}"))
                 }
             };
