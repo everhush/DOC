@@ -1,28 +1,16 @@
-name: DOC Kaggle physical GPU parity (quota gated)
+name: DOC Kaggle physical GPU parity
 
-# A separate Kaggle notebook is the hardware GPU runner. The regular workflow
-# still validates CPU behavior and Mesa software Vulkan without using quota.
-# Automatic Kaggle consumption is OFF unless DOC_KAGGLE_AUTORUN=true.
+# Kaggle owns GPU quota, accelerator availability and session duration.
+# No DOC-specific usage, repeat, concurrency or session-time restrictions.
+# The regular workflow retains CPU behavior and Mesa software Vulkan checks.
 on:
   workflow_dispatch:
     inputs:
       accelerator:
-        description: Kaggle physical GPU type (account availability varies)
-        type: choice
+        description: Kaggle-supported GPU name (default NVIDIA T4)
+        type: string
         required: true
         default: NvidiaTeslaT4
-        options:
-          - NvidiaTeslaT4
-          - NvidiaL4
-      minutes:
-        description: Max remote GPU runtime including native builds
-        type: choice
-        required: true
-        default: '30'
-        options:
-          - '15'
-          - '20'
-          - '30'
   workflow_run:
     workflows: ['DOC dual-runtime validation']
     types: [completed]
@@ -32,12 +20,6 @@ permissions:
   contents: read
   actions: read
 
-# Do not cancel the GitHub controller once it launches a remote notebook:
-# Kaggle sessions may continue consuming quota after GitHub cancellation.
-concurrency:
-  group: doc-kaggle-physical-${{ github.repository }}
-  cancel-in-progress: false
-
 jobs:
   physical-doc-parity:
     name: Kaggle Rust wgpu vs Goose SDL3 physical GPU
@@ -46,15 +28,12 @@ jobs:
         (github.event_name == 'workflow_dispatch' &&
          github.ref_name == 'feat/webgpu-dual-runtime-ci') ||
         (github.event_name == 'workflow_run' &&
-         (vars.DOC_KAGGLE_AUTORUN == 'true' ||
-          github.event.workflow_run.head_sha == '847459962a8a5b7802f05eea80fd8502afc8e765') &&
          github.event.workflow_run.conclusion == 'success' &&
          github.event.workflow_run.event == 'push' &&
          github.event.workflow_run.head_repository.full_name == github.repository &&
          github.event.workflow_run.head_branch == 'feat/webgpu-dual-runtime-ci')
       }}
     runs-on: ubuntu-latest
-    timeout-minutes: 65
     steps:
       - name: Check out the exact trusted DOC revision
         uses: actions/checkout@v4
@@ -77,12 +56,10 @@ jobs:
           DOC_TARGET_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
           DOC_SOURCE_WORKFLOW_RUN_ID: ${{ github.event.workflow_run.id || '' }}
           DOC_KAGGLE_ACCELERATOR: ${{ inputs.accelerator || 'NvidiaTeslaT4' }}
-          DOC_KAGGLE_MINUTES: ${{ inputs.minutes || '30' }}
         run: |
           set -euo pipefail
           python3 ci/kaggle/dispatch.py \
             --accelerator "$DOC_KAGGLE_ACCELERATOR" \
-            --minutes "$DOC_KAGGLE_MINUTES" \
             --output kaggle-validation
       - name: Retain non-secret quota, Vulkan, Goose, Rust and GPU parity logs
         if: always()
