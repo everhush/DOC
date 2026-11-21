@@ -51,18 +51,18 @@ fn signed_i32_operand(expr: &Expr, formal: &[Type]) -> Result<String> {
 }
 
 fn signed_i32_equality(expr: &Expr, formal: &[Type]) -> Result<String> {
-    match expr {
-        Expr::Eq(lhs, rhs)
-            if lhs.kind(formal)? == Type::Int && rhs.kind(formal)? == Type::Int =>
-        {
-            Ok(format!(
-                "({} == {})",
-                signed_i32_operand(lhs, formal)?,
-                signed_i32_operand(rhs, formal)?
-            ))
-        }
-        _ => Err("WGSL signed-integer eligibility requires pure equality without arithmetic".into()),
+    let (left,right,operator)=match expr {
+        Expr::Eq(a,b)=>(a,b,"=="),
+        Expr::Lt(a,b)=>(a,b,"<"),
+        Expr::Le(a,b)=>(a,b,"<="),
+        _=>return Err("WGSL signed eligibility requires pure eq/lt/le".into())
+    };
+    if left.kind(formal)?!=Type::Int || right.kind(formal)?!=Type::Int {
+        return Err("WGSL signed operands must be DOC integers".into());
     }
+    Ok(format!("({} {operator} {})",
+        signed_i32_operand(left,formal)?,
+        signed_i32_operand(right,formal)?))
 }
 
 /// Emit a typed WebGPU compute shader from an actual DOC derived definition.

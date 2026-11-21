@@ -237,6 +237,25 @@ jobs:
           DOC_GPU_EXECUTION=cpu "$executable"             > validation-logs/signed-cpu-only.log 2>&1
           test "$(grep -c '^DOC_SIGNED_CPU_ONLY_PASS:' validation-logs/signed-cpu-only.log)" = 2
           if grep -q '^DOC_SIGNED_WEBGPU_COMPUTE_PASS:' validation-logs/signed-cpu-only.log; then exit 1; fi
+          # Additional signed ordering operators, independently lowered
+          # from identical DOC source by the Rust and Goose frontends.
+          for op in lt le; do
+            for lanes in 1 64 65 257; do
+              DOC_GPU_LANES=$lanes "$executable" "--$op" \
+                > "validation-logs/signed-$op-rust-$lanes.log" 2>&1
+              DOC_GPU_LANES=$lanes "$executable" "--$op" --shader \
+                "validation-logs/goose-webgpu/integer-$([ "$op" = lt ] && echo less || echo le).wgsl" \
+                > "validation-logs/signed-$op-goose-$lanes.log" 2>&1
+              for origin in rust goose; do
+                test "$(grep -c '^DOC_SIGNED_WEBGPU_COMPUTE_PASS:' \
+                    "validation-logs/signed-$op-$origin-$lanes.log")" = 2
+              done
+              diff -u \
+                <(grep '^DOC_SIGNED_WEBGPU_COMPUTE_PASS:' "validation-logs/signed-$op-rust-$lanes.log") \
+                <(grep '^DOC_SIGNED_WEBGPU_COMPUTE_PASS:' "validation-logs/signed-$op-goose-$lanes.log")
+            done
+          done
+          echo DOC_SIGNED_WEBGPU_ORDERING_PASS
           echo DOC_SIGNED_WEBGPU_DIFFERENTIAL_PASS
       - name: Preserve WebGPU adapter and correctness evidence
         if: always()

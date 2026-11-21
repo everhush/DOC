@@ -47,10 +47,16 @@ fn main() -> Result<(), Box<dyn Error>> {
 }
 async fn run() -> Result<(), Box<dyn Error>> {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    let file = match args.as_slice() {
-        [] => None,
-        [flag, path] if flag == "--shader" => Some(path.as_str()),
-        _ => return Err("usage: webgpu_integer_eq [--shader GENERATED.wgsl]".into()),
+    let (operator,file) = match args.as_slice() {
+        [] => ("eq", None),
+        [flag] if flag == "--lt" => ("lt",None),
+        [flag] if flag == "--le" => ("le",None),
+        [flag, path] if flag == "--shader" => ("eq",Some(path.as_str())),
+        [flag, shader, path] if flag == "--lt" && shader == "--shader" =>
+            ("lt",Some(path.as_str())),
+        [flag, shader, path] if flag == "--le" && shader == "--shader" =>
+            ("le",Some(path.as_str())),
+        _ => return Err("usage: webgpu_integer_eq [--lt|--le] [--shader GENERATED.wgsl]".into()),
     };
     let count: usize = std::env::var("DOC_GPU_LANES")
         .unwrap_or_else(|_| "130".into()).parse()?;
@@ -64,8 +70,12 @@ async fn run() -> Result<(), Box<dyn Error>> {
     if require_hardware && forced_cpu != "gpu" {
         return Err("hardware-GPU requirement excludes CPU fallback".into());
     }
-    let graph = Graph::parse(include_str!("integer_equality.doc"))?;
-    let target = graph.id("equal").ok_or("missing integer equality")?;
+    let graph = Graph::parse(if operator=="eq" {
+        include_str!("integer_equality.doc")
+    }else{include_str!("integer_ordering.doc")})?;
+    let name=match operator{"eq"=>"equal","lt"=>"less","le"=>"less_or_equal",_=>
+        return Err("invalid signed DOC comparison".into())};
+    let target = graph.id(name).ok_or("missing signed DOC derived target")?;
     let a_id = graph.id("a").ok_or("missing a")?;
     let b_id = graph.id("b").ok_or("missing b")?;
     let shader = match file {
