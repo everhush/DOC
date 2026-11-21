@@ -303,12 +303,15 @@ jobs:
           GOOSE_GFX_DEBUG: "0"
           SDL_VIDEODRIVER: "x11"
           SDL_GPU_DRIVER: "vulkan"
-          VK_ICD_FILENAMES: /usr/share/vulkan/icd.d/lvp_icd.x86_64.json
+          SDL_LOGGING: "*=debug"
+          VK_LOADER_DEBUG: "warn"
         run: |
           set -euo pipefail
           # SDL GPU Vulkan requires a video driver with Vulkan_CreateSurface;
           # offscreen SDL video cannot expose that interface here. A virtual
           # X11 display is used ONLY to enable real SDL3 -> Vulkan llvmpipe.
+          xvfb-run -a vulkaninfo --summary \
+            > validation-logs/goose-sdl3-xvfb-vulkan-adapter.log 2>&1
           xvfb-run -a python3 runtime-goose/check-doc-sdl3-gpu.py \
             validation-logs/doc-goose-sdl3 validation-logs/goose-sdl3
           grep -Fx 'DOC_GOOSE_SDL3_NATIVE_PARITY_PASS: 77 checks' \
