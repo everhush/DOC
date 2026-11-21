@@ -38,8 +38,9 @@ impl PublishedRuntime {
         Ok(Self{writer:Mutex::new(rt),current:RwLock::new(snapshot)})
     }
     pub fn read(&self)->Result<Arc<PublishedSnapshot>>{
-        Ok(Arc::clone(&self.current.read()
-            .map_err(|_|"published reader lock poisoned")?))
+        let guard=self.current.read()
+            .map_err(|_|"published reader lock poisoned")?;
+        Ok(Arc::clone(&*guard))
     }
     fn transact(&self,expected:ObservationToken,
         action:impl FnOnce(&mut Runtime)->Result<()>
