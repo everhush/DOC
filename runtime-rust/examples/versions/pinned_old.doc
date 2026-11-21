@@ -1,0 +1,7 @@
+# All three arena-backed DOC value families are pinned by native readers.
+source n: nat = 99999999999999999999999999999999999999999999999999
+source items: ints = [3,5,8]
+source msg: text = "Hello 世界"
+derive next: nat (n) = add(n,nat(1))
+derive size: int (items) = len(items)
+derive joined: text (msg) = concat(msg,"?")
