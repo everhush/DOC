@@ -201,6 +201,46 @@ for bad_value in ("9223372036854775808","-9223372036854775809","true"):
             raise AssertionError(f"{binary} published failed list append")
         cases+=1
 
+
+# The same directly authored DOC graph must retain source-override semantics
+# and independent ready-frontier observations across worker counts. In
+# particular, replacing a large collection with a smaller one must not leak
+# stale indexed values from an earlier invocation or a previous graph size.
+# These are fresh processes; persistent graph-generation tests live elsewhere.
+import os
+worker_doc=root/"list-worker-frontier.doc"
+worker_doc.write_text(
+    "source items: ints = [1,2,3]\\n"
+    "derive expanded: ints (items) = append(items,-7)\\n"
+    "derive count: int (expanded) = len(expanded)\\n"
+    "derive first: int (items) = get(items,0)\\n"
+    "derive last: int (expanded) = get(expanded,3)\\n"
+)
+for data in ([4,5,6],[-2**63,0,2**63-1],[0,0,0]):
+    source="items=["+",".join(map(str,data))+"]"
+    expected={"count":4,"first":data[0],"last":-7}
+    for workers in (1,2,4,8):
+        for binary in (rust,goose):
+            completed=subprocess.run(
+                [binary,str(worker_doc),source],
+                env={**os.environ,"DOC_WORKERS":str(workers)},
+                capture_output=True,text=True,timeout=30,
+            )
+            if completed.returncode:
+                raise AssertionError(
+                    f"{binary} workers={workers} failed: {completed.stderr}"
+                )
+            observed={}
+            for line in completed.stdout.splitlines():
+                if line.startswith(("count: ","first: ","last: ")):
+                    name,value=line.split(": ",1)
+                    observed[name]=int(value)
+            if observed!=expected:
+                raise AssertionError(
+                    f"{binary} workers={workers}: {observed} != {expected}"
+                )
+            cases+=1
+
 assert all(isinstance(v,int) for values in inputs for v in values)
 root.joinpath("doc-list-conformance.log").write_text(
     f"DOC_NATIVE_DYNAMIC_LIST_PASS: {cases} independent checks\n"
