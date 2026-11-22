@@ -109,6 +109,40 @@ for binary in (rust,goose):
     if observed!={"items":large,"expanded":large+[777],"count":4098}:
         raise AssertionError(f"{binary} large DOC collection result mismatch")
     cases+=1
+# A second larger, mixed-sign collection checks dynamic growth, indexed reads
+# at the last valid position, and append after growth without hardcoded values.
+# The oracle is independent of the DOC evaluator and identical for both hosts.
+wide=[((i*7919)%200003)-100001 for i in range(8193)]
+wide_doc=root/"list-wide-index.doc"
+wide_doc.write_text(
+    "source items: ints = ["+",".join(map(str,wide))+"]\n"
+    "derive expanded: ints (items) = append(items,-777)\\n"
+    "derive count: int (expanded) = len(expanded)\\n"
+    "derive last: int (expanded) = get(expanded,8193)\n"
+    "derive previous: int (items) = get(items,8192)\n"
+)
+for binary in (rust,goose):
+    stdout=run(binary,str(wide_doc))
+    found={}
+    for line in stdout.splitlines():
+        if line.startswith(("count: ","last: ","previous: ")):
+            name,value=line.split(": ",1)
+            found[name]=int(value)
+    if found!={"count":8194,"last":-777,"previous":wide[-1]}:
+        raise AssertionError(f"{binary} wide indexed DOC collection mismatch")
+    cases+=1
+# Invalid index immediately past the dynamically grown collection must fail.
+bad_wide=root/"list-wide-out-of-bounds.doc"
+bad_wide.write_text(
+    "source items: ints = ["+",".join(map(str,wide))+"]\n"
+    "derive invalid: int (items) = get(items,8193)\n"
+)
+for binary in (rust,goose):
+    stdout=run(binary,str(bad_wide),valid=False)
+    if "invalid:" in stdout:
+        raise AssertionError(f"{binary} published invalid wide collection index")
+    cases+=1
+
 assert all(isinstance(v,int) for values in inputs for v in values)
 root.joinpath("doc-list-conformance.log").write_text(
     f"DOC_NATIVE_DYNAMIC_LIST_PASS: {cases} independent checks\n"
