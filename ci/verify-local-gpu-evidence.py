@@ -50,7 +50,7 @@ def parse_rust(content, mode, width, expected_adapter=None):
     # missing epochs, or duplicate records as benchmark evidence.
     timing = {}
     timing_pat = re.compile(
-        r"^DOC_SIGNED_WEBGPU_HOST_MS: epoch=([01]) elapsed_ms=(\\S+)$")
+        r"^DOC_SIGNED_WEBGPU_HOST_MS: epoch=([01]) elapsed_ms=(\S+)$")
     for line in lines:
         if line.startswith("DOC_SIGNED_WEBGPU_HOST_MS:"):
             m = timing_pat.fullmatch(line)
