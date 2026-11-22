@@ -21,7 +21,12 @@ jobs:
         with:
           python-version: '3.11'
       - name: Install Kaggle CLI for read-only API probes
-        run: python3 -m pip install --disable-pip-version-check 'kaggle>=2.2.1,<3'
+        run: |
+          set -euo pipefail
+          # Kaggle CLI 2.2.5 imports six but omits the dependency when
+          # python-dateutil >=4 is installed. This is NOT an auth failure.
+          python3 -m pip install --disable-pip-version-check 'kaggle>=2.2.1,<3' 'six>=1.16'
+          python3 -c "import kaggle, six; print('DOC_KAGGLE_CLI_IMPORT_PASS')"
       - name: Test exact dataset owner and token permissions without GPU spend
         env:
           KAGGLE_DOC_1: ${{ secrets.KAGGLE_DOC_1 }}
