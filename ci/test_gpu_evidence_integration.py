@@ -72,8 +72,8 @@ class EvidenceIntegration(unittest.TestCase):
 
     def test_missing_rust_host_timing_rejected(self):
         path = self.root / "rust/rust-eq-1.log"
-        path.write_text("\\n".join(line for line in path.read_text().splitlines()
-                                  if "DOC_SIGNED_WEBGPU_HOST_MS: epoch=1" not in line) + "\\n")
+        path.write_text("\n".join(line for line in path.read_text().splitlines()
+                                  if "DOC_SIGNED_WEBGPU_HOST_MS: epoch=1" not in line) + "\n")
         with self.assertRaisesRegex(ValueError, "missing host timings"):
             evidence.main(self.root)
 
@@ -85,7 +85,7 @@ class EvidenceIntegration(unittest.TestCase):
 
     def test_duplicate_rust_host_timing_rejected(self):
         path = self.root / "rust/rust-le-64.log"
-        path.write_text(path.read_text() + "DOC_SIGNED_WEBGPU_HOST_MS: epoch=0 elapsed_ms=3.0\\n")
+        path.write_text(path.read_text() + "DOC_SIGNED_WEBGPU_HOST_MS: epoch=0 elapsed_ms=3.0\n")
         with self.assertRaisesRegex(ValueError, "duplicate host timing"):
             evidence.main(self.root)
 
