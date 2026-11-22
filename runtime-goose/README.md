@@ -6,6 +6,10 @@ doc_typed.goose. The native Goose-owned optional GPU engine is
 doc_sdl3_gpu.goose. Both operate on the SAME directly authored DOC
 source language. Rust is independent and keeps its wgpu GPU backend.
 
+## Explicit backend execution policy
+
+The native `doc-goose` CLI defaults to CPU. `doc-goose FILE.doc --backend=cpu [other arguments]` selects the CPU implementation. `doc-goose FILE.doc --backend=gpu` **fails closed** with `DOC_GPU_UNSUPPORTED`: the general-purpose Goose GPU evaluator is not implemented. No automatic selection or CPU fallback is permitted. The separate `doc_sdl3_gpu.goose` program uses SDL3 gfx for bounded native GPU kernel tests only; it is not a general-purpose DOC GPU interpreter. See [backend policy](../BACKEND-EXECUTION-CONTRACT.md).
+
 ## What SDL3 handles
 
 The optional upstream Goose gfx package wraps SDL3 GPU devices, Vulkan,
