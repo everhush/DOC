@@ -1,5 +1,7 @@
 # DOC claim-to-evidence map — active Rust + Goose project
 
+**Execution backend acceptance update (2026-11-22):** CPU is the default for both native general-purpose CLIs, explicit `--backend=cpu|gpu` is strict, and there is no `auto` or silent CPU fallback. The two general-purpose GPU branches currently reject `--backend=gpu`; bounded native GPU parity does **not** establish HVM-like general-purpose GPU execution. See [BACKEND-EXECUTION-CONTRACT.md](BACKEND-EXECUTION-CONTRACT.md). This is a new OPEN implementation/acceptance requirement, not a claim of passing evidence.
+
 **Evidence classes must never be merged:** a paper's theorem argument is not a machine-checked proof; an archived executable witness is not a current runtime; an unexecuted test file is not a passing test; an implementation plan is not evidence of a feature.
 
 The submitted DOC manuscript and its original experimental measurements remain unchanged. The earlier C++20 executable witness, its checker source and raw data are preserved **only** at [`snapshot-2026-11-17-pre-rust-runtime`](https://github.com/imxade/DOC/tree/snapshot-2026-11-17-pre-rust-runtime) and are **not** active code, an execution dependency, or a current baseline.
