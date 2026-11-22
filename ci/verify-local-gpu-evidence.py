@@ -75,9 +75,14 @@ def main(root):
                 "Unexpected parity CSV columns")
         rows = {}
         for record in reader:
+            require(None not in record and all(record.get(c) is not None for c in reader.fieldnames),
+                    "Malformed parity CSV column count")
             mode = record["operation"]
-            width, epoch, value = (int(record[c]) for c in
-                                    ("lanes", "epoch", "equal_or_true_count"))
+            try:
+                width, epoch, value = (int(record[c]) for c in
+                                        ("lanes", "epoch", "equal_or_true_count"))
+            except (TypeError, ValueError) as exc:
+                raise ValueError("Non-integer parity CSV field") from exc
             key = (mode, width, epoch)
             require(key in EXPECTED and key not in rows,
                     f"Unknown or duplicated CSV row: {key}")
