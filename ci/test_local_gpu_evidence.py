@@ -56,5 +56,22 @@ class LogParserAdversarialTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             verifier.parse_goose("DOC_GOOSE_SDL3_DEVICE: vulkan\n" + GOOSE, "lt", 65)
 
+
+    def test_rust_malformed_record_rejected(self):
+        with self.assertRaises(ValueError):
+            verifier.parse_rust(RUST.replace("equals=31", "equals=31 trailing"), "lt", 65)
+
+    def test_goose_malformed_record_rejected(self):
+        with self.assertRaises(ValueError):
+            verifier.parse_goose(GOOSE.replace("count=31", "count=31 trailing"), "lt", 65)
+
+    def test_rust_impossible_count_rejected(self):
+        with self.assertRaises(ValueError):
+            verifier.parse_rust(RUST.replace("equals=31", "equals=66"), "lt", 65)
+
+    def test_goose_impossible_count_rejected(self):
+        with self.assertRaises(ValueError):
+            verifier.parse_goose(GOOSE.replace("count=31", "count=66"), "lt", 65)
+
 if __name__ == "__main__":
     unittest.main()
