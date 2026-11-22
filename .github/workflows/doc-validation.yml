@@ -64,6 +64,8 @@ jobs:
           grep -Fx 'sum: 5' validation-logs/doc-worker1.txt
           grep -Fx 'doubled: 10' validation-logs/doc-worker1.txt
           grep -Fx 'chosen: 10' validation-logs/doc-worker1.txt
+      - name: Verify strict explicit backend admission in Rust CLI
+        run: bash ci/check-explicit-backend.sh runtime-rust/target/release/doc runtime-rust/examples/repair.doc
       - name: Black-box DOC finite branch and failure conformance (1, 2, 4 workers)
         run: bash runtime-rust/check-doc-finite-cli.sh runtime-rust/target/release/doc validation-logs
       - name: Source format and lint diagnostics (record until existing sources are normalized)
@@ -174,9 +176,9 @@ jobs:
             fi
           done
           # Failed GPU candidates must not be counted as published results;
-          # an auto execution setting does NOT permit fallback after failure.
+          # strict GPU execution does NOT permit fallback after failure.
           for epoch in 0 1; do
-            if DOC_GPU_EXECUTION=auto DOC_GPU_INJECT_FAILURE_EPISODE="$epoch" \
+            if DOC_GPU_EXECUTION=gpu DOC_GPU_INJECT_FAILURE_EPISODE="$epoch" \
               "$bool" --repair \
               > "validation-logs/rust-fault-epoch-$epoch.log" 2>&1; then
               echo "Rust wgpu accepted injected device failure" >&2
@@ -187,13 +189,17 @@ jobs:
             published=$(grep -c '^DOC_WEBGPU_COMPUTE_PASS:' \
               "validation-logs/rust-fault-epoch-$epoch.log" || true)
             test "$published" = "$epoch"
-            if grep -q '^DOC_CPU_FALLBACK_PASS:' \
+            if grep -q '^DOC_CPU_ONLY_PASS:' \
                 "validation-logs/rust-fault-epoch-$epoch.log"; then
               echo "Device failure was misclassified as CPU fallback" >&2
               exit 1
             fi
           done
-          if DOC_GPU_REQUIRE_HARDWARE=1 DOC_GPU_EXECUTION=cpu "$bool" \
+          if DOC_GPU_EXECUTION=auto "$bool" > validation-logs/rust-invalid-auto.log 2>&1; then
+             echo "Unsupported automatic CPU/GPU mode was accepted" >&2; exit 1
+           fi
+           grep -F 'DOC_GPU_EXECUTION must be gpu or cpu' validation-logs/rust-invalid-auto.log
+           if DOC_GPU_REQUIRE_HARDWARE=1 DOC_GPU_EXECUTION=cpu "$bool" \
             > validation-logs/rust-invalid-hardware-fallback.log 2>&1; then
             echo "Hardware gate accepted a CPU-only execution" >&2
             exit 1
@@ -301,6 +307,8 @@ jobs:
             > validation-logs/goose-installed-smoke.log 2>&1
           grep -Fx 'chosen: 10' validation-logs/goose-installed-smoke.log
           echo DOC_GOOSE_PACKAGED_INSTALL_PASS
+      - name: Verify strict explicit backend admission in Goose CLI
+        run: bash ci/check-explicit-backend.sh validation-logs/release/bin/doc-goose runtime-rust/examples/repair.doc
       - name: Preserve Goose compilation evidence
         if: always()
         uses: actions/upload-artifact@v4
