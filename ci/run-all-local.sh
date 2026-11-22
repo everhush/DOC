@@ -15,7 +15,8 @@ if [ ! -x "$GOOSE_BIN" ]; then
   if command -v goose >/dev/null 2>&1; then
     GOOSE_BIN="$(command -v goose)"
   else
-    echo "Warning: Goose compiler not found at $GOOSE_BIN or on PATH. Set GOOSE_BIN to run Goose tests." >&2
+    echo "DOC_LOCAL_ACCEPTANCE_BLOCKED: native Goose compiler unavailable; set GOOSE_BIN to the pinned compiler and rerun the complete suite." >&2
+    exit 1
   fi
 fi
 
@@ -49,4 +50,4 @@ if [ -x "$GOOSE_BIN" ]; then
   bash ci/check-explicit-backend.sh "$SCRATCH_DIR/doc-goose" runtime-rust/examples/repair.doc
 fi
 
-echo "=== ALL LOCAL ACCEPTANCE CHECKS PASSED ==="
+echo "=== LOCAL NATIVE REGRESSION CHECKS PASSED (not production, hosted CI, or physical GPU acceptance) ==="
