@@ -33,8 +33,29 @@ class EvidenceIntegration(unittest.TestCase):
         (self.root / "parity/native-gpu-equivalence.log").write_text(
             "DOC_RUST_WGPU_GOOSE_SDL3_PARITY_PASS: 42 observed GPU episodes\n")
         (self.root / "vulkan-adapter.log").write_text(
-            "deviceType         = PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU\n"
-            "deviceName         = AMD Radeon 860M Graphics (RADV KRACKAN1)\n")
+            "GPU0:\\n"
+            "\\tvendorID           = 0x1002\\n"
+            "\\tdeviceID           = 0x1114\\n"
+            "\\tdeviceType         = PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU\\n"
+            "\\tdeviceName         = AMD Radeon 860M Graphics (RADV KRACKAN1)\\n")
+
+    def test_inventory_identity_cannot_be_borrowed_from_cpu(self):
+        path = self.root / "vulkan-adapter.log"
+        path.write_text(
+            "GPU0:\\n\\tdeviceType         = PHYSICAL_DEVICE_TYPE_CPU\\n"
+            "\\tdeviceName         = AMD Radeon 860M Graphics (RADV KRACKAN1)\\n"
+            "\\tvendorID           = 0x1002\\n\\tdeviceID           = 0x1114\\n"
+            "GPU1:\\n\\tdeviceType         = PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU\\n"
+            "\\tdeviceName         = llvmpipe\\n"
+            "\\tvendorID           = 0x10005\\n\\tdeviceID           = 0x0000\\n")
+        with self.assertRaisesRegex(ValueError, "identity, type and PCI IDs"):
+            evidence.main(self.root)
+
+    def test_inventory_wrong_pci_device_rejected(self):
+        path = self.root / "vulkan-adapter.log"
+        path.write_text(path.read_text().replace("0x1114", "0x9999"))
+        with self.assertRaisesRegex(ValueError, "identity, type and PCI IDs"):
+            evidence.main(self.root)
 
     def test_complete_fixture(self):
         self.assertEqual(evidence.main(self.root), 0)
