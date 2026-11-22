@@ -6,6 +6,7 @@ the committed summary CSV. Rust identifies a physical Vulkan adapter; Goose
 reports only the Vulkan backend, so its exact GPU selection remains OPEN.
 """
 import csv
+import math
 import re
 import sys
 from pathlib import Path
@@ -44,6 +45,25 @@ def parse_rust(content, mode, width, expected_adapter=None):
                     f"Rust {mode}/{width}: invalid/duplicate episode")
             require(0 <= value <= width, f"Rust {mode}/{width}: impossible count")
             result[epoch] = value
+    # Rust reports wall-clock host execution, not isolated kernel latency.
+    # Require one finite nonnegative timing per epoch; never accept NaN/Inf,
+    # missing epochs, or duplicate records as benchmark evidence.
+    timing = {}
+    timing_pat = re.compile(
+        r"^DOC_SIGNED_WEBGPU_HOST_MS: epoch=([01]) elapsed_ms=(\\S+)$")
+    for line in lines:
+        if line.startswith("DOC_SIGNED_WEBGPU_HOST_MS:"):
+            m = timing_pat.fullmatch(line)
+            require(m is not None, f"Rust {mode}/{width}: malformed host timing")
+            epoch, raw = m.groups()
+            try:
+                elapsed = float(raw)
+            except ValueError as exc:
+                raise ValueError(f"Rust {mode}/{width}: invalid host timing") from exc
+            require(math.isfinite(elapsed) and elapsed >= 0 and int(epoch) not in timing,
+                    f"Rust {mode}/{width}: nonfinite, negative or duplicate host timing")
+            timing[int(epoch)] = elapsed
+    require(set(timing) == {0, 1}, f"Rust {mode}/{width}: missing host timings")
     require(set(result) == {0, 1}, f"Rust {mode}/{width}: incomplete observations")
     return result
 
