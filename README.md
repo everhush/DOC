@@ -2,6 +2,10 @@
 
 DOC is a persistent dependency-graph computation model for typed, reactive incremental repair, with additional, **separately scoped** contracts for recurrence, changing graph versions, safe physical realization, placement and external effects.
 
+## Explicit execution-backend policy — 2026-11-22
+
+General-purpose DOC execution is **CPU by default**. Both native Rust and Goose CLIs accept `FILE.doc --backend=cpu` and strictly reject `FILE.doc --backend=gpu` until their general-purpose GPU evaluators exist; there is no `auto` mode, no automatic CPU/GPU switching and no silent CPU fallback. Dedicated Rust wgpu and native Goose SDL3 gfx GPU examples remain bounded regression paths, **not** general-purpose GPU implementations. See [BACKEND-EXECUTION-CONTRACT.md](BACKEND-EXECUTION-CONTRACT.md) for the normative decision, limitations, and completion gates.
+
 ## Current development objective
 
 Build one small, expressive, general-purpose **DOC language** with **two independent runtimes**:
