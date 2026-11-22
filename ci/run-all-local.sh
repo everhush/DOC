@@ -27,6 +27,9 @@ cargo test --release --manifest-path runtime-rust/Cargo.toml --features webgpu -
 cargo build --release --manifest-path runtime-rust/Cargo.toml --bin doc
 cargo build --release --manifest-path runtime-rust/Cargo.toml --features webgpu --examples
 
+echo "--- 2b. Rust CLI strict backend selection ---"
+bash ci/check-explicit-backend.sh runtime-rust/target/release/doc runtime-rust/examples/repair.doc
+
 echo "--- 3. Python unit and integration tests (ci/) ---"
 python3 -m unittest discover -s ci -p 'test_*.py' -v
 
@@ -42,6 +45,8 @@ if [ -x "$GOOSE_BIN" ]; then
   trap 'rm -rf -- "$SCRATCH_DIR"' EXIT
   bash runtime-goose/check-doc-typed.sh "$GOOSE_BIN" runtime-rust/target/release/doc "$SCRATCH_DIR"
   echo "Goose typed checks passed in $SCRATCH_DIR"
+  "$GOOSE_BIN" build runtime-goose/doc_typed.goose --offline -o "$SCRATCH_DIR/doc-goose"
+  bash ci/check-explicit-backend.sh "$SCRATCH_DIR/doc-goose" runtime-rust/examples/repair.doc
 fi
 
 echo "=== ALL LOCAL ACCEPTANCE CHECKS PASSED ==="
