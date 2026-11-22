@@ -65,12 +65,11 @@ async fn run() -> Result<(), Box<dyn Error>> {
     if !(1..=4096).contains(&lane_count) {
         return Err("DOC_GPU_LANES must be within 1..=4096".into());
     }
-    // The default is strict GPU execution. 'auto' is an opt-in fallback
-    // only for GPU-admission failure, never for a failed or stale dispatch.
-    // 'cpu' is a deterministic fallback test without any GPU dependency.
+    // This dedicated GPU regression tool defaults to GPU; general-purpose DOC defaults to CPU.
+    // Do not silently switch execution backends.
     let execution = std::env::var("DOC_GPU_EXECUTION").unwrap_or_else(|_| "gpu".into());
-    if !["gpu", "auto", "cpu"].contains(&execution.as_str()) {
-        return Err("DOC_GPU_EXECUTION must be gpu, auto, or cpu".into());
+    if !["gpu", "cpu"].contains(&execution.as_str()) {
+        return Err("DOC_GPU_EXECUTION must be gpu or cpu; no automatic selection".into());
     }
     let require_hardware=std::env::var("DOC_GPU_REQUIRE_HARDWARE")
         .unwrap_or_else(|_| "0".into());
@@ -141,10 +140,10 @@ async fn run() -> Result<(), Box<dyn Error>> {
     };
     let Some(adapter) = adapter else {
         if execution == "gpu" {
-            return Err("No conforming Vulkan WebGPU adapter available".into());
+            return Err("No conforming Vulkan WebGPU adapter available; no CPU fallback".into());
         }
         for (episode, (_, _, expected)) in cases.iter().enumerate() {
-            println!("DOC_CPU_FALLBACK_PASS: episode={episode} lanes={lane_count} output={expected:?}");
+            println!("DOC_CPU_ONLY_PASS: episode={episode} lanes={lane_count} output={expected:?}");
         }
         return Ok(());
     };
@@ -161,12 +160,6 @@ async fn run() -> Result<(), Box<dyn Error>> {
         .await
     {
         Ok(pair) => pair,
-        Err(_) if execution == "auto" => {
-            for (episode, (_, _, expected)) in cases.iter().enumerate() {
-                println!("DOC_CPU_FALLBACK_PASS: episode={episode} lanes={lane_count} output={expected:?}");
-            }
-            return Ok(());
-        }
         Err(error) => return Err(format!("DOC WebGPU device admission failed: {error}").into()),
     };
 
