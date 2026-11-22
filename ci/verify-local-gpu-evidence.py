@@ -98,12 +98,24 @@ def main(root):
     # vulkaninfo can list software and hardware adapters together. All identity
     # fields must belong to the SAME GPU stanza, not separate devices.
     devices = re.split(r"(?m)^GPU\d+:\s*$", physical)[1:]
-    require(any(
-        re.search(r"(?m)^\s*deviceName\s*= " + re.escape(expected_adapter) + r"$", device)
-        and re.search(r"(?m)^\s*deviceType\s*= PHYSICAL_DEVICE_TYPE_(?:INTEGRATED|DISCRETE)_GPU$", device)
-        and re.search(r"(?m)^\s*vendorID\s*= 0x1002$", device)
-        and re.search(r"(?m)^\s*deviceID\s*= 0x1114$", device)
-        for device in devices),
+    # A single device stanza must have exactly one of each identity field.
+    # Duplicate contradictory keys must never manufacture a matching adapter.
+    def physical_amd(device):
+        fields = {}
+        for key in ("deviceName", "deviceType", "vendorID", "deviceID"):
+            matches = re.findall(
+                r"(?m)^\\s*" + key + r"\\s*=\\s*(.*?)\\s*$", device)
+            if len(matches) != 1:
+                return False
+            fields[key] = matches[0]
+        return (fields["deviceName"] == expected_adapter
+                and fields["deviceType"] in (
+                    "PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU",
+                    "PHYSICAL_DEVICE_TYPE_DISCRETE_GPU")
+                and fields["vendorID"] == "0x1002"
+                and fields["deviceID"] == "0x1114")
+
+    require(any(physical_amd(device) for device in devices),
         "Inventoried AMD GPU identity, type and PCI IDs do not match one physical device")
     for mode in MODES:
         for width in WIDTHS:
