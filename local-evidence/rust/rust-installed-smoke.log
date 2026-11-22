@@ -1,0 +1,7 @@
+a: 4
+b: 1
+flag: true
+sum: 5
+doubled: 10
+chosen: 10
+stats: Stats { frontiers: 3, evaluations: 3, publications: 3, cutoffs: 0, updates: 2 }
