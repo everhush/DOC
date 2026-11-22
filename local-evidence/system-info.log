@@ -1,0 +1,13 @@
+=== DOC Local Physical GPU Validation ===
+Date: 2026-11-22
+Host: NixOS 6.18.62 x86_64 GNU/Linux
+CPU: AMD Ryzen AI 7 350 w/ Radeon 860M (16 logical cores)
+Memory: 23,734,184 kB
+GPU: AMD Radeon 860M Graphics (RADV KRACKAN1)
+  PCI ID: 1002:1114 (PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU)
+  Driver: radv / Mesa 26.3.0
+  Vulkan Version: 1.4.363 (conformance: 1.4.5.3)
+Rust Toolchain: rustc 1.99.1 (58cf8f9c3), cargo 1.99.0
+Goose Compiler: 9412b80f52d833c4697cffdbbf1f4eeb5195cd41 (native + SDL3/Vulkan gfx)
+Base Commit: 70394f1b65ee6d6ddad348cf497eb9b6f1fa8d52
+Target: Physical AMD GPU parity & dual-runtime non-game DOC validation

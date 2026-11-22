@@ -1,0 +1,11 @@
+DOC Typed Differential Benchmarks (same-source Rust vs Goose, 31 samples each)
+Machine: AMD Radeon 860M host (NixOS, 6.18.62)
+wide_ready_frontier/rust: median=3.207ms p95=3.791ms max_rss=19348KiB
+wide_ready_frontier/goose: median=4.263ms p95=5.239ms max_rss=19348KiB
+DOC_WORKER_BENCHMARK_PASS: 186 raw samples
+rust/1 workers: n=31 median_ms=1.945 p95_ms=3.115
+rust/2 workers: n=31 median_ms=2.124 p95_ms=2.748
+rust/4 workers: n=31 median_ms=2.365 p95_ms=2.918
+goose/1 workers: n=31 median_ms=2.117 p95_ms=3.300
+goose/2 workers: n=31 median_ms=3.774 p95_ms=4.761
+goose/4 workers: n=31 median_ms=4.313 p95_ms=6.468

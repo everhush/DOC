@@ -1,0 +1,7 @@
+DOC_SIGNED_CPU_REFERENCE_MS: epoch=0 value_ms=0.101
+DOC_SIGNED_CPU_REFERENCE_MS: epoch=1 value_ms=0.059
+DOC_SIGNED_WEBGPU_ADAPTER: AMD Radeon 860M Graphics (RADV KRACKAN1) type=IntegratedGpu backend=Vulkan driver=radv
+DOC_SIGNED_WEBGPU_COMPUTE_PASS: epoch=0 lanes=63 equals=40
+DOC_SIGNED_WEBGPU_HOST_MS: epoch=0 elapsed_ms=32.091
+DOC_SIGNED_WEBGPU_COMPUTE_PASS: epoch=1 lanes=63 equals=37
+DOC_SIGNED_WEBGPU_HOST_MS: epoch=1 elapsed_ms=7.467
