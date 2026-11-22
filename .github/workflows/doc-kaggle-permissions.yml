@@ -57,6 +57,40 @@ jobs:
               print("DOC_KAGGLE_OWNER_VARIABLE_PRESENT:", bool(owner))
               if not re.fullmatch(r"[a-z0-9_-]{2,60}", owner):
                   raise SystemExit("DOC_KAGGLE_PERMISSION_RESULT: invalid or absent username")
+              # Do not emit raw CLI stderr/stdout: a failed auth stack may
+              # contain secret-derived material. Only coarse error categories
+              # are useful for deciding next steps.
+              def classify(output):
+                  msg = output.lower()
+                  if "authentication required" in msg or "not authenticated" in msg:
+                      return "AUTH_REQUIRED"
+                  if "invalid token" in msg or "token is invalid" in msg or "expired token" in msg:
+                      return "TOKEN_INVALID_OR_EXPIRED"
+                  if "insufficient scope" in msg or "permission denied" in msg or "access denied" in msg:
+                      return "PERMISSION_OR_SCOPE"
+                  if "403" in msg or "forbidden" in msg:
+                      return "HTTP_403_FORBIDDEN"
+                  if "401" in msg or "unauthorized" in msg:
+                      return "HTTP_401_UNAUTHORIZED"
+                  if "429" in msg or "rate limit" in msg or "too many requests" in msg:
+                      return "RATE_LIMITED"
+                  if "unrecognized arguments" in msg or "no such option" in msg or "usage:" in msg:
+                      return "CLI_ARGUMENT_ERROR"
+                  if "connection" in msg or "timeout" in msg or "name resolution" in msg:
+                      return "NETWORK_OR_TIMEOUT"
+                  if "traceback" in msg or "exception" in msg:
+                      return "CLI_INTERNAL_EXCEPTION"
+                  return "UNCLASSIFIED"
+              for label,command in [
+                  ("version",["kaggle","--version"]),
+                  ("configuration",["kaggle","config","view"])]:
+                  try:
+                      p = subprocess.run(command,capture_output=True,text=True,
+                                         env=env,timeout=20)
+                      print(f"DOC_KAGGLE_AUTH_DIAG: {label} ok={p.returncode == 0}"
+                            f" category={classify(p.stdout + chr(10) + p.stderr) if p.returncode else 'OK'}")
+                  except subprocess.TimeoutExpired:
+                      print(f"DOC_KAGGLE_AUTH_DIAG: {label} category=TIMEOUT")
               probes = [
                   ("quota", ["kaggle","quota","--format","json"]),
                   ("private_list",["kaggle","datasets","list","--mine","--search","doc-gpu"]),
@@ -74,7 +108,8 @@ jobs:
                       http = re.search(r"(?<!\d)(401|403|404|429|500|503)(?!\d)",output)
                       statuses[name] = p.returncode == 0
                       print(f"DOC_KAGGLE_PROBE: {name} success={p.returncode == 0} "
-                            f"rc={p.returncode} http={http.group(1) if http else 'not_shown'}")
+                            f"rc={p.returncode} category={classify(output)} "
+                            f"http={http.group(1) if http else 'not_shown'}")
                   except subprocess.TimeoutExpired:
                       statuses[name]=False
                       print(f"DOC_KAGGLE_PROBE: {name} timeout")
