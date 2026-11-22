@@ -34,10 +34,12 @@ def parse_rust(content, mode, width):
         r"^DOC_SIGNED_WEBGPU_COMPUTE_PASS: epoch=([01]) lanes=(\d+) equals=(\d+)$")
     for line in lines:
         m = pat.fullmatch(line)
-        if m:
+        if line.startswith("DOC_SIGNED_WEBGPU_COMPUTE_PASS:"):
+            require(m is not None, f"Rust {mode}/{width}: malformed compute record")
             epoch, size, value = map(int, m.groups())
             require(size == width and epoch not in result,
                     f"Rust {mode}/{width}: invalid/duplicate episode")
+            require(0 <= value <= width, f"Rust {mode}/{width}: impossible count")
             result[epoch] = value
     require(set(result) == {0, 1}, f"Rust {mode}/{width}: incomplete observations")
     return result
@@ -52,11 +54,13 @@ def parse_goose(content, mode, width):
     result = {}
     for line in lines:
         m = pat.fullmatch(line)
-        if m:
+        if line.startswith("DOC_GOOSE_SDL3_GPU_PASS:"):
+            require(m is not None, f"Goose {mode}/{width}: malformed GPU record")
             operation, episode, size, value = m.groups()
             epoch = int(episode)
             require(operation == mode and int(size) == width and epoch not in result,
                     f"Goose {mode}/{width}: invalid/duplicate episode")
+            require(0 <= int(value) <= width, f"Goose {mode}/{width}: impossible count")
             result[epoch] = int(value)
     require(set(result) == {0, 1}, f"Goose {mode}/{width}: incomplete observations")
     return result
