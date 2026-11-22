@@ -116,8 +116,8 @@ wide=[((i*7919)%200003)-100001 for i in range(8193)]
 wide_doc=root/"list-wide-index.doc"
 wide_doc.write_text(
     "source items: ints = ["+",".join(map(str,wide))+"]\n"
-    "derive expanded: ints (items) = append(items,-777)\\n"
-    "derive count: int (expanded) = len(expanded)\\n"
+    "derive expanded: ints (items) = append(items,-777)\n"
+    "derive count: int (expanded) = len(expanded)\n"
     "derive last: int (expanded) = get(expanded,8193)\n"
     "derive previous: int (items) = get(items,8192)\n"
 )
