@@ -5,11 +5,20 @@ fn main() {
 }
 fn run() -> Result<(), String> {
     let mut args = env::args().skip(1);
-    let file = args.next().ok_or("usage: doc FILE.doc [source=value ... | --through=N source=previous ... | --until=BOOL --max-epochs=N source=previous ... | --demand=STATE source=value ...]")?;
+    let file = args.next().ok_or("usage: doc FILE.doc [--backend=cpu|gpu] [source=value ... | --through=N source=previous ... | --until=BOOL --max-epochs=N source=previous ... | --demand=STATE source=value ...]")?;
+    // Explicit placement policy: no automatic selection or CPU fallback.
+    let mut args = args.peekable();
+    if let Some(backend) = args.peek().and_then(|a| a.strip_prefix("--backend=")).map(str::to_owned) {
+        args.next();
+        match backend.as_str() {
+            "cpu" => {},
+            "gpu" => return Err("DOC_GPU_UNSUPPORTED: general-purpose GPU evaluation is not yet implemented; no CPU fallback".into()),
+            _ => return Err("DOC_BACKEND_INVALID: expected --backend=cpu or --backend=gpu (no auto mode)".into()),
+        }
+    }
     let graph = Graph::parse_file(&file)?;
     let workers = env::var("DOC_WORKERS").ok().and_then(|v| v.parse().ok())
         .unwrap_or_else(|| std::thread::available_parallelism().map_or(1, |v| v.get()));
-    let mut args = args.peekable();
     let recurrence_command = if let Some(first) = args.peek() {
         if let Some(limit) = first.strip_prefix("--through=") {
             Some((false, limit.to_string()))
