@@ -1,0 +1,2 @@
+effect a: int = read("../outside.txt")
+derive answer: bool (a) = eq(a,a)

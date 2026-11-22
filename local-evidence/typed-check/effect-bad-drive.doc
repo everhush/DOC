@@ -1,0 +1,2 @@
+effect a: int = read("C:/Windows/secret.txt")
+derive answer: bool (a) = eq(a,a)

@@ -1,0 +1,16 @@
+DOC_GOOSE_SDL3_DEVICE: vulkan
+DOC_GOOSE_SDL3_GPU_PASS: op=lt epoch=0 lanes=1024 count=369 backend=vulkan
+DOC_GOOSE_SDL3_GPU_PASS: op=lt epoch=1 lanes=1024 count=255 backend=vulkan
+
+selectable devices:
+  GPU 0: 1002:1114 "AMD Radeon 860M Graphics (RADV KRACKAN1)" integrated GPU
+device-select: device_select_find_explicit_default for MESA_VK_DEVICE_SELECT selected 0
+selectable devices:
+  GPU 0: 1002:1114 "AMD Radeon 860M Graphics (RADV KRACKAN1)" integrated GPU
+device-select: device_select_find_explicit_default for MESA_VK_DEVICE_SELECT selected 0
+selectable devices:
+  GPU 0: 1002:1114 "AMD Radeon 860M Graphics (RADV KRACKAN1)" integrated GPU
+device-select: device_select_find_explicit_default for MESA_VK_DEVICE_SELECT selected 0
+selectable devices:
+  GPU 0: 1002:1114 "AMD Radeon 860M Graphics (RADV KRACKAN1)" integrated GPU
+device-select: device_select_find_explicit_default for MESA_VK_DEVICE_SELECT selected 0

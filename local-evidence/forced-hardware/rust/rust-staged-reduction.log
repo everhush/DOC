@@ -1,0 +1,19 @@
+DOC_CPU_REFERENCE_MS: episode=0 lanes=130 elapsed_ms=0.195
+DOC_CPU_REFERENCE_MS: episode=1 lanes=130 elapsed_ms=0.133
+selectable devices:
+  GPU 0: 1002:1114 "AMD Radeon 860M Graphics (RADV KRACKAN1)" integrated GPU 0000:04:00.0
+device-select: device_select_find_explicit_default for MESA_VK_DEVICE_SELECT selected 0
+selectable devices:
+  GPU 0: 1002:1114 "AMD Radeon 860M Graphics (RADV KRACKAN1)" integrated GPU 0000:04:00.0
+device-select: device_select_find_explicit_default for MESA_VK_DEVICE_SELECT selected 0
+WebGPU adapter: AMD Radeon 860M Graphics (RADV KRACKAN1) (IntegratedGpu, Vulkan)
+DOC_WEBGPU_ADAPTER: vendor=4098 device=4372 type=IntegratedGpu backend=Vulkan driver=radv
+DOC_WEBGPU_LIMITS: max_storage_binding=134217728 max_workgroups_per_dimension=65535 max_bind_groups=4
+DOC_WEBGPU_HOST_TIMING: episode=0 lanes=130 setup_ms=20.577 total_ms=21.302
+DOC_WEBGPU_REDUCTION_PASS: episode=0 count=78
+DOC_WEBGPU_EPISODE: 0
+DOC_WEBGPU_COMPUTE_PASS: [1, 1, 0, 1, 0, 1, 1, 0, 0, 1, 1, 1, 1, 0, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 1, 1, 1, 1, 0, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 1, 1, 1, 1, 0, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 1, 1, 1, 1, 0, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 1, 1, 1, 1, 0, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 1, 1, 1, 1, 0, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 1, 1, 1, 1, 0, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 1, 1, 1, 1, 0, 0, 1, 1, 0, 1, 0, 1, 1, 0, 0, 1]
+DOC_WEBGPU_HOST_TIMING: episode=1 lanes=130 setup_ms=12.875 total_ms=13.284
+DOC_WEBGPU_REDUCTION_PASS: episode=1 count=63
+DOC_WEBGPU_EPISODE: 1
+DOC_WEBGPU_COMPUTE_PASS: [1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 0, 1, 0, 0, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 0, 0, 1, 0, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 0, 1, 0, 0, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 0, 0, 1, 0, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 0, 0, 0, 0, 1, 1, 1, 0]

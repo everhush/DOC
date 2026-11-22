@@ -1,0 +1,3 @@
+fn looped(x) = looped(x)
+source x: int = 1
+derive bad: int (x) = looped(x)

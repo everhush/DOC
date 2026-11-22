@@ -1,0 +1,11 @@
+DOC_NATIVE_NAT_CONFORMANCE_PASS: 415 cases
+runtime=doc rep=0 wall_ms=1.593
+runtime=doc rep=1 wall_ms=1.375
+runtime=doc rep=2 wall_ms=1.206
+runtime=doc rep=3 wall_ms=1.314
+runtime=doc rep=4 wall_ms=1.507
+runtime=doc-typed rep=0 wall_ms=1.622
+runtime=doc-typed rep=1 wall_ms=1.767
+runtime=doc-typed rep=2 wall_ms=1.622
+runtime=doc-typed rep=3 wall_ms=1.672
+runtime=doc-typed rep=4 wall_ms=1.470

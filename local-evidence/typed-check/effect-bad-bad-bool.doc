@@ -1,0 +1,2 @@
+effect a: bool = read("bad-bool.txt")
+derive answer: bool (a) = eq(a,a)

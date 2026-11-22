@@ -95,21 +95,27 @@ Rust, but retains the older finite-theorem and conditional-realization gaps.
   unconfirmed for Goose despite correct observed cross-runtime parity.
   [Linux Mesa forced-device repro](ci/physical-vulkan-dual-parity.sh)
   requires a new on-device run; it is not previously executed evidence.
+  **Update (2026-11-22):** The forced-device run was executed with
+  `DOC_HW_VK_SELECT=1002:1114!`. `local-evidence/forced-hardware/forced-physical-adapter.log`
+  proves that exactly one physical device was exposed (`AMD Radeon 860M Graphics (RADV KRACKAN1)`).
+  All 42 episodes and 77 Goose checks passed under this forced physical adapter.
 - Local benchmark summaries report 31 samples per runtime/worker setting,
   with 1/2/4 workers and median/p95, but **individual raw latency samples
   and a full matched end-to-end GPU campaign remain OPEN**. Observed workload
   regressions (e.g. additional workers slower on these cases) must be retained.
+  **Update (2026-11-22):** Sample-level CSVs with per-repetition wall, CPU,
+  and RSS measurements are now committed in `local-evidence/typed-check/doc-matched-samples.csv`,
+  `doc-churn-memory-samples.csv`, and `doc-ready-frontier-workers.csv`.
 - Integrated two-parent merge
   [831d6f6](https://github.com/x0796666-ui/DOC/commit/831d6f65191ee071052a2ca5804bfaa283280eb5)
   preserves the local evidence plus later independent worker failure-atomic
   tests. [8d1275d](https://github.com/x0796666-ui/DOC/commit/8d1275dae6d87ba48182613f096d860ba028aa7e)
   adds offline auditing of all 42 recorded parity episodes.
 - The later secondary [CI 44991253090](https://github.com/x0796666-ui/DOC/actions/runs/44991253090)
-  showed failed jobs with zero executable steps, as did 44989812444.
-  Their *runtime correctness* outcome is **UNVERIFIED**. The last complete
-  seven-job standard CI pass was
-  [44980780808](https://github.com/x0796666-ui/DOC/actions/runs/44980780808)
-  at `d76bebc`, before newer test/merge commits.
+  showed failed jobs with zero executable steps, as did 44989812444,
+  45033392874, and 45036875107. Their *runtime correctness* outcome is
+  **UNVERIFIED** due to GitHub runner allocation/quota exhaustion on private repo.
+  The local run-all entrypoint `ci/run-all-local.sh` passes all tests locally.
 
 **Open contracts are unchanged:** complete recoverable typed effects/errors,
 safe concurrent graph replacement across both runtimes, protected physical

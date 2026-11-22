@@ -1,0 +1,16 @@
+runtime-goose/doc_typed_core.goose:102: warning: redundant `as i64`: a u8 converts to i64 implicitly here
+        nat_pool[v.start + index] as i64
+        ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+runtime-goose/doc_typed_core.goose:183: warning: redundant `as i64`: a u8 converts to i64 implicitly here
+            let total = digits[i+j] as i64 +
+                        ^~~~~~~~~~~~~~~~~~
+runtime-goose/doc_typed_core.goose:188: warning: redundant `as i64`: a u8 converts to i64 implicitly here
+        let total = digits[i+b.length] as i64 + carry;
+                    ^~~~~~~~~~~~~~~~~~~~~~~~~
+runtime-goose/doc_typed_core.goose:1248: warning: redundant `as i64`: a u8 converts to i64 implicitly here
+                digest+=nats[value.start+i] as i64;
+                        ^~~~~~~~~~~~~~~~~~~~~~~~~~
+runtime-goose/doc_typed_core.goose:1258: warning: redundant `as i64`: a u8 converts to i64 implicitly here
+                digest+=texts[value.start+i] as i64;
+                        ^~~~~~~~~~~~~~~~~~~~~~~~~~~
+built local-evidence/release/bin/doc-goose

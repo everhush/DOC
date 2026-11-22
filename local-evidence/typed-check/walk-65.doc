@@ -1,0 +1,8 @@
+# Pure DOC traversal of a finite functional graph represented as ints adjacency.
+# No host-language graph traversal: each successor is a true DOC recurrence.
+source links: ints = [43,4,62,64,58,18,17,5,51,23,32,25,19,10,59,37,50,12,6,39,54,0,27,15,61,29,24,44,26,41,53,22,1,45,31,28,3,8,20,36,49,47,35,52,-1,9,57,38,55,48,63,14,60,34,2,11,46,16,40,21,7,56,33,30,42]
+source node: int = 13
+source hops: int = 0
+derive halt: bool (node) = eq(node,-1)
+derive next_node: int (links,node) = if(eq(node,-1),-1,get(links,node))
+derive next_hops: int (node,hops) = if(eq(node,-1),hops,add(hops,1))

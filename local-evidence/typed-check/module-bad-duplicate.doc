@@ -1,0 +1,3 @@
+import lib/ordering.doc
+import lib/ordering.doc
+source a: int = 1

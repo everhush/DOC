@@ -1,0 +1,2 @@
+effect a: int = write("source.txt")
+derive answer: bool (a) = eq(a,a)

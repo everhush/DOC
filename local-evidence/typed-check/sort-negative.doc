@@ -1,0 +1,1 @@
+derive bad: bool () = lt(nat(1),1)

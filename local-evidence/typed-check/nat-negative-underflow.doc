@@ -1,0 +1,2 @@
+source a: nat = 0
+derive bad: nat (a) = sub(a,nat(1))
