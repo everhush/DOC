@@ -94,12 +94,17 @@ def main(root):
     require(set(rows) == EXPECTED,
             f"Parity CSV missing/extra {len(EXPECTED) - len(rows)} rows")
     physical = (root / "vulkan-adapter.log").read_text(errors="replace")
-    require("deviceType         = PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU" in physical
-            or "deviceType         = PHYSICAL_DEVICE_TYPE_DISCRETE_GPU" in physical,
-            "Local Vulkan inventory has no physical GPU")
     expected_adapter = "AMD Radeon 860M Graphics (RADV KRACKAN1)"
-    require("deviceName         = " + expected_adapter in physical,
-            "Submitted adapter identity differs from local metadata")
+    # vulkaninfo can list software and hardware adapters together. All identity
+    # fields must belong to the SAME GPU stanza, not separate devices.
+    devices = re.split(r"(?m)^GPU\\d+:\\s*$", physical)[1:]
+    require(any(
+        re.search(r"(?m)^\\s*deviceName\\s*= " + re.escape(expected_adapter) + r"$", device)
+        and re.search(r"(?m)^\\s*deviceType\\s*= PHYSICAL_DEVICE_TYPE_(?:INTEGRATED|DISCRETE)_GPU$", device)
+        and re.search(r"(?m)^\\s*vendorID\\s*= 0x1002$", device)
+        and re.search(r"(?m)^\\s*deviceID\\s*= 0x1114$", device)
+        for device in devices),
+        "Inventoried AMD GPU identity, type and PCI IDs do not match one physical device")
     for mode in MODES:
         for width in WIDTHS:
             rust_file = root / f"rust/rust-{mode}-{width}.log"
