@@ -45,3 +45,29 @@ Do not claim release readiness solely from physical GPU parity. The
 non-game acceptance contracts in issue #1/#7 include lifetime,
 reclamation/reconstruction, typed failures, placement/transport,
 complete paper-ordered evidence, and distributable release QA.
+
+## Follow-up: enforce one physical Vulkan device for BOTH implementations
+
+Mesa exposes a device-select layer: `MESA_VK_DEVICE_SELECT=vid:did!` leaves
+only the chosen device available through Vulkan enumeration. To close the
+outstanding Goose physical-device proof, rerun with the new Linux-specific
+reproduction harness (example AMD Radeon 860M, PCI 1002:1114):
+
+```bash
+DOC_HW_VK_SELECT=1002:1114! bash ci/physical-vulkan-dual-parity.sh \
+  runtime-rust/target/release/examples/webgpu_bool \
+  runtime-rust/target/release/examples/webgpu_integer_eq \
+  ./doc-goose-sdl3 \
+  local-evidence/forced-hardware
+```
+
+Build the Rust `webgpu` examples and the pinned Goose SDL3-gfx binary as
+described in issue #1. This script first **fails** unless Vulkan enumerates
+exactly one integrated/discrete GPU with matching PCI IDs, and then runs
+the Rust hardware-required source episodes, 77 Goose checks and all 42
+independent parity comparisons **under the same restricted enumeration**.
+It has no resource or run-count limits; it is a correctness/provenance check.
+It is specific to Linux Mesa and does not replace native adapter proof on
+Metal/Direct3D or other Vulkan implementations. This is a new test harness,
+not retroactive proof that the earlier Goose logs selected Radeon rather
+than llvmpipe.
