@@ -11,3 +11,4 @@ paper/*.svg
 /runtime-rust/target/
 /runtime-rust/Cargo.lock
 /validation-logs/
+local-evidence/release/*.tar.gz

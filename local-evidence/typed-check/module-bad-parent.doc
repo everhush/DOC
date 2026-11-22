@@ -1,0 +1,2 @@
+import ../secret.doc
+source a: int = 1

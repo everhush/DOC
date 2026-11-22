@@ -64,7 +64,38 @@ independence theorem obligations, or the conditional safe-realization proofs.
   transport, placement and bounded fail-stop policies, distribution packaging,
   exhaustive paper-order implementation trace and production tests.
 
+## 2026-11-22 local acceptance and dual-runtime completion update
+
+Final local validation of Gates 1–8 was executed on the physical development workstation:
+
+- **Gate 1–5 Language, Semantics, Demand, Memory & Effects:** Fully exercised across both
+  independent runtimes via `runtime-rust/Cargo.toml` test suite and `runtime-goose/check-doc-typed.sh`
+  (`DOC_TYPED_FINITE_PASS`), covering Booleans, checked signed integers, arbitrary naturals,
+  UTF-8 text, dynamic collections, safe options, functions, composition, user modules,
+  ancestor-closed demand, 2-counter machine simulation, atomic generation switching, pinned readers,
+  and sampled file effects (`--emit`).
+- **Gate 6 Single Physical GPU Proof:** Ran with Mesa device selection debug
+  `DOC_HW_VK_SELECT=1002:1114!`. `local-evidence/forced-hardware/forced-physical-adapter.log`
+  proves that exactly one physical Vulkan device was exposed: `AMD Radeon 860M Graphics (RADV KRACKAN1)`
+  (vendorID `0x1002`, deviceID `0x1114`, `PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU`). Rust wgpu and Goose
+  SDL3 executed under this forced single adapter, producing 42 matching GPU episodes and 77 Goose checks.
+  Both `local-evidence` and `local-evidence/forced-hardware` pass `ci/verify-local-gpu-evidence.py`.
+- **Gate 7 Benchmarks, Release Packages & Local Verification:**
+  - Sample-level CSV benchmark distributions committed in `local-evidence/typed-check/doc-matched-samples.csv`,
+    `doc-churn-memory-samples.csv`, and `doc-ready-frontier-workers.csv`.
+  - Self-contained Linux release packages `doc-rust-linux-x86_64.tar.gz` and `doc-goose-linux-x86_64.tar.gz`
+    built, verified via out-of-tree unpack-and-run smoke tests, checksummed in `local-evidence/release/SHA256SUMS`,
+    and uploaded to GitHub release `v0.1.0-alpha.local-acceptance`.
+  - Independent local test runner `ci/run-all-local.sh` committed and verified.
+  - **Hosted CI Status (BLOCKED / OPEN):** GitHub Actions runs 45036875107 and 45033392874 failed with
+    zero executed steps (`steps: []`) in 1–3s across all jobs due to private repository runner quota / billing
+    limits on `x0796666-ui/DOC`. Per gate rules, this gate remains OPEN pending repository owner intervention.
+  - **Cross-Platform Disclosures:** macOS and Windows native execution are disclosed as unavailable locally
+    on the Linux development workstation without hosted runners.
+- **Gate 8 Ledger & Signoff:** Machine-readable final manifest published at `local-evidence/final-manifest.json`.
+
 Implementation handoff is [secondary Issue #1](https://github.com/x0796666-ui/DOC/issues/1);
 canonical acceptance is [#7](https://github.com/imxade/DOC/issues/7)
 and [#9](https://github.com/imxade/DOC/issues/9). The local branch merge
 does not close either issue or complete the game engine.
+

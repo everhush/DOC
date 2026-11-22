@@ -1,0 +1,3 @@
+effect a: nat = read("too-many.txt")
+derive incremented: nat (a) = add(a,nat(1))
+derive valid: bool (a) = eq(a,a)

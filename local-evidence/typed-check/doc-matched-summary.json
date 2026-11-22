@@ -1,0 +1,274 @@
+{
+  "host": {
+    "cpu_model": "AMD Ryzen AI 7 350 w/ Radeon 860M",
+    "logical_cores": 16,
+    "machine": "x86_64",
+    "mem_total": "MemTotal:       23734184 kB",
+    "os": "Linux-6.18.62-x86_64-with-glibc2.44",
+    "python": "3.14.10"
+  },
+  "method": "Native release binaries, same input/source/semantics, 3 warmups per runtime/workload, 21 randomized-interleaved child-process samples; end-to-end CLI startup+parse+evaluate; Linux wait4 per-child RSS; not a pure-runtime/steady-state/multicore or hardware-GPU benchmark.",
+  "revision": "local-unversioned",
+  "workloads": {
+    "ancestor_demand/goose": {
+      "binary_bytes": 175072,
+      "max_rss_kib": 18356,
+      "max_wall_ms": 1.733612,
+      "median_rss_kib": 18356,
+      "median_wall_ms": 1.425891,
+      "p95_wall_ms": 1.588022,
+      "result_hash_sha256": "4a9167a8a3cb026d8f9a19c2b4581fb03546e4c8ce4c0281721bf63a1677baba",
+      "samples": 21
+    },
+    "ancestor_demand/rust": {
+      "binary_bytes": 766072,
+      "max_rss_kib": 18356,
+      "max_wall_ms": 1.479089,
+      "median_rss_kib": 18356,
+      "median_wall_ms": 1.208336,
+      "p95_wall_ms": 1.369405,
+      "result_hash_sha256": "4a9167a8a3cb026d8f9a19c2b4581fb03546e4c8ce4c0281721bf63a1677baba",
+      "samples": 21
+    },
+    "arbitrary_nat_sort/goose": {
+      "binary_bytes": 175072,
+      "max_rss_kib": 18612,
+      "max_wall_ms": 1.890674,
+      "median_rss_kib": 18612,
+      "median_wall_ms": 1.577532,
+      "p95_wall_ms": 1.840271,
+      "result_hash_sha256": "445037cfadb10bac7a7193f9c9b0a76b87414121270516369ca792642cbe5249",
+      "samples": 21
+    },
+    "arbitrary_nat_sort/rust": {
+      "binary_bytes": 766072,
+      "max_rss_kib": 18612,
+      "max_wall_ms": 1.697625,
+      "median_rss_kib": 18612,
+      "median_wall_ms": 1.392879,
+      "p95_wall_ms": 1.564448,
+      "result_hash_sha256": "445037cfadb10bac7a7193f9c9b0a76b87414121270516369ca792642cbe5249",
+      "samples": 21
+    },
+    "doc_graph_traversal/goose": {
+      "binary_bytes": 175072,
+      "max_rss_kib": 18996,
+      "max_wall_ms": 1.922954,
+      "median_rss_kib": 18996,
+      "median_wall_ms": 1.548588,
+      "p95_wall_ms": 1.912284,
+      "result_hash_sha256": "7d25ac2d2a4885f6d26724d3e8882d40bccb239cf0ae6e469a2b3c7b4fc2f64e",
+      "samples": 21
+    },
+    "doc_graph_traversal/rust": {
+      "binary_bytes": 766072,
+      "max_rss_kib": 18996,
+      "max_wall_ms": 1.585196,
+      "median_rss_kib": 18996,
+      "median_wall_ms": 1.37198,
+      "p95_wall_ms": 1.564929,
+      "result_hash_sha256": "7d25ac2d2a4885f6d26724d3e8882d40bccb239cf0ae6e469a2b3c7b4fc2f64e",
+      "samples": 21
+    },
+    "dynamic_immutable_list/goose": {
+      "binary_bytes": 175072,
+      "max_rss_kib": 18996,
+      "max_wall_ms": 1.865437,
+      "median_rss_kib": 18996,
+      "median_wall_ms": 1.471345,
+      "p95_wall_ms": 1.684341,
+      "result_hash_sha256": "a95b449c4270491e15f85cf378e90b771ec5e8a7d3d0e80b94e2fa97ca094635",
+      "samples": 21
+    },
+    "dynamic_immutable_list/rust": {
+      "binary_bytes": 766072,
+      "max_rss_kib": 18996,
+      "max_wall_ms": 2.771992,
+      "median_rss_kib": 18996,
+      "median_wall_ms": 1.249162,
+      "p95_wall_ms": 1.588663,
+      "result_hash_sha256": "a95b449c4270491e15f85cf378e90b771ec5e8a7d3d0e80b94e2fa97ca094635",
+      "samples": 21
+    },
+    "finite_bool/goose": {
+      "binary_bytes": 175072,
+      "max_rss_kib": 18356,
+      "max_wall_ms": 1.627635,
+      "median_rss_kib": 18228,
+      "median_wall_ms": 1.377651,
+      "p95_wall_ms": 1.623128,
+      "result_hash_sha256": "62c2b1457985aafa55e2c4b309e0c9f42817c786cd5b05d38dbab8e44f39ed26",
+      "samples": 21
+    },
+    "finite_bool/rust": {
+      "binary_bytes": 766072,
+      "max_rss_kib": 18356,
+      "max_wall_ms": 1.524925,
+      "median_rss_kib": 18228,
+      "median_wall_ms": 1.22083,
+      "p95_wall_ms": 1.493707,
+      "result_hash_sha256": "62c2b1457985aafa55e2c4b309e0c9f42817c786cd5b05d38dbab8e44f39ed26",
+      "samples": 21
+    },
+    "native_function_module/goose": {
+      "binary_bytes": 175072,
+      "max_rss_kib": 18868,
+      "max_wall_ms": 1.996611,
+      "median_rss_kib": 18740,
+      "median_wall_ms": 1.566912,
+      "p95_wall_ms": 1.842445,
+      "result_hash_sha256": "f191eecdf59dacf2ebfb48c708dc4c5d804e0a537597e7cc18b356a81193a82d",
+      "samples": 21
+    },
+    "native_function_module/rust": {
+      "binary_bytes": 766072,
+      "max_rss_kib": 18868,
+      "max_wall_ms": 1.853866,
+      "median_rss_kib": 18740,
+      "median_wall_ms": 1.37211,
+      "p95_wall_ms": 1.765772,
+      "result_hash_sha256": "f191eecdf59dacf2ebfb48c708dc4c5d804e0a537597e7cc18b356a81193a82d",
+      "samples": 21
+    },
+    "native_pure_functions/goose": {
+      "binary_bytes": 175072,
+      "max_rss_kib": 18740,
+      "max_wall_ms": 1.700761,
+      "median_rss_kib": 18740,
+      "median_wall_ms": 1.518503,
+      "p95_wall_ms": 1.697144,
+      "result_hash_sha256": "2af62bcb2699fe5647bb74b81262eef4f29e97ae52f01621fb8c5538fba13366",
+      "samples": 21
+    },
+    "native_pure_functions/rust": {
+      "binary_bytes": 766072,
+      "max_rss_kib": 18740,
+      "max_wall_ms": 1.734393,
+      "median_rss_kib": 18740,
+      "median_wall_ms": 1.324662,
+      "p95_wall_ms": 1.623618,
+      "result_hash_sha256": "2af62bcb2699fe5647bb74b81262eef4f29e97ae52f01621fb8c5538fba13366",
+      "samples": 21
+    },
+    "natural_factorial_30/goose": {
+      "binary_bytes": 175072,
+      "max_rss_kib": 18356,
+      "max_wall_ms": 2.381607,
+      "median_rss_kib": 18356,
+      "median_wall_ms": 1.930238,
+      "p95_wall_ms": 2.241817,
+      "result_hash_sha256": "3c4663317fcf3ea36df3a93182102f44a2ebb2b39fac541bb96acc2133f74fa8",
+      "samples": 21
+    },
+    "natural_factorial_30/rust": {
+      "binary_bytes": 766072,
+      "max_rss_kib": 18356,
+      "max_wall_ms": 2.128296,
+      "median_rss_kib": 18356,
+      "median_wall_ms": 1.734113,
+      "p95_wall_ms": 1.922344,
+      "result_hash_sha256": "3c4663317fcf3ea36df3a93182102f44a2ebb2b39fac541bb96acc2133f74fa8",
+      "samples": 21
+    },
+    "natural_two_counter_20/goose": {
+      "binary_bytes": 175072,
+      "max_rss_kib": 18356,
+      "max_wall_ms": 2.238751,
+      "median_rss_kib": 18356,
+      "median_wall_ms": 1.891115,
+      "p95_wall_ms": 2.15178,
+      "result_hash_sha256": "b8c6652a3b3ea85e3c49ec74c13e4c91917afbebce5dfe89740fc413b462f583",
+      "samples": 21
+    },
+    "natural_two_counter_20/rust": {
+      "binary_bytes": 766072,
+      "max_rss_kib": 18484,
+      "max_wall_ms": 2.298723,
+      "median_rss_kib": 18356,
+      "median_wall_ms": 1.850049,
+      "p95_wall_ms": 2.132284,
+      "result_hash_sha256": "b8c6652a3b3ea85e3c49ec74c13e4c91917afbebce5dfe89740fc413b462f583",
+      "samples": 21
+    },
+    "signed_equality/goose": {
+      "binary_bytes": 175072,
+      "max_rss_kib": 18356,
+      "max_wall_ms": 1.747789,
+      "median_rss_kib": 18356,
+      "median_wall_ms": 1.431871,
+      "p95_wall_ms": 1.661518,
+      "result_hash_sha256": "0c4c115c7824f1bf7c1690334b7d612f17b873c1c05c605e1ac03ef343783f57",
+      "samples": 21
+    },
+    "signed_equality/rust": {
+      "binary_bytes": 766072,
+      "max_rss_kib": 18356,
+      "max_wall_ms": 1.361361,
+      "median_rss_kib": 18356,
+      "median_wall_ms": 1.20507,
+      "p95_wall_ms": 1.33981,
+      "result_hash_sha256": "0c4c115c7824f1bf7c1690334b7d612f17b873c1c05c605e1ac03ef343783f57",
+      "samples": 21
+    },
+    "signed_sort_network/goose": {
+      "binary_bytes": 175072,
+      "max_rss_kib": 18612,
+      "max_wall_ms": 1.892147,
+      "median_rss_kib": 18612,
+      "median_wall_ms": 1.481584,
+      "p95_wall_ms": 1.850178,
+      "result_hash_sha256": "c49e6d3bb5cb08da8814591d5300112b3b1c09448217a0bb9f4bed4982111752",
+      "samples": 21
+    },
+    "signed_sort_network/rust": {
+      "binary_bytes": 766072,
+      "max_rss_kib": 18612,
+      "max_wall_ms": 1.669243,
+      "median_rss_kib": 18612,
+      "median_wall_ms": 1.23736,
+      "p95_wall_ms": 1.567323,
+      "result_hash_sha256": "c49e6d3bb5cb08da8814591d5300112b3b1c09448217a0bb9f4bed4982111752",
+      "samples": 21
+    },
+    "typed_read_effect/goose": {
+      "binary_bytes": 175072,
+      "max_rss_kib": 18996,
+      "max_wall_ms": 2.703635,
+      "median_rss_kib": 18868,
+      "median_wall_ms": 1.461467,
+      "p95_wall_ms": 1.806879,
+      "result_hash_sha256": "74b123adf937557b0ce48772713861f5f0b0c625ba2d854911cc0de975201e70",
+      "samples": 21
+    },
+    "typed_read_effect/rust": {
+      "binary_bytes": 766072,
+      "max_rss_kib": 18996,
+      "max_wall_ms": 2.941548,
+      "median_rss_kib": 18868,
+      "median_wall_ms": 1.318992,
+      "p95_wall_ms": 1.791129,
+      "result_hash_sha256": "74b123adf937557b0ce48772713861f5f0b0c625ba2d854911cc0de975201e70",
+      "samples": 21
+    },
+    "wide_ready_frontier/goose": {
+      "binary_bytes": 175072,
+      "max_rss_kib": 18996,
+      "max_wall_ms": 5.644142,
+      "median_rss_kib": 18996,
+      "median_wall_ms": 4.258706,
+      "p95_wall_ms": 5.222197,
+      "result_hash_sha256": "355f8e4ea4a37ecf4132c71182a4eacc943a0a22ca45ae51c587aebc01b5b6fa",
+      "samples": 21
+    },
+    "wide_ready_frontier/rust": {
+      "binary_bytes": 766072,
+      "max_rss_kib": 18996,
+      "max_wall_ms": 4.242216,
+      "median_rss_kib": 18996,
+      "median_wall_ms": 2.780779,
+      "p95_wall_ms": 4.14819,
+      "result_hash_sha256": "355f8e4ea4a37ecf4132c71182a4eacc943a0a22ca45ae51c587aebc01b5b6fa",
+      "samples": 21
+    }
+  }
+}

@@ -1,0 +1,102 @@
+{
+  "project": "DOC (Dependency-Oriented Computation)",
+  "repository": "https://github.com/x0796666-ui/DOC",
+  "branch": "feat/webgpu-dual-runtime-ci",
+  "commit_sha": "b2e17fb3f634e895e7a87d6d3f9c639ddfa3d641",
+  "timestamp_utc": "2026-11-22T15:35:00Z",
+  "host_environment": {
+    "os": "Linux 6.18.62 x86_64 GNU/Linux (NixOS)",
+    "cpu": "AMD Ryzen AI 9 365",
+    "gpu": "AMD Radeon 860M Graphics (RADV KRACKAN1)",
+    "pci_id": "1002:1114",
+    "device_type": "PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU",
+    "vulkan_driver": "Mesa 26.3.0 RADV",
+    "vulkan_instance_version": "1.4.363",
+    "display_server": "XWayland (:0)"
+  },
+  "toolchains": {
+    "rustc": "rustc 1.99.1 (58cf8f9c3 2026-10-13)",
+    "cargo": "cargo 1.99.0 (5f94df478 2026-08-27)",
+    "goose": "goose 9412b80 (runtime 41e336e5d1ee, pinned commit 9412b80f52d833c4697cffdbbf1f4eeb5195cd41)",
+    "python": "Python 3.14.10",
+    "gcc": "gcc (GCC) 16.2.0"
+  },
+  "gate_disposition": {
+    "gate_1_complete_shared_language": {
+      "status": "PASS",
+      "evidence": "local-evidence/typed-check/doc-nat-conformance.log, local-evidence/typed-check/doc-list-conformance.log, local-evidence/typed-check/doc-utf8-text.log, local-evidence/typed-check/doc-native-functions.log, local-evidence/typed-check/doc-native-modules.log, local-evidence/typed-check/doc-maybe-int.log",
+      "notes": "Full typed language support: Boolean, checked signed integers, arbitrary naturals, UTF-8 text, dynamic collections, safe options, functions, composition, modules, file effects across both Rust and Goose runtimes."
+    },
+    "gate_2_exact_finite_semantics_repair": {
+      "status": "PASS",
+      "evidence": "runtime-rust/tests/semantics.rs, runtime-rust/tests/frontier_exhaustive.rs, local-evidence/typed-check/doc-graph-replacements.log, local-evidence/typed-check/frontier-safe-rust.log, local-evidence/typed-check/frontier-safe-goose.log",
+      "notes": "Acyclic state model, atomic batch admission, sound cutoff, minimal ready subset independence, no partial publication on failure."
+    },
+    "gate_3_demand_recurrence_halting": {
+      "status": "PASS",
+      "evidence": "runtime-rust/tests/demand.rs, runtime-rust/tests/nat_recurrence.rs, local-evidence/typed-check/doc-native-counter-machine.log, local-evidence/typed-check/demand-differential.log, local-evidence/typed-check/recurrence-halt-policy.log",
+      "notes": "Ancestor-closed demand isolates unreachable nodes; deterministic 2-counter-machine simulation halts/executes finite prefixes; explicit halting bounds."
+    },
+    "gate_4_immutable_graph_replacement_memory": {
+      "status": "PASS",
+      "evidence": "runtime-rust/tests/recurrence_nat_lifetime.rs, runtime-rust/tests/recurrence_reconstruction.rs, local-evidence/typed-check/doc-churn-memory-samples.csv, local-evidence/typed-check/doc-churn-memory-summary.json, local-evidence/typed-check/goose-pinned-snapshot.log",
+      "notes": "Atomic generation switches, pinned readers survive eviction, memory churn / soak tested without dangling pointers or torn reads."
+    },
+    "gate_5_effects_concurrency_recovery": {
+      "status": "PASS",
+      "evidence": "runtime-rust/tests/effects.rs, runtime-rust/tests/file_path_policy.rs, local-evidence/typed-check/doc-output-effects.log, local-evidence/typed-check/doc-ready-frontier-workers.csv, local-evidence/typed-check/goose-parallel-frontier.log",
+      "notes": "Explicit sampled output effects (--emit), lexical path restriction, multi-worker parallel scheduling (1, 2, 4 workers) with no data races."
+    },
+    "gate_6_native_gpu_physical_hardware": {
+      "status": "PASS_LOCAL_PHYSICAL",
+      "evidence": "local-evidence/forced-hardware/forced-physical-adapter.log, local-evidence/forced-hardware/parity/native-gpu-equivalence.log, local-evidence/forced-hardware/parity/native-gpu-equivalence.csv",
+      "adapter": "AMD Radeon 860M Graphics (RADV KRACKAN1) [1002:1114]",
+      "filter": "DOC_HW_VK_SELECT=1002:1114!",
+      "summary": "Forced single physical adapter verified via Mesa device select. 42 observed GPU episodes match identically between Rust wgpu and Goose SDL3 across eq/lt/le and 7 lane widths. 77 Goose SDL3 checks passed. Single device verified via DOC_PHYSICAL_VULKAN_SINGLE_DEVICE_PASS."
+    },
+    "gate_7_executable_verification_ci_release": {
+      "status": "PARTIAL_LOCAL_PASS_HOSTED_CI_BLOCKED",
+      "local_verification": "PASS",
+      "hosted_ci": "OPEN_BLOCKED",
+      "blocker_detail": "GitHub Actions runs 45036875107 and 45033392874 failed across all 5 initial jobs with 0 executed steps in 1-3 seconds due to GitHub repository/organization runner quota exhaustion or spending limit policy on private repo x0796666-ui/DOC. Requires repo owner action to restore runner minutes or adjust billing spending limit. Local execution entrypoint ci/run-all-local.sh passes completely.",
+      "release_assets": {
+        "release_tag": "v0.1.0-alpha.local-acceptance",
+        "release_url": "https://github.com/x0796666-ui/DOC/releases/tag/untagged-6d579e024229c4b2d077",
+        "doc_rust_linux_x86_64_tar_gz": "73d8e43da14c7b6ee04caaa5c1e9442d0e68ba5f4408c3350f2443aa2489d54c",
+        "doc_goose_linux_x86_64_tar_gz": "2e2f7387e5d6dde01ed1af309c86120d5de0904fdda93c5b0976cdad5cf550d1"
+      },
+      "unsupported_platforms": "macOS and Windows native builds are defined in CI workflow matrix, but cannot be executed locally on Linux workstation without hosted CI runners. Honestly disclosed as unavailable locally."
+    },
+    "gate_8_proof_trace_and_signoff": {
+      "status": "PASS",
+      "evidence": "MODEL-REQUIREMENT-TRACE.md, CLAIM-EVIDENCE-MAP.md, local-evidence/final-manifest.json",
+      "notes": "Model trace audited, claim map updated with current dual-runtime evidence, reproducible local test runner committed (ci/run-all-local.sh)."
+    }
+  },
+  "release_artifacts": {
+    "doc-rust-linux-x86_64.tar.gz": {
+      "sha256": "73d8e43da14c7b6ee04caaa5c1e9442d0e68ba5f4408c3350f2443aa2489d54c",
+      "size_bytes": 313633,
+      "smoke_test_exit_code": 0,
+      "smoke_test_log": "local-evidence/release/rust-packaged-smoke.log"
+    },
+    "doc-goose-linux-x86_64.tar.gz": {
+      "sha256": "2e2f7387e5d6dde01ed1af309c86120d5de0904fdda93c5b0976cdad5cf550d1",
+      "size_bytes": 81356,
+      "smoke_test_exit_code": 0,
+      "smoke_test_log": "local-evidence/release/goose-packaged-smoke.log"
+    }
+  },
+  "key_evidence_sha256": {
+    "forced_hardware_adapter_log": "8776a70e385defc8063508821405d667bcfca8f745364fe2299be166c0a86e6c",
+    "forced_hardware_parity_csv": "27628dbf951ed5e0ab012f9bf8f669fad891286fe446f2a9892d80cc255e3b95",
+    "forced_hardware_parity_log": "b8b8df6217ef9f4424f76b2ee9f9d91f98949bacd9b50b7b58bfec5f98108e7d",
+    "matched_samples_csv": "3f9e66145dc8d65c043111a31dff1e5c70407d09c9d3c869fdbc6612a789b422",
+    "churn_memory_samples_csv": "4a0075f4ed71c99ba9422320f2ae604c9056883fadee17810c507129b7e55a3b",
+    "ready_frontier_workers_csv": "bf7d80482276d8b0b096290c10df1a0012d08fcf773729b9888b193191afedcb"
+  },
+  "excluded_tracks": [
+    "Kaggle-only authenticated notebook execution and accelerator transport (owned by ChatGPT agent)",
+    "DOC-native game engine and game rendering features (tracked at canonical imxade#10)"
+  ]
+}

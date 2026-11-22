@@ -1,0 +1,2 @@
+effect input: nat = read("long-nat-invalid-tail.txt")
+derive observed: bool (input) = eq(input,input)

@@ -1,0 +1,5 @@
+source items: ints = [1,2,3]
+derive expanded: ints (items) = append(items,-7)
+derive count: int (expanded) = len(expanded)
+derive first: int (items) = get(items,0)
+derive last: int (expanded) = get(expanded,3)

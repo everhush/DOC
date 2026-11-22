@@ -1,0 +1,2 @@
+import missing_module.doc
+source a: int = 1

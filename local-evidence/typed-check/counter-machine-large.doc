@@ -1,0 +1,11 @@
+# A deterministic two-counter program authored in the SAME DOC language.
+# pc=0: if a==0 goto 2 (halt), else decrement a and goto 1
+# pc=1: increment b and goto 0
+# A finite acyclic per-epoch graph, with forward-only typed nat recurrence.
+source pc: nat = 0
+source a: nat = 9999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999999
+source b: nat = 0
+derive a_next: nat (pc,a) = if(eq(pc,nat(0)),if(eq(a,nat(0)),a,sub(a,nat(1))),a)
+derive b_next: nat (pc,b) = if(eq(pc,nat(1)),add(b,nat(1)),b)
+derive pc_next: nat (pc,a) = if(eq(pc,nat(0)),if(eq(a,nat(0)),nat(2),nat(1)),nat(0))
+derive halt: bool (pc) = eq(pc,nat(2))

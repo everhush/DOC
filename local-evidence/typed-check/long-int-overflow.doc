@@ -1,0 +1,2 @@
+effect input: int = read("long-int-overflow.txt")
+derive observed: bool (input) = eq(input,input)

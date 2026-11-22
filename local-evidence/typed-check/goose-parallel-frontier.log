@@ -1,0 +1,3 @@
+DOC_GOOSE_PARALLEL_READY_FRONTIER_PASS: 1/2/4 native worker paths
+DOC_GOOSE_PARALLEL_FRONTIER: workers=4 candidates=128
+DOC_GOOSE_PARALLEL_FRONTIER: workers=4 candidates=128

@@ -1,0 +1,2 @@
+fn add(x,y) = mul(x,y)
+source x: int = 1

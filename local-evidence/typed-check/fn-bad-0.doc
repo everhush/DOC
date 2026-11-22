@@ -1,0 +1,3 @@
+fn twice(x) = add(x,x)
+source x: int = 1
+derive bad: int (x) = twice(x,x)

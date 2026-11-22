@@ -1,0 +1,2 @@
+effect a: int = read("/tmp/no.txt")
+derive answer: bool (a) = eq(a,a)

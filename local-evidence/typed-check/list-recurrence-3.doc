@@ -1,0 +1,9 @@
+# Real immutable dynamic-list recurrence directly authored in the ONE DOC language.
+# An ancestor-closed finite step graph, no host-implemented iteration.
+source remaining: ints = [5,-3,9,0]
+source total: int = 0
+derive done: bool (remaining) = eq(len(remaining),0)
+derive next_remaining: ints (remaining) = tail(remaining)
+derive next_total: int (remaining,total) = if(eq(len(remaining),0),total,add(total,get(remaining,0)))
+derive count: int (remaining) = len(remaining)
+derive singleton: ints (total) = append(empty(),total)

@@ -1,0 +1,6 @@
+	linux-vdso.so.1 (0x000075396536f000)
+	libm.so.6 => /nix/store/r3hvhzl5fxhrgn0rfy5g7rda17702pj4-glibc-2.44-57/lib/libm.so.6 (0x0000753965219000)
+	libdl.so.2 => /nix/store/r3hvhzl5fxhrgn0rfy5g7rda17702pj4-glibc-2.44-57/lib/libdl.so.2 (0x0000753965214000)
+	libpthread.so.0 => /nix/store/r3hvhzl5fxhrgn0rfy5g7rda17702pj4-glibc-2.44-57/lib/libpthread.so.0 (0x000075396520f000)
+	libc.so.6 => /nix/store/r3hvhzl5fxhrgn0rfy5g7rda17702pj4-glibc-2.44-57/lib/libc.so.6 (0x0000753964e00000)
+	/nix/store/r3hvhzl5fxhrgn0rfy5g7rda17702pj4-glibc-2.44-57/lib/ld-linux-x86-64.so.2 => /nix/store/r3hvhzl5fxhrgn0rfy5g7rda17702pj4-glibc-2.44-57/lib64/ld-linux-x86-64.so.2 (0x0000753965371000)

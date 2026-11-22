@@ -1,0 +1,13 @@
+PASS a=1 demand=a expected=1
+PASS a=1 demand=target expected=3
+PASS a=1 demand=copy expected=4
+PASS a=3 demand=a expected=3
+PASS a=3 demand=target expected=5
+PASS a=3 demand=copy expected=6
+PASS a=7 demand=a expected=7
+PASS a=7 demand=target expected=9
+PASS a=7 demand=copy expected=10
+PASS a=19 demand=a expected=19
+PASS a=19 demand=target expected=21
+PASS a=19 demand=copy expected=22
+DOC_ANCESTOR_CLOSED_DEMAND_PASS

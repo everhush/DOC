@@ -1,0 +1,2 @@
+effect input: bool = read("long-bool-invalid.txt")
+derive observed: bool (input) = eq(input,input)

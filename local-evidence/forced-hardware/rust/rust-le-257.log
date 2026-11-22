@@ -1,0 +1,13 @@
+DOC_SIGNED_CPU_REFERENCE_MS: epoch=0 value_ms=0.288
+DOC_SIGNED_CPU_REFERENCE_MS: epoch=1 value_ms=0.179
+selectable devices:
+  GPU 0: 1002:1114 "AMD Radeon 860M Graphics (RADV KRACKAN1)" integrated GPU 0000:04:00.0
+device-select: device_select_find_explicit_default for MESA_VK_DEVICE_SELECT selected 0
+selectable devices:
+  GPU 0: 1002:1114 "AMD Radeon 860M Graphics (RADV KRACKAN1)" integrated GPU 0000:04:00.0
+device-select: device_select_find_explicit_default for MESA_VK_DEVICE_SELECT selected 0
+DOC_SIGNED_WEBGPU_ADAPTER: AMD Radeon 860M Graphics (RADV KRACKAN1) type=IntegratedGpu backend=Vulkan driver=radv
+DOC_SIGNED_WEBGPU_COMPUTE_PASS: epoch=0 lanes=257 equals=164
+DOC_SIGNED_WEBGPU_HOST_MS: epoch=0 elapsed_ms=15.746
+DOC_SIGNED_WEBGPU_COMPUTE_PASS: epoch=1 lanes=257 equals=150
+DOC_SIGNED_WEBGPU_HOST_MS: epoch=1 elapsed_ms=4.512

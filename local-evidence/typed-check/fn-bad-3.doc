@@ -1,0 +1,3 @@
+fn bad(x,y) = add(x,y)
+source a: bool = true
+derive badstate: bool (a) = bad(a,a)

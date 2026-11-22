@@ -1,0 +1,2 @@
+effect a: int = read("not-found.txt")
+derive answer: bool (a) = eq(a,a)

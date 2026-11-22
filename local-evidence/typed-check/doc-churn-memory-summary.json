@@ -1,0 +1,139 @@
+{
+  "count": 12,
+  "method": "per-child wait4 RSS, streamed output, 250/1000/5000 epochs, CPU workers setting 1/4, no steady-state proof",
+  "host": "Linux-6.18.62-x86_64-with-glibc2.44",
+  "samples": [
+    {
+      "runtime": "rust",
+      "workers_setting": 1,
+      "epochs": 250,
+      "wall_ms": 5.236,
+      "user_ms": 2.971,
+      "sys_ms": 0.994,
+      "maxrss_kib": 15268,
+      "sha": "local",
+      "command": "[\"runtime-rust/target/release/doc\", \"runtime-rust/examples/memory_soak.doc\", \"--through=250\", \"counter=next_counter\", \"list=next_list\", \"label=next_label\"]"
+    },
+    {
+      "runtime": "rust",
+      "workers_setting": 1,
+      "epochs": 1000,
+      "wall_ms": 8.767,
+      "user_ms": 7.315,
+      "sys_ms": 1.054,
+      "maxrss_kib": 15396,
+      "sha": "local",
+      "command": "[\"runtime-rust/target/release/doc\", \"runtime-rust/examples/memory_soak.doc\", \"--through=1000\", \"counter=next_counter\", \"list=next_list\", \"label=next_label\"]"
+    },
+    {
+      "runtime": "rust",
+      "workers_setting": 1,
+      "epochs": 5000,
+      "wall_ms": 40.309,
+      "user_ms": 33.617,
+      "sys_ms": 5.978,
+      "maxrss_kib": 15396,
+      "sha": "local",
+      "command": "[\"runtime-rust/target/release/doc\", \"runtime-rust/examples/memory_soak.doc\", \"--through=5000\", \"counter=next_counter\", \"list=next_list\", \"label=next_label\"]"
+    },
+    {
+      "runtime": "rust",
+      "workers_setting": 4,
+      "epochs": 250,
+      "wall_ms": 5.663,
+      "user_ms": 4.092,
+      "sys_ms": 0.0,
+      "maxrss_kib": 15396,
+      "sha": "local",
+      "command": "[\"runtime-rust/target/release/doc\", \"runtime-rust/examples/memory_soak.doc\", \"--through=250\", \"counter=next_counter\", \"list=next_list\", \"label=next_label\"]"
+    },
+    {
+      "runtime": "rust",
+      "workers_setting": 4,
+      "epochs": 1000,
+      "wall_ms": 8.5,
+      "user_ms": 7.119,
+      "sys_ms": 1.026,
+      "maxrss_kib": 15396,
+      "sha": "local",
+      "command": "[\"runtime-rust/target/release/doc\", \"runtime-rust/examples/memory_soak.doc\", \"--through=1000\", \"counter=next_counter\", \"list=next_list\", \"label=next_label\"]"
+    },
+    {
+      "runtime": "rust",
+      "workers_setting": 4,
+      "epochs": 5000,
+      "wall_ms": 36.586,
+      "user_ms": 32.949,
+      "sys_ms": 3.012,
+      "maxrss_kib": 15396,
+      "sha": "local",
+      "command": "[\"runtime-rust/target/release/doc\", \"runtime-rust/examples/memory_soak.doc\", \"--through=5000\", \"counter=next_counter\", \"list=next_list\", \"label=next_label\"]"
+    },
+    {
+      "runtime": "goose",
+      "workers_setting": 1,
+      "epochs": 250,
+      "wall_ms": 3.291,
+      "user_ms": 1.913,
+      "sys_ms": 0.955,
+      "maxrss_kib": 15396,
+      "sha": "local",
+      "command": "[\"/tmp/nix-shell-449097-1474028653/tmp.3c7YLkltp4/doc-typed\", \"runtime-rust/examples/memory_soak.doc\", \"--through=250\", \"counter=next_counter\", \"list=next_list\", \"label=next_label\"]"
+    },
+    {
+      "runtime": "goose",
+      "workers_setting": 1,
+      "epochs": 1000,
+      "wall_ms": 5.456,
+      "user_ms": 4.05,
+      "sys_ms": 1.005,
+      "maxrss_kib": 15396,
+      "sha": "local",
+      "command": "[\"/tmp/nix-shell-449097-1474028653/tmp.3c7YLkltp4/doc-typed\", \"runtime-rust/examples/memory_soak.doc\", \"--through=1000\", \"counter=next_counter\", \"list=next_list\", \"label=next_label\"]"
+    },
+    {
+      "runtime": "goose",
+      "workers_setting": 1,
+      "epochs": 5000,
+      "wall_ms": 22.136,
+      "user_ms": 13.335,
+      "sys_ms": 8.189,
+      "maxrss_kib": 15396,
+      "sha": "local",
+      "command": "[\"/tmp/nix-shell-449097-1474028653/tmp.3c7YLkltp4/doc-typed\", \"runtime-rust/examples/memory_soak.doc\", \"--through=5000\", \"counter=next_counter\", \"list=next_list\", \"label=next_label\"]"
+    },
+    {
+      "runtime": "goose",
+      "workers_setting": 4,
+      "epochs": 250,
+      "wall_ms": 3.476,
+      "user_ms": 2.013,
+      "sys_ms": 1.016,
+      "maxrss_kib": 15396,
+      "sha": "local",
+      "command": "[\"/tmp/nix-shell-449097-1474028653/tmp.3c7YLkltp4/doc-typed\", \"runtime-rust/examples/memory_soak.doc\", \"--through=250\", \"counter=next_counter\", \"list=next_list\", \"label=next_label\"]"
+    },
+    {
+      "runtime": "goose",
+      "workers_setting": 4,
+      "epochs": 1000,
+      "wall_ms": 5.613,
+      "user_ms": 2.582,
+      "sys_ms": 2.593,
+      "maxrss_kib": 15396,
+      "sha": "local",
+      "command": "[\"/tmp/nix-shell-449097-1474028653/tmp.3c7YLkltp4/doc-typed\", \"runtime-rust/examples/memory_soak.doc\", \"--through=1000\", \"counter=next_counter\", \"list=next_list\", \"label=next_label\"]"
+    },
+    {
+      "runtime": "goose",
+      "workers_setting": 4,
+      "epochs": 5000,
+      "wall_ms": 18.639,
+      "user_ms": 14.081,
+      "sys_ms": 4.029,
+      "maxrss_kib": 15396,
+      "sha": "local",
+      "command": "[\"/tmp/nix-shell-449097-1474028653/tmp.3c7YLkltp4/doc-typed\", \"runtime-rust/examples/memory_soak.doc\", \"--through=5000\", \"counter=next_counter\", \"list=next_list\", \"label=next_label\"]"
+    }
+  ]
+}

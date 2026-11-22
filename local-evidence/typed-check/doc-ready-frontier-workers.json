@@ -1,0 +1,50 @@
+{
+  "revision": "unversioned",
+  "hardware_threads": 16,
+  "method": "31 randomized interleaved native per-process repetitions per worker count;",
+  "caveat": "Includes CLI startup and IPC overhead; negative speedups must be retained.",
+  "results": {
+    "rust/1": {
+      "n": 31,
+      "median_ms": 1.65181,
+      "p95_ms": 2.008022,
+      "min_ms": 1.297342,
+      "max_ms": 2.018232
+    },
+    "rust/2": {
+      "n": 31,
+      "median_ms": 1.935528,
+      "p95_ms": 2.291149,
+      "min_ms": 1.497063,
+      "max_ms": 2.681054
+    },
+    "rust/4": {
+      "n": 31,
+      "median_ms": 1.994768,
+      "p95_ms": 2.376748,
+      "min_ms": 1.525616,
+      "max_ms": 2.470473
+    },
+    "goose/1": {
+      "n": 31,
+      "median_ms": 1.767525,
+      "p95_ms": 2.455965,
+      "min_ms": 1.353255,
+      "max_ms": 3.00223
+    },
+    "goose/2": {
+      "n": 31,
+      "median_ms": 3.41096,
+      "p95_ms": 4.069735,
+      "min_ms": 2.636781,
+      "max_ms": 4.897854
+    },
+    "goose/4": {
+      "n": 31,
+      "median_ms": 3.800765,
+      "p95_ms": 4.472594,
+      "min_ms": 3.209376,
+      "max_ms": 5.059104
+    }
+  }
+}
