@@ -57,6 +57,19 @@ class EvidenceIntegration(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "identity, type and PCI IDs"):
             evidence.main(self.root)
 
+    def test_duplicate_vendor_identity_in_one_stanza_rejected(self):
+        path = self.root / "vulkan-adapter.log"
+        path.write_text(path.read_text() + "\\tvendorID = 0x10005\\n")
+        with self.assertRaisesRegex(ValueError, "identity, type and PCI IDs"):
+            evidence.main(self.root)
+
+    def test_duplicate_device_type_in_one_stanza_rejected(self):
+        path = self.root / "vulkan-adapter.log"
+        path.write_text(path.read_text() +
+                        "\\tdeviceType = PHYSICAL_DEVICE_TYPE_CPU\\n")
+        with self.assertRaisesRegex(ValueError, "identity, type and PCI IDs"):
+            evidence.main(self.root)
+
     def test_complete_fixture(self):
         self.assertEqual(evidence.main(self.root), 0)
 
