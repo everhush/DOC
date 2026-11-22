@@ -104,7 +104,7 @@ def main(root):
         fields = {}
         for key in ("deviceName", "deviceType", "vendorID", "deviceID"):
             matches = re.findall(
-                r"(?m)^\\s*" + key + r"\\s*=\\s*(.*?)\\s*$", device)
+                r"(?m)^\s*" + key + r"\s*=\s*(.*?)\s*$", device)
             if len(matches) != 1:
                 return False
             fields[key] = matches[0]
