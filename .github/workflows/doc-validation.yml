@@ -6,6 +6,8 @@ on:
     paths:
       - '.github/workflows/doc-validation.yml'
       - '.github/workflows/doc-kaggle-gpu.yml'
+      - '.github/workflows/doc-kaggle-permissions.yml'
+      - 'BACKEND-EXECUTION-CONTRACT.md'
       - 'ci/**'
       - 'local-evidence/**'
       - 'runtime-rust/**'
