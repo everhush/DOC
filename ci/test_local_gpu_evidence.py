@@ -10,7 +10,9 @@ spec.loader.exec_module(verifier)
 
 RUST = ("DOC_SIGNED_WEBGPU_ADAPTER: name=AMD Radeon 860M Graphics type=IntegratedGpu backend=Vulkan\n"
         "DOC_SIGNED_WEBGPU_COMPUTE_PASS: epoch=0 lanes=65 equals=32\n"
-        "DOC_SIGNED_WEBGPU_COMPUTE_PASS: epoch=1 lanes=65 equals=31\n")
+        "DOC_SIGNED_WEBGPU_COMPUTE_PASS: epoch=1 lanes=65 equals=31\n"
+        "DOC_SIGNED_WEBGPU_HOST_MS: epoch=0 elapsed_ms=1.125\n"
+        "DOC_SIGNED_WEBGPU_HOST_MS: epoch=1 elapsed_ms=2.125\n")
 GOOSE = ("DOC_GOOSE_SDL3_DEVICE: vulkan\n"
          "DOC_GOOSE_SDL3_GPU_PASS: op=lt epoch=0 lanes=65 count=32 backend=vulkan\n"
          "DOC_GOOSE_SDL3_GPU_PASS: op=lt epoch=1 lanes=65 count=31 backend=vulkan\n")
@@ -30,11 +32,11 @@ class LogParserAdversarialTests(unittest.TestCase):
 
     def test_rust_duplicate_episode_rejected(self):
         with self.assertRaises(ValueError):
-            verifier.parse_rust(RUST + RUST.splitlines()[-1] + "\n", "lt", 65)
+            verifier.parse_rust(RUST + "DOC_SIGNED_WEBGPU_COMPUTE_PASS: epoch=1 lanes=65 equals=31\n", "lt", 65)
 
     def test_rust_missing_episode_rejected(self):
         with self.assertRaises(ValueError):
-            verifier.parse_rust("\n".join(RUST.splitlines()[:-1]), "lt", 65)
+            verifier.parse_rust("\n".join(line for line in RUST.splitlines() if "DOC_SIGNED_WEBGPU_COMPUTE_PASS: epoch=1" not in line), "lt", 65)
 
     def test_goose_wrong_operation_rejected(self):
         with self.assertRaises(ValueError):
