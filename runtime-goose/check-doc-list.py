@@ -75,6 +75,26 @@ for iteration,data in enumerate(([],[1],[-1,0,1],[5,-3,9,0],
         if not totals or totals[-1]!=sum(data):
             raise AssertionError(f"{binary} list sum mismatch: {totals}")
         cases+=1
+# Longer typed list recurrence stresses carry, dynamic tail storage and
+# deterministic halting after many immutable epochs on both native hosts.
+# This is an output oracle, not a claim of unbounded physical execution.
+long_data=list(range(-32,32))
+long_source=Path(program).read_text().replace(
+    "source remaining: ints = [5,-3,9,0]",
+    "source remaining: ints = ["+",".join(map(str,long_data))+"]")
+long_doc=root/"list-long-carry.doc"
+long_doc.write_text(long_source)
+for binary in (rust,goose):
+    output=run(binary,str(long_doc),"--until=done","--max-epochs=66",
+               "remaining=next_remaining","total=next_total")
+    if "DOC_RECURRENCE_HALT: 64" not in output:
+        raise AssertionError(f"{binary} long list carry did not halt")
+    totals=[int(line.split(":",1)[1]) for line in output.splitlines()
+            if line.startswith("total:")]
+    if not totals or totals[-1]!=sum(long_data):
+        raise AssertionError(f"{binary} long list carry total mismatch")
+    cases+=1
+
 # Verify an out-of-bounds index produces no stable observation and no success.
 for text in (
     "source a: ints = []\nderive bad: int (a) = get(a,0)\n",

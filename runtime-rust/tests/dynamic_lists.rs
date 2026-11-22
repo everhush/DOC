@@ -79,3 +79,36 @@ fn dynamic_collections_extend_beyond_previous_fixed_cap() {
     assert_eq!(runtime.value(graph.id("expanded").unwrap()),
                Some(Value::Ints(expected)));
 }
+
+#[test]
+fn long_dynamic_list_carry_reconstructs_evicted_epochs_without_mutating_readers() {
+    // Each epoch consumes one element; reconstruction must replay from
+    // immutable typed carry rather than borrow a reclaimed list buffer.
+    let items=(-32i64..32).collect::<Vec<_>>();
+    let literal=items.iter().map(i64::to_string).collect::<Vec<_>>().join(",");
+    let source=include_str!("../examples/list_fold.doc").replace(
+        "source remaining: ints = [5,-3,9,0]",
+        &format!("source remaining: ints = [{literal}]"));
+    let graph=Graph::parse(&source).unwrap();
+    let remaining=graph.id("remaining").unwrap();
+    let total=graph.id("total").unwrap();
+    let mut recurrence=Recurrence::new_with_retention(
+        graph.clone(),
+        vec![(remaining,graph.id("next_remaining").unwrap()),
+             (total,graph.id("next_total").unwrap())],&[],4,2).unwrap();
+    let pinned=recurrence.snapshot_at(0).unwrap();
+    assert!(recurrence.advance_until(graph.id("done").unwrap(),66).unwrap());
+    assert_eq!(recurrence.epoch(),64);
+    assert_eq!(recurrence.value(remaining),Some(Value::Ints(vec![])));
+    assert_eq!(recurrence.value(total),Some(Value::Int(items.iter().sum())));
+    assert_eq!(pinned[remaining],Some(Value::Ints(items.clone())));
+    assert_eq!(pinned[total],Some(Value::Int(0)));
+    assert_eq!(recurrence.retained_epochs(),vec![63,64]);
+    for epoch in [0,1,20,63,64] {
+        let rebuilt=recurrence.reconstruct_epoch(epoch).unwrap().unwrap();
+        assert_eq!(rebuilt[remaining],Some(Value::Ints(items[epoch as usize..].to_vec())));
+        assert_eq!(rebuilt[total],Some(Value::Int(items[..epoch as usize].iter().sum())));
+    }
+    // Replaying an evicted epoch must not overwrite the live generation.
+    assert_eq!(recurrence.value(total),Some(Value::Int(items.iter().sum())));
+}
