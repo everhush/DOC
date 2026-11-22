@@ -55,4 +55,38 @@ for selected in gpu auto invalid; do
     exit 1
   fi
 done
+
+# Selection must happen BEFORE parsing the DOC source or admitting effects.
+# GPU is intentionally unsupported by the general-purpose CLIs at this stage,
+# so rejecting it may not require even a readable source file.
+for selected in gpu auto invalid; do
+  if "$bin" "$scratch/nonexistent.doc" "--backend=$selected" > "$scratch/preflight-$selected" 2>&1; then
+    echo "Backend preflight accepted unsupported selection: $selected" >&2
+    exit 1
+  fi
+  if [ "$selected" = gpu ]; then
+    grep -F 'DOC_GPU_UNSUPPORTED:' "$scratch/preflight-$selected"
+  else
+    grep -F 'DOC_BACKEND_INVALID:' "$scratch/preflight-$selected"
+  fi
+done
+
+# A rejected GPU request must not commit an output effect, even when the
+# DOC source is valid and an --emit target is present.
+cp "$source" "$scratch/effect-source.doc"
+if "$bin" "$scratch/effect-source.doc" --backend=gpu --emit=chosen:forbidden.txt \
+    > "$scratch/rejected-effect" 2>&1; then
+  echo "Unsupported GPU request committed an effect" >&2
+  exit 1
+fi
+grep -F 'DOC_GPU_UNSUPPORTED:' "$scratch/rejected-effect"
+if [ -e "$scratch/forbidden.txt" ]; then
+  echo "Rejected GPU request created an output file" >&2
+  exit 1
+fi
+
+# An explicitly selected CPU is allowed to perform the documented effect.
+"$bin" "$scratch/effect-source.doc" --backend=cpu --emit=chosen:permitted.txt \
+    > "$scratch/cpu-effect" 2>&1
+grep -Fx '10' "$scratch/permitted.txt"
 echo DOC_EXPLICIT_BACKEND_CLI_PASS
