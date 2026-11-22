@@ -161,11 +161,11 @@ def verify_result(folder, spec):
                     raise AssertionError("GPU evidence disagrees with result: " + name)
                 if name == "physical-vulkan.log":
                     devices = re.findall(
-                        r"(?ms)^GPU\\d+:\\s*\\n(.*?)(?=^GPU\\d+:|\\Z)", observed)
+                        r"(?ms)^GPU\d+:\s*\n(.*?)(?=^GPU\d+:|\Z)", observed)
                     if not devices or not all(
-                        re.search(r"\\bvendorID\\s*=\\s*0x10de\\b", device, re.I)
+                        re.search(r"\bvendorID\s*=\s*0x10de\b", device, re.I)
                         and re.search(
-                            r"\\bdeviceType\\s*=\\s*PHYSICAL_DEVICE_TYPE_(?:DISCRETE|INTEGRATED)_GPU\\b",
+                            r"\bdeviceType\s*=\s*PHYSICAL_DEVICE_TYPE_(?:DISCRETE|INTEGRATED)_GPU\b",
                             device)
                         for device in devices):
                         raise AssertionError(

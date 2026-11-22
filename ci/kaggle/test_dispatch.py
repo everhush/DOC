@@ -88,9 +88,9 @@ class KaggleDispatchPolicy(unittest.TestCase):
                     "goose/goose-sdl3/doc-goose-sdl3-summary.log":
                         "DOC_GOOSE_SDL3_NATIVE_PARITY_PASS: 77 checks",
                     "physical-vulkan.log": (
-                        "GPU0:\\n"
-                        "  vendorID = 0x10de\\n"
-                        "  deviceType = PHYSICAL_DEVICE_TYPE_DISCRETE_GPU\\n"),
+                        "GPU0:\n"
+                        "  vendorID = 0x10de\n"
+                        "  deviceType = PHYSICAL_DEVICE_TYPE_DISCRETE_GPU\n"),
                     "nvidia-smi.log":"GPU 0: Tesla T4",
                 }
                 for name,content in evidence.items():
@@ -112,9 +112,9 @@ class KaggleDispatchPolicy(unittest.TestCase):
             with tarfile.open(out/"doc-kaggle-logs.tar.gz","w:gz") as archive:
                 for name,content in evidence.items():
                     if name == "physical-vulkan.log":
-                        content = ("GPU0:\\n"
-                                   "  vendorID = 0x10005\\n"
-                                   "  deviceType = PHYSICAL_DEVICE_TYPE_CPU\\n")
+                        content = ("GPU0:\n"
+                                   "  vendorID = 0x10005\n"
+                                   "  deviceType = PHYSICAL_DEVICE_TYPE_CPU\n")
                     path = Path(temp)/name
                     path.write_text(content)
                     archive.add(path,arcname=name)

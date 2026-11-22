@@ -103,11 +103,11 @@ def load_verified_native_bundle():
 
 def all_vulkan_adapters_are_physical_nvidia(summary):
     """Reject software/foreign Vulkan adapters; SDL3 and wgpu share this ICD."""
-    blocks = re.findall(r"(?ms)^GPU\\d+:\\s*\\n(.*?)(?=^GPU\\d+:|\\Z)", summary)
+    blocks = re.findall(r"(?ms)^GPU\d+:\s*\n(.*?)(?=^GPU\d+:|\Z)", summary)
     return bool(blocks) and all(
-        re.search(r"\\bvendorID\\s*=\\s*0x10de\\b", block, re.I)
+        re.search(r"\bvendorID\s*=\s*0x10de\b", block, re.I)
         and re.search(
-            r"\\bdeviceType\\s*=\\s*PHYSICAL_DEVICE_TYPE_(?:DISCRETE|INTEGRATED)_GPU\\b",
+            r"\bdeviceType\s*=\s*PHYSICAL_DEVICE_TYPE_(?:DISCRETE|INTEGRATED)_GPU\b",
             block)
         for block in blocks)
 
