@@ -15,11 +15,29 @@ fn run_doc_cli() {
     var values: Value[>..] = [];
     var active: bool[>..] = [];
     load(source,nodes,values,active,path);
-    if arg_count() >= 3 {
+    // General-purpose CLI: CPU is default; GPU requests fail closed until supported.
+    var first_arg=2;
+    if arg_count()>2 {
+        var backend:u8[>..]=[];
+        arg(2,backend);
+        if starts_with(backend,"--backend=") {
+            if backend=="--backend=gpu" {
+                print("DOC_GPU_UNSUPPORTED: general-purpose GPU evaluation is not yet implemented; no CPU fallback");
+                fail();
+            }
+            if backend!="--backend=cpu" {
+                print("DOC_BACKEND_INVALID: expected --backend=cpu or --backend=gpu (no auto mode)");
+                fail();
+            }
+            first_arg=3;
+        }
+    }
+    let following_arg=first_arg+1;
+    if arg_count()>first_arg {
         var mode: u8[>..] = [];
-        arg(2,mode);
+        arg(first_arg,mode);
         if starts_with(mode,"--emit=") {
-            if arg_count()!=3 { fail(); }
+            if arg_count()!=following_arg { fail(); }
             let target_spec=mode[7..];
             let colon=find(target_spec,":");
             if colon <= 0 { fail(); }
@@ -56,7 +74,7 @@ fn run_doc_cli() {
             return;
         }
         if mode=="--snapshot-proof" {
-            if arg_count()!=3 { fail(); }
+            if arg_count()!=following_arg { fail(); }
             snapshot_proof(nodes,values,active);
             return;
         }
@@ -64,7 +82,7 @@ fn run_doc_cli() {
             let target = lookup(nodes,mode[9..]);
             if target < 0 { fail(); }
             var changes: Change[>..] = [];
-            for i in 3..arg_count() {
+            for i in following_arg..arg_count() {
                 var raw: u8[>..] = [];
                 arg(i,raw);
                 let eq = find(raw,"=");
@@ -111,29 +129,29 @@ fn run_doc_cli() {
         if starts_with(mode,"--through=") {
             let limit, ok = parse_int(mode[10..]);
             if !ok || limit < 0 { fail(); }
-            run_recurrence(nodes,values,active,limit,-1,3);
+            run_recurrence(nodes,values,active,limit,-1,following_arg);
             return;
         }
         if starts_with(mode,"--until=") {
-            if arg_count() < 4 { fail(); }
+            if arg_count() < following_arg+1 { fail(); }
             var raw_cap: u8[>..] = [];
-            arg(3,raw_cap);
+            arg(following_arg,raw_cap);
             if !starts_with(raw_cap,"--max-epochs=") { fail(); }
             let cap, ok = parse_int(raw_cap[13..]);
             let halt = lookup(nodes,mode[8..]);
             if !ok || cap < 0 || halt < 0 || nodes[halt].kind != 0 { fail(); }
-            run_recurrence(nodes,values,active,cap,halt,4);
+            run_recurrence(nodes,values,active,cap,halt,following_arg+1);
             return;
         }
         if starts_with(mode,"--replace-pinned=") {
-            if arg_count()!=3 { fail(); }
+            if arg_count()!=following_arg { fail(); }
             let next_path=mode[17..];
             if next_path.len==0 || !safe_doc_path(next_path) { fail(); }
             replace_pinned_proof(nodes,values,active,next_path);
             return;
         }
         if starts_with(mode,"--replace=") {
-            if arg_count()!=3 { fail(); }
+            if arg_count()!=following_arg { fail(); }
             let next_path=mode[10..];
             if next_path.len==0 { fail(); }
             // Complete the old frontier before any candidate is constructed.
@@ -167,7 +185,7 @@ fn run_doc_cli() {
     // Validate the full command line before applying any source batch.
     var changes: Change[>..] = [];
     var next = false;
-    for i in 2..arg_count() {
+    for i in first_arg..arg_count() {
         var raw: u8[>..] = [];
         arg(i,raw);
         if raw == "--next" {
