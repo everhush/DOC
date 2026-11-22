@@ -26,7 +26,7 @@ class EvidenceIntegration(unittest.TestCase):
                         writer.writerow((mode, width, epoch, width // 2 + epoch))
                     (self.root / f"rust/rust-{mode}-{width}.log").write_text(
                         "DOC_SIGNED_WEBGPU_ADAPTER: AMD Radeon 860M Graphics (RADV KRACKAN1) type=IntegratedGpu backend=Vulkan\n"
-                        + "".join(f"DOC_SIGNED_WEBGPU_COMPUTE_PASS: epoch={epoch} lanes={width} equals={width // 2 + epoch}\n" for epoch in (0, 1)))
+                        + "".join(f"DOC_SIGNED_WEBGPU_COMPUTE_PASS: epoch={epoch} lanes={width} equals={width // 2 + epoch}\nDOC_SIGNED_WEBGPU_HOST_MS: epoch={epoch} elapsed_ms={epoch + 1}.125\n" for epoch in (0, 1)))
                     (self.root / f"goose/goose-sdl3/sdl3-{mode}-{width}.log").write_text(
                         "DOC_GOOSE_SDL3_DEVICE: vulkan\n"
                         + "".join(f"DOC_GOOSE_SDL3_GPU_PASS: op={mode} epoch={epoch} lanes={width} count={width // 2 + epoch} backend=vulkan\n" for epoch in (0, 1)))
@@ -68,6 +68,31 @@ class EvidenceIntegration(unittest.TestCase):
         path.write_text(path.read_text() +
                         "\tdeviceType = PHYSICAL_DEVICE_TYPE_CPU\n")
         with self.assertRaisesRegex(ValueError, "identity, type and PCI IDs"):
+            evidence.main(self.root)
+
+    def test_missing_rust_host_timing_rejected(self):
+        path = self.root / "rust/rust-eq-1.log"
+        path.write_text("\\n".join(line for line in path.read_text().splitlines()
+                                  if "DOC_SIGNED_WEBGPU_HOST_MS: epoch=1" not in line) + "\\n")
+        with self.assertRaisesRegex(ValueError, "missing host timings"):
+            evidence.main(self.root)
+
+    def test_nonfinite_rust_host_timing_rejected(self):
+        path = self.root / "rust/rust-lt-63.log"
+        path.write_text(path.read_text().replace("elapsed_ms=1.125", "elapsed_ms=nan"))
+        with self.assertRaisesRegex(ValueError, "nonfinite"):
+            evidence.main(self.root)
+
+    def test_duplicate_rust_host_timing_rejected(self):
+        path = self.root / "rust/rust-le-64.log"
+        path.write_text(path.read_text() + "DOC_SIGNED_WEBGPU_HOST_MS: epoch=0 elapsed_ms=3.0\\n")
+        with self.assertRaisesRegex(ValueError, "duplicate host timing"):
+            evidence.main(self.root)
+
+    def test_negative_rust_host_timing_rejected(self):
+        path = self.root / "rust/rust-eq-65.log"
+        path.write_text(path.read_text().replace("elapsed_ms=2.125", "elapsed_ms=-0.5"))
+        with self.assertRaisesRegex(ValueError, "negative"):
             evidence.main(self.root)
 
     def test_complete_fixture(self):
