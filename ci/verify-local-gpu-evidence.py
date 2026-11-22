@@ -19,12 +19,15 @@ def require(condition, message):
     if not condition:
         raise ValueError(message)
 
-def parse_rust(content, mode, width):
+def parse_rust(content, mode, width, expected_adapter=None):
     lines = content.splitlines()
     adapter = [s for s in lines if s.startswith("DOC_SIGNED_WEBGPU_ADAPTER:")]
     require(len(adapter) == 1, f"Rust {mode}/{width}: no unique wgpu adapter")
     require(re.search(r"\btype=(IntegratedGpu|DiscreteGpu)\b", adapter[0]),
             f"Rust {mode}/{width}: not a physical GPU")
+    if expected_adapter is not None:
+        require(adapter[0].startswith("DOC_SIGNED_WEBGPU_ADAPTER: " + expected_adapter + " "),
+                f"Rust {mode}/{width}: adapter differs from inventoried hardware")
     require("backend=Vulkan" in adapter[0],
             f"Rust {mode}/{width}: not Vulkan")
     require("llvmpipe" not in adapter[0].lower(),
@@ -90,11 +93,18 @@ def main(root):
             rows[key] = value
     require(set(rows) == EXPECTED,
             f"Parity CSV missing/extra {len(EXPECTED) - len(rows)} rows")
+    physical = (root / "vulkan-adapter.log").read_text(errors="replace")
+    require("deviceType         = PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU" in physical
+            or "deviceType         = PHYSICAL_DEVICE_TYPE_DISCRETE_GPU" in physical,
+            "Local Vulkan inventory has no physical GPU")
+    expected_adapter = "AMD Radeon 860M Graphics (RADV KRACKAN1)"
+    require("deviceName         = " + expected_adapter in physical,
+            "Submitted adapter identity differs from local metadata")
     for mode in MODES:
         for width in WIDTHS:
             rust_file = root / f"rust/rust-{mode}-{width}.log"
             goose_file = root / f"goose/goose-sdl3/sdl3-{mode}-{width}.log"
-            rust = parse_rust(rust_file.read_text(), mode, width)
+            rust = parse_rust(rust_file.read_text(), mode, width, expected_adapter)
             goose = parse_goose(goose_file.read_text(), mode, width)
             for epoch in (0, 1):
                 key = (mode, width, epoch)
@@ -104,12 +114,6 @@ def main(root):
     require(marker ==
             "DOC_RUST_WGPU_GOOSE_SDL3_PARITY_PASS: 42 observed GPU episodes",
             "Independent parity tool summary does not match")
-    physical = (root / "vulkan-adapter.log").read_text(errors="replace")
-    require("deviceType         = PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU" in physical
-            or "deviceType         = PHYSICAL_DEVICE_TYPE_DISCRETE_GPU" in physical,
-            "Local Vulkan inventory has no physical GPU")
-    require("AMD Radeon 860M Graphics (RADV KRACKAN1)" in physical,
-            "Submitted adapter identity differs from local metadata")
     print("DOC_COMMITTED_LOCAL_GPU_LOG_PARITY_PASS: 42 raw episodes")
     print("DOC_GOOSE_PHYSICAL_DEVICE_IDENTITY_PENDING: SDL3 logs identify only Vulkan backend")
     return 0
