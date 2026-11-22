@@ -6,7 +6,8 @@ on:
     paths:
       - '.github/workflows/doc-validation.yml'
       - '.github/workflows/doc-kaggle-gpu.yml'
-      - 'ci/kaggle/**'
+      - 'ci/**'
+      - 'local-evidence/**'
       - 'runtime-rust/**'
       - 'runtime-goose/**'
   pull_request:
@@ -37,11 +38,13 @@ jobs:
       - name: Shell syntax-check all DOC validation harnesses before compiling Goose
         run: |
           set -euo pipefail
-          for script in runtime-goose/*.sh runtime-rust/*.sh; do
+          for script in runtime-goose/*.sh runtime-rust/*.sh ci/*.sh; do
             bash -n "$script"
           done
-      - name: Validate Kaggle budget policies without credentials or GPUs
+      - name: Validate Kaggle dispatch and evidence policies without credentials or GPUs
         run: python3 -m unittest discover -s ci/kaggle -p 'test_*.py' -v
+      - name: Audit submitted local physical-GPU result logs without hardware claims
+        run: python3 ci/verify-local-gpu-evidence.py local-evidence
       - name: Native compile, tests and WGSL parse/validation
         run: |
           set -o pipefail
