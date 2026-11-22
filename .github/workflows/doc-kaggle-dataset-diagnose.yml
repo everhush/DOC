@@ -36,8 +36,20 @@ jobs:
               env,username=dispatcher.auth_environment(
                   os.environ.get("KAGGLE_DOC_1",""),
                   pathlib.Path(temp)/"config",
-                  os.environ.get("DOC_KAGGLE_USERNAME",""))
-              ref=username+"/doc-gpu-44953036963-1-bundle"
+                  os.environ.get("DOC_KAGGLE_USERNAME","") or "diagnostic")
+              # A raw API token may not identify its owner via Kaggle config.
+              # Probe one's own private dataset list first without guessing.
+              own=subprocess.run(["kaggle","datasets","list","--mine","--search",
+                  "doc-gpu-44953036963","-v"],env=env,
+                  capture_output=True,text=True,timeout=30)
+              import re
+              match=re.search(r"([a-z0-9_-]+)/doc-gpu-44953036963-1-bundle",
+                  own.stdout,re.I)
+              print("DOC_KAGGLE_DATASET_DISCOVERY: list_rc=",own.returncode,
+                    "found=",bool(match))
+              if not match:
+                  raise RuntimeError("Private dataset not visible to authenticated owner")
+              ref=match.group(0)
               cmds=[
                  ["kaggle","datasets","status",ref,"--format","json"],
                  ["kaggle","datasets","status",ref],
