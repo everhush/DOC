@@ -210,11 +210,11 @@ for bad_value in ("9223372036854775808","-9223372036854775809","true"):
 import os
 worker_doc=root/"list-worker-frontier.doc"
 worker_doc.write_text(
-    "source items: ints = [1,2,3]\\n"
-    "derive expanded: ints (items) = append(items,-7)\\n"
-    "derive count: int (expanded) = len(expanded)\\n"
-    "derive first: int (items) = get(items,0)\\n"
-    "derive last: int (expanded) = get(expanded,3)\\n"
+    "source items: ints = [1,2,3]\n"
+    "derive expanded: ints (items) = append(items,-7)\n"
+    "derive count: int (expanded) = len(expanded)\n"
+    "derive first: int (items) = get(items,0)\n"
+    "derive last: int (expanded) = get(expanded,3)\n"
 )
 for data in ([4,5,6],[-2**63,0,2**63-1],[0,0,0]):
     source="items=["+",".join(map(str,data))+"]"

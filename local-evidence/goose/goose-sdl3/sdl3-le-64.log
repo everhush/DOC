@@ -1,0 +1,4 @@
+DOC_GOOSE_SDL3_DEVICE: vulkan
+DOC_GOOSE_SDL3_GPU_PASS: op=le epoch=0 lanes=64 count=41 backend=vulkan
+DOC_GOOSE_SDL3_GPU_PASS: op=le epoch=1 lanes=64 count=38 backend=vulkan
+
