@@ -143,6 +143,44 @@ for binary in (rust,goose):
         raise AssertionError(f"{binary} published invalid wide collection index")
     cases+=1
 
+# Stress signed 64-bit boundary elements beyond the former fixed-size arena.
+# The independent oracle checks exact indexed values, not just the length.
+extremes=[(-2**63 if i%2 else 2**63-1) for i in range(8193)]
+extreme_doc=root/"list-extreme-boundaries.doc"
+extreme_doc.write_text(
+    "source items: ints = ["+",".join(map(str,extremes))+"]\n"
+    "derive expanded: ints (items) = append(items,-9223372036854775808)\n"
+    "derive count: int (expanded) = len(expanded)\n"
+    "derive first: int (items) = get(items,0)\n"
+    "derive last: int (items) = get(items,8192)\n"
+    "derive appended: int (expanded) = get(expanded,8193)\n"
+)
+for binary in (rust,goose):
+    output=run(binary,str(extreme_doc))
+    observed={}
+    for line in output.splitlines():
+        if line.startswith(("count: ","first: ","last: ","appended: ")):
+            name,value=line.split(": ",1)
+            observed[name]=int(value)
+    expected={"count":8194,"first":extremes[0],
+              "last":extremes[-1],"appended":-(2**63)}
+    if observed!=expected:
+        raise AssertionError(f"{binary} i64 boundary list mismatch: {observed}")
+    cases+=1
+# A malformed value must fail without a stable observation of its dependent.
+for bad_value in ("9223372036854775808","-9223372036854775809","true"):
+    bad=root/"list-extreme-invalid.doc"
+    bad.write_text(
+        "source items: ints = [1,2]\n"
+        f"derive expanded: ints (items) = append(items,{bad_value})\n"
+        "derive count: int (expanded) = len(expanded)\n"
+    )
+    for binary in (rust,goose):
+        output=run(binary,str(bad),valid=False)
+        if "expanded:" in output or "count:" in output:
+            raise AssertionError(f"{binary} published failed list append")
+        cases+=1
+
 assert all(isinstance(v,int) for values in inputs for v in values)
 root.joinpath("doc-list-conformance.log").write_text(
     f"DOC_NATIVE_DYNAMIC_LIST_PASS: {cases} independent checks\n"
