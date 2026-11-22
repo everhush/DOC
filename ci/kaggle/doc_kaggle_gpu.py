@@ -101,6 +101,16 @@ def load_verified_native_bundle():
     return (ROOT/"DOC",ROOT/"bin/doc-goose-sdl3",
             ROOT/"bin/webgpu_integer_eq",ROOT/"bin/webgpu_bool")
 
+def all_vulkan_adapters_are_physical_nvidia(summary):
+    """Reject software/foreign Vulkan adapters; SDL3 and wgpu share this ICD."""
+    blocks = re.findall(r"(?ms)^GPU\\d+:\\s*\\n(.*?)(?=^GPU\\d+:|\\Z)", summary)
+    return bool(blocks) and all(
+        re.search(r"\\bvendorID\\s*=\\s*0x10de\\b", block, re.I)
+        and re.search(
+            r"\\bdeviceType\\s*=\\s*PHYSICAL_DEVICE_TYPE_(?:DISCRETE|INTEGRATED)_GPU\\b",
+            block)
+        for block in blocks)
+
 def preflight_hardware():
     # A CUDA-visible NVIDIA device is not enough: SDL3 and wgpu both require
     # a *physical* Vulkan ICD. Do not use llvmpipe or silently fall back.
@@ -134,8 +144,10 @@ def preflight_hardware():
     ENV["VK_DRIVER_FILES"]=":".join(map(str,drivers))
     ENV["VK_ICD_FILENAMES"]=ENV["VK_DRIVER_FILES"]
     info=run("physical-vulkan",["vulkaninfo","--summary"])
-    if not re.search(r"PHYSICAL_DEVICE_TYPE_(?:DISCRETE|INTEGRATED)_GPU",info):
-        raise RuntimeError("INFRA_BLOCKED: NVIDIA Vulkan physical GPU not exposed")
+    if not all_vulkan_adapters_are_physical_nvidia(info):
+        raise RuntimeError(
+            "INFRA_BLOCKED: Vulkan inventory must contain only physical NVIDIA GPU(s); "
+            "CPU software devices or foreign GPUs cannot certify native Rust/Goose parity")
     print("DOC_KAGGLE_PHYSICAL_VULKAN_FOUND")
 
 def test_physical_gpu(repo, goose_gpu, rust_signed, rust_bool):

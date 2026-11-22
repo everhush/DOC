@@ -23,6 +23,12 @@ alone is insufficient) and execute the 77 Goose GPU/CPU oracle checks and
 42 independent Rust/Goose GPU-result parity cases. Native timing evidence
 includes startup, device/pipeline initialization, dispatch and readback, and
 must never be represented as isolated kernel latency or proof of GPU speedup.
+The notebook now requires each Vulkan adapter exposed by its selected
+NVIDIA ICD to have vendor ID `0x10de` and a physical integrated/discrete GPU
+device type. A visible CUDA device or a mixed CPU-software Vulkan inventory
+alone cannot certify native Rust/Goose GPU parity. Both the notebook and
+the GitHub-side evidence verifier fail closed on incompatible adapter evidence.
+
 Failing hardware access or mismatching results are correctly reported as
 blocked/failed, not CPU-fallback GPU success. Metal, Direct3D and TPU require
 separate platforms.
