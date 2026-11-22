@@ -159,6 +159,17 @@ def verify_result(folder, spec):
                 observed = stream.read(262144).decode("utf-8", errors="replace")
                 if expected_text not in observed:
                     raise AssertionError("GPU evidence disagrees with result: " + name)
+                if name == "physical-vulkan.log":
+                    devices = re.findall(
+                        r"(?ms)^GPU\\d+:\\s*\\n(.*?)(?=^GPU\\d+:|\\Z)", observed)
+                    if not devices or not all(
+                        re.search(r"\\bvendorID\\s*=\\s*0x10de\\b", device, re.I)
+                        and re.search(
+                            r"\\bdeviceType\\s*=\\s*PHYSICAL_DEVICE_TYPE_(?:DISCRETE|INTEGRATED)_GPU\\b",
+                            device)
+                        for device in devices):
+                        raise AssertionError(
+                            "GPU evidence contains non-NVIDIA/software or unverified Vulkan adapters")
     except (OSError, tarfile.TarError) as error:
         raise AssertionError("Missing or invalid raw physical-GPU evidence archive") from error
     return result

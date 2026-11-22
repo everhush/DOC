@@ -87,7 +87,10 @@ class KaggleDispatchPolicy(unittest.TestCase):
                         "DOC_RUST_WGPU_GOOSE_SDL3_PARITY_PASS: 42 observed GPU episodes",
                     "goose/goose-sdl3/doc-goose-sdl3-summary.log":
                         "DOC_GOOSE_SDL3_NATIVE_PARITY_PASS: 77 checks",
-                    "physical-vulkan.log":"deviceType = PHYSICAL_DEVICE_TYPE_DISCRETE_GPU",
+                    "physical-vulkan.log": (
+                        "GPU0:\\n"
+                        "  vendorID = 0x10de\\n"
+                        "  deviceType = PHYSICAL_DEVICE_TYPE_DISCRETE_GPU\\n"),
                     "nvidia-smi.log":"GPU 0: Tesla T4",
                 }
                 for name,content in evidence.items():
@@ -105,6 +108,18 @@ class KaggleDispatchPolicy(unittest.TestCase):
             result["sha"]="a"*40
             (out/"doc-kaggle-summary.json").write_text(json.dumps(result))
             self.assertEqual(module.verify_result(out,fields),result)
+            # A software Vulkan adapter must not be certified as NVIDIA hardware.
+            with tarfile.open(out/"doc-kaggle-logs.tar.gz","w:gz") as archive:
+                for name,content in evidence.items():
+                    if name == "physical-vulkan.log":
+                        content = ("GPU0:\\n"
+                                   "  vendorID = 0x10005\\n"
+                                   "  deviceType = PHYSICAL_DEVICE_TYPE_CPU\\n")
+                    path = Path(temp)/name
+                    path.write_text(content)
+                    archive.add(path,arcname=name)
+            with self.assertRaises(AssertionError):
+                module.verify_result(out,fields)
             (out/"doc-kaggle-logs.tar.gz").write_bytes(b"x")
             with self.assertRaises(AssertionError):
                 module.verify_result(out,fields)

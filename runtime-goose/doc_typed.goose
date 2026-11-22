@@ -9,13 +9,8 @@ fn run_doc_cli() {
     if arg_count() < 2 { fail(); }
     var path: u8[>..] = [];
     arg(1,path);
-    var source: u8[>..] = [];
-    if !read_file(path,source) { fail(); }
-    var nodes: State[>..] = [];
-    var values: Value[>..] = [];
-    var active: bool[>..] = [];
-    load(source,nodes,values,active,path);
-    // General-purpose CLI: CPU is default; GPU requests fail closed until supported.
+    // General-purpose CLI: CPU is default; reject GPU before parsing a
+    // DOC source, opening its effects or constructing any candidate state.
     var first_arg=2;
     if arg_count()>2 {
         var backend:u8[>..]=[];
@@ -33,6 +28,12 @@ fn run_doc_cli() {
         }
     }
     let following_arg=first_arg+1;
+    var source: u8[>..] = [];
+    if !read_file(path,source) { fail(); }
+    var nodes: State[>..] = [];
+    var values: Value[>..] = [];
+    var active: bool[>..] = [];
+    load(source,nodes,values,active,path);
     if arg_count()>first_arg {
         var mode: u8[>..] = [];
         arg(first_arg,mode);
