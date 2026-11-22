@@ -25,7 +25,7 @@ class EvidenceIntegration(unittest.TestCase):
                     for epoch in (0, 1):
                         writer.writerow((mode, width, epoch, width // 2 + epoch))
                     (self.root / f"rust/rust-{mode}-{width}.log").write_text(
-                        "DOC_SIGNED_WEBGPU_ADAPTER: name=AMD Radeon 860M Graphics type=IntegratedGpu backend=Vulkan\n"
+                        "DOC_SIGNED_WEBGPU_ADAPTER: AMD Radeon 860M Graphics (RADV KRACKAN1) type=IntegratedGpu backend=Vulkan\n"
                         + "".join(f"DOC_SIGNED_WEBGPU_COMPUTE_PASS: epoch={epoch} lanes={width} equals={width // 2 + epoch}\n" for epoch in (0, 1)))
                     (self.root / f"goose/goose-sdl3/sdl3-{mode}-{width}.log").write_text(
                         "DOC_GOOSE_SDL3_DEVICE: vulkan\n"
@@ -61,6 +61,20 @@ class EvidenceIntegration(unittest.TestCase):
         path = self.root / "parity/native-gpu-equivalence.csv"
         path.write_text(path.read_text().replace("eq,1,0,0", "eq,1,0,NaN", 1))
         with self.assertRaises(ValueError):
+            evidence.main(self.root)
+
+    def test_rust_adapter_not_in_inventory_rejected(self):
+        path = self.root / "rust/rust-eq-1.log"
+        path.write_text(path.read_text().replace(
+            "AMD Radeon 860M Graphics (RADV KRACKAN1)", "Other Physical GPU"))
+        with self.assertRaisesRegex(ValueError, "adapter differs"):
+            evidence.main(self.root)
+
+    def test_rust_adapter_inconsistent_across_episodes_rejected(self):
+        path = self.root / "rust/rust-lt-65.log"
+        path.write_text(path.read_text().replace(
+            "AMD Radeon 860M Graphics (RADV KRACKAN1)", "Other Physical GPU"))
+        with self.assertRaisesRegex(ValueError, "adapter differs"):
             evidence.main(self.root)
 
     def test_missing_log(self):
