@@ -46,8 +46,7 @@ jobs:
         (github.event_name == 'workflow_dispatch' &&
          github.ref_name == 'feat/webgpu-dual-runtime-ci') ||
         (github.event_name == 'workflow_run' &&
-         (vars.DOC_KAGGLE_AUTORUN == 'true' ||
-          github.event.workflow_run.head_sha == '15ce13abb0afa49f00d5184721d0166e5d5e5013') &&
+         vars.DOC_KAGGLE_AUTORUN == 'true' &&
          github.event.workflow_run.conclusion == 'success' &&
          github.event.workflow_run.event == 'push' &&
          github.event.workflow_run.head_repository.full_name == github.repository &&
