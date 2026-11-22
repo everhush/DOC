@@ -15,6 +15,31 @@ trap 'rm -rf -- "$scratch"' EXIT
 "$bin" "$source" --backend=cpu a=4 b=1 > "$scratch/cpu" 2> "$scratch/cpu.err"
 diff -u "$scratch/default" "$scratch/cpu"
 grep -Fx 'chosen: 10' "$scratch/cpu"
+# Verify the offset remains correct for nontrivial DOC CLI modes as well.
+fixtures=$(dirname "$source")
+demand="$fixtures/demand_lazy.doc"
+recurrence="$fixtures/recurrence_halt.doc"
+previous="$fixtures/versions/old.doc"
+replacement="$fixtures/versions/compatible.doc"
+for scenario in demand recurrence replacement; do
+  case "$scenario" in
+    demand)
+      src=$demand
+      set -- --demand=copy a=7
+      ;;
+    recurrence)
+      src=$recurrence
+      set -- --until=halt --max-epochs=4 index=successor
+      ;;
+    replacement)
+      src=$previous
+      set -- "--replace=$replacement"
+      ;;
+  esac
+  "$bin" "$src" "$@" > "$scratch/$scenario.default"
+  "$bin" "$src" --backend=cpu "$@" > "$scratch/$scenario.cpu"
+  diff -u "$scratch/$scenario.default" "$scratch/$scenario.cpu"
+done
 for selected in gpu auto invalid; do
   if "$bin" "$source" "--backend=$selected" a=4 b=1 > "$scratch/$selected" 2>&1; then
     echo "Unsupported backend was accepted: $selected" >&2
