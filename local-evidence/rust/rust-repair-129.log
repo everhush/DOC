@@ -1,0 +1,11 @@
+DOC_CPU_REFERENCE_MS: episode=0 lanes=129 elapsed_ms=0.083
+DOC_CPU_REFERENCE_MS: episode=1 lanes=129 elapsed_ms=0.058
+WebGPU adapter: AMD Radeon 860M Graphics (RADV KRACKAN1) (IntegratedGpu, Vulkan)
+DOC_WEBGPU_ADAPTER: vendor=4098 device=4372 type=IntegratedGpu backend=Vulkan driver=radv
+DOC_WEBGPU_LIMITS: max_storage_binding=134217728 max_workgroups_per_dimension=65535 max_bind_groups=4
+DOC_WEBGPU_HOST_TIMING: episode=0 lanes=129 setup_ms=4.008 total_ms=4.639
+DOC_WEBGPU_EPISODE: 0
+DOC_WEBGPU_COMPUTE_PASS: [1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1, 1, 1]
+DOC_WEBGPU_HOST_TIMING: episode=1 lanes=129 setup_ms=1.736 total_ms=1.959
+DOC_WEBGPU_EPISODE: 1
+DOC_WEBGPU_COMPUTE_PASS: [1, 0, 0, 1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 0, 1, 0, 1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 1, 1, 1, 1, 0, 0, 1, 1, 1, 1, 1, 0, 0, 0]
