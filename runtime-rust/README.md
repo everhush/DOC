@@ -29,6 +29,10 @@ still use host error paths in important places, and physical-lifetime,
 reconstruction/eviction, placement/transport and fail-stop policy obligations
 are not fully discharged. No all-algorithms-to-GPU claim is made.
 
+## Explicit backend execution policy
+
+The native `doc` CLI defaults to CPU. `doc FILE.doc --backend=cpu [other arguments]` is equivalent to no selector. `doc FILE.doc --backend=gpu` **fails closed** with `DOC_GPU_UNSUPPORTED` until a genuine general-purpose GPU evaluator is available; no automatic selection or silent CPU fallback. The `webgpu_bool` and `webgpu_integer_eq` examples remain bounded GPU regression tools, not the general DOC CLI. They use `DOC_GPU_EXECUTION=cpu|gpu` without `auto`. See [backend policy](../BACKEND-EXECUTION-CONTRACT.md).
+
 ## Local build and correctness
 
 From repository root with Rust installed:
