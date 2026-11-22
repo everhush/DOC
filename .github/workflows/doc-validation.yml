@@ -43,6 +43,8 @@ jobs:
           done
       - name: Validate Kaggle dispatch and evidence policies without credentials or GPUs
         run: python3 -m unittest discover -s ci/kaggle -p 'test_*.py' -v
+      - name: Adversarial physical-GPU log parser tests (synthetic, no GPU)
+        run: python3 -m unittest discover -s ci -p 'test_local_gpu_evidence.py' -v
       - name: Audit submitted local physical-GPU result logs without hardware claims
         run: python3 ci/verify-local-gpu-evidence.py local-evidence
       - name: Native compile, tests and WGSL parse/validation
