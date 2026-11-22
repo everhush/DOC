@@ -97,12 +97,12 @@ def main(root):
     expected_adapter = "AMD Radeon 860M Graphics (RADV KRACKAN1)"
     # vulkaninfo can list software and hardware adapters together. All identity
     # fields must belong to the SAME GPU stanza, not separate devices.
-    devices = re.split(r"(?m)^GPU\\d+:\\s*$", physical)[1:]
+    devices = re.split(r"(?m)^GPU\d+:\s*$", physical)[1:]
     require(any(
-        re.search(r"(?m)^\\s*deviceName\\s*= " + re.escape(expected_adapter) + r"$", device)
-        and re.search(r"(?m)^\\s*deviceType\\s*= PHYSICAL_DEVICE_TYPE_(?:INTEGRATED|DISCRETE)_GPU$", device)
-        and re.search(r"(?m)^\\s*vendorID\\s*= 0x1002$", device)
-        and re.search(r"(?m)^\\s*deviceID\\s*= 0x1114$", device)
+        re.search(r"(?m)^\s*deviceName\s*= " + re.escape(expected_adapter) + r"$", device)
+        and re.search(r"(?m)^\s*deviceType\s*= PHYSICAL_DEVICE_TYPE_(?:INTEGRATED|DISCRETE)_GPU$", device)
+        and re.search(r"(?m)^\s*vendorID\s*= 0x1002$", device)
+        and re.search(r"(?m)^\s*deviceID\s*= 0x1114$", device)
         for device in devices),
         "Inventoried AMD GPU identity, type and PCI IDs do not match one physical device")
     for mode in MODES:
