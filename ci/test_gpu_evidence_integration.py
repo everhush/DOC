@@ -45,6 +45,24 @@ class EvidenceIntegration(unittest.TestCase):
         with self.assertRaises(ValueError):
             evidence.main(self.root)
 
+    def test_extra_csv_column_rejected(self):
+        path = self.root / "parity/native-gpu-equivalence.csv"
+        path.write_text(path.read_text().replace("eq,1,0,0", "eq,1,0,0,unexpected", 1))
+        with self.assertRaises(ValueError):
+            evidence.main(self.root)
+
+    def test_missing_csv_column_rejected(self):
+        path = self.root / "parity/native-gpu-equivalence.csv"
+        path.write_text(path.read_text().replace("eq,1,0,0", "eq,1,0", 1))
+        with self.assertRaises(ValueError):
+            evidence.main(self.root)
+
+    def test_non_integer_csv_rejected(self):
+        path = self.root / "parity/native-gpu-equivalence.csv"
+        path.write_text(path.read_text().replace("eq,1,0,0", "eq,1,0,NaN", 1))
+        with self.assertRaises(ValueError):
+            evidence.main(self.root)
+
     def test_missing_log(self):
         (self.root / "goose/goose-sdl3/sdl3-lt-65.log").unlink()
         with self.assertRaises(OSError):
