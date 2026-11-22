@@ -71,5 +71,26 @@ for binary in (rust,goose):
         raise AssertionError(f"{binary} corrupted or truncated long natural")
     cases+=1
 
+# Invalid large typed effects must reject the whole graph without publishing
+# dependent observations. This also checks errors near the end of a large file.
+for name, contents, kind in (
+    ("long-nat-invalid-tail", "9"*8192+"x\n", "nat"),
+    ("long-int-overflow", "9"*8193+"\n", "int"),
+    ("long-bool-invalid", "true"+" "*8192+"false\n", "bool"),
+):
+    filename=f"{name}.txt"
+    (root/filename).write_text(contents)
+    authored=root/f"{name}.doc"
+    authored.write_text(
+        f'effect input: {kind} = read("{filename}")\n'
+        'derive observed: bool (input) = eq(input,input)\n')
+    for binary in (rust,goose):
+        child=subprocess.run([binary,str(authored)],capture_output=True,
+                             text=True,timeout=30)
+        if child.returncode==0 or "observed:" in child.stdout:
+            raise AssertionError(
+                f"{binary} accepted/published invalid large effect {name}")
+        cases+=1
+
 print(f"DOC_NATIVE_TYPED_READ_EFFECT_PASS: {cases} independent source-effect checks")
 (root/"doc-typed-effect.log").write_text(f"DOC_NATIVE_TYPED_READ_EFFECT_PASS: {cases}\n")
