@@ -24,3 +24,47 @@ The submitted DOC manuscript and its original experimental measurements remain u
 | General-purpose usable language and independent binary/runtime toolchains | New product acceptance goal, not a theorem of the original finite calculus | Not established | Not established |
 
 See [MODEL-REQUIREMENT-TRACE.md](MODEL-REQUIREMENT-TRACE.md) for a detailed **paper-ordered audit worklist**. Each future positive result must include tested revision, actual commands and raw evidence. Record comparative benchmarks in [issue #9](https://github.com/imxade/DOC/issues/9). For the current finite-subset build, exact revision, commands and adapter evidence, see [secondary validation run 44550920946](https://github.com/x0796666-ui/DOC/actions/runs/44550920946). Full production and cross-runtime conformance gates remain open.
+
+
+## 2026-11-22 current-code evidence update (supersedes stale table cells above)
+
+The original table is a historical implementation snapshot and should not be
+read as the current status of Goose: it now has a native typed DOC runtime
+(`runtime-goose/doc_typed_core.goose`, `doc_typed.goose`), independent
+frontend, ready-frontier repair, demand and typed forward recurrence, exact
+arbitrary naturals, functions/modules, collections, UTF-8, sampled file
+effects, graph-replacement and protected-reader tests. Rust has corresponding
+source and tests under `runtime-rust/`. These bounded executable tests do
+**not** establish full general-purpose production acceptance, all schedule
+independence theorem obligations, or the conditional safe-realization proofs.
+
+- **Executed secondary CI:** [44980780808](https://github.com/x0796666-ui/DOC/actions/runs/44980780808),
+  revision `d76bebc`: seven native CPU, Rust wgpu/Goose SDL3 Mesa Vulkan,
+  independent result-parity and portability jobs passed. Newer revisions,
+  including the physical branch merge, have not yet produced an executing
+  seven-job pass due jobs failing before recording steps.
+- **Hardware evidence:** Physical local Rust wgpu adapter was AMD Radeon
+  860M, IntegratedGpu/Vulkan RADV. Native Goose independently dispatched
+  SDL3 Vulkan and returned 77 oracle checks plus 42 matching Rust/Goose
+  eq/lt/le episodes. The local machine also enumerated software llvmpipe;
+  Goose logs did not identify its chosen physical device. Therefore a
+  same-single-device rerun is required before marking *Goose physical
+  selection* PASS. This is **not** a failed observed result-parity check.
+- **Performance evidence:** local agent reported 31 samples each for Rust
+  and Goose 1/2/4 workers (including slower multi-worker cases), and staged
+  Rust GPU host timings. The full samples and comprehensive same-hardware
+  distributions have not been committed. No speedup is implied.
+- **Exact integration provenance:** [831d6f6](https://github.com/x0796666-ui/DOC/commit/831d6f65191ee071052a2ca5804bfaa283280eb5),
+  [local hardware evidence index](local-evidence/README.md),
+  [new offline log validator](ci/verify-local-gpu-evidence.py). Current
+  branch evidence is derived from local-agent submitted text logs; new
+  physical device testing must be performed locally.
+- **Still not accepted:** complete typed error/effect/cancellation semantics,
+  full pinned-reader/eviction/reconstruction and Goose pool-safety lifetime,
+  transport, placement and bounded fail-stop policies, distribution packaging,
+  exhaustive paper-order implementation trace and production tests.
+
+Implementation handoff is [secondary Issue #1](https://github.com/x0796666-ui/DOC/issues/1);
+canonical acceptance is [#7](https://github.com/imxade/DOC/issues/7)
+and [#9](https://github.com/imxade/DOC/issues/9). The local branch merge
+does not close either issue or complete the game engine.

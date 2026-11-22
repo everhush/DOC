@@ -71,3 +71,52 @@ This addendum supersedes **stale implementation status in the source-ordered tab
 **Minimum semantic-basis review:** The existing stable typed sources, pure finite DAG definitions, atomic repair/publication, and separate typed forward recurrence with finite demand remain distinct model operators. `if` is a pure value selector, not an effect or graph-generation operator. Bounded function calls, module imports, sorting networks and collection operators are source elaborations/local pure transformations; none establishes a new irreducible DOC scheduling primitive. Explicit file reads are admitted effects, not pure derived definitions. SDL3/wgpu are physical placement implementations, not new DOC operators. Removing atomic publication would permit partial-frontier observations; removing forward carry/demand would confine execution to the finite acyclic kernel. Conversely, introducing a separate game, thread or GPU core primitive is not justified by the existing evidence.
 
 **Known documentation debt:** This document's older table still references obsolete Goose WGSL and old bounded-only natural limitations; those entries are historical and superseded here. A complete paragraph-by-paragraph audit of the manuscript, with exact theorem assumptions, tests, measurements and per-runtime statuses, remains OPEN. No release or production-parity claim follows from green CI.
+
+
+## Evidence addendum — 2026-11-22, local AMD physical adapter and branch integration
+
+This adds **observed local-machine evidence**, not a new language theorem or
+full physical-realization/production certification. It supersedes the
+2026-11-21 addendum's statement that no physical Vulkan evidence exists for
+Rust, but retains the older finite-theorem and conditional-realization gaps.
+
+- Local agent checked AMD Radeon 860M (RADV KRACKAN1, NixOS kernel 6.18.62,
+  Mesa 26.3.0) at the source base
+  `70394f1b65ee6d6ddad348cf497eb9b6f1fa8d52`, pushed as
+  `feat/physical-gpu-parity` commit `b8111b6`.
+- Rust `wgpu` explicitly logged `IntegratedGpu` / `Vulkan` / `radv`
+  and 42 signed eq/lt/le source episodes. Independent Goose SDL3 Vulkan
+  logged 77 native GPU/CPU checks and 42 matching GPU-result episodes.
+  Data: [local-evidence](local-evidence/README.md), including 89 raw text
+  files, device inventory and parity CSV.
+- **Qualification:** Local Vulkan inventory also lists CPU llvmpipe. Goose
+  logged `DOC_GOOSE_SDL3_DEVICE: vulkan`, but not the exact GPU model or
+  PCI ID. Hence physical-GPU identity is verified for Rust but remains
+  unconfirmed for Goose despite correct observed cross-runtime parity.
+  [Linux Mesa forced-device repro](ci/physical-vulkan-dual-parity.sh)
+  requires a new on-device run; it is not previously executed evidence.
+- Local benchmark summaries report 31 samples per runtime/worker setting,
+  with 1/2/4 workers and median/p95, but **individual raw latency samples
+  and a full matched end-to-end GPU campaign remain OPEN**. Observed workload
+  regressions (e.g. additional workers slower on these cases) must be retained.
+- Integrated two-parent merge
+  [831d6f6](https://github.com/x0796666-ui/DOC/commit/831d6f65191ee071052a2ca5804bfaa283280eb5)
+  preserves the local evidence plus later independent worker failure-atomic
+  tests. [8d1275d](https://github.com/x0796666-ui/DOC/commit/8d1275dae6d87ba48182613f096d860ba028aa7e)
+  adds offline auditing of all 42 recorded parity episodes.
+- The later secondary [CI 44991253090](https://github.com/x0796666-ui/DOC/actions/runs/44991253090)
+  showed failed jobs with zero executable steps, as did 44989812444.
+  Their *runtime correctness* outcome is **UNVERIFIED**. The last complete
+  seven-job standard CI pass was
+  [44980780808](https://github.com/x0796666-ui/DOC/actions/runs/44980780808)
+  at `d76bebc`, before newer test/merge commits.
+
+**Open contracts are unchanged:** complete recoverable typed effects/errors,
+safe concurrent graph replacement across both runtimes, protected physical
+lifetime and reconstruction, Goose pool slot reuse, transport and fail-stop
+policies under stated assumptions, independent same-source real applications,
+matched performance distributions, distribution packaging, and paragraph-level
+paper-to-code evidence. [Secondary Issue #1](https://github.com/x0796666-ui/DOC/issues/1)
+is the local engineering handoff and stays open until all three non-game
+milestones truly pass. Do not infer universal acceleration or paper-parity
+from bounded GPU observations.
