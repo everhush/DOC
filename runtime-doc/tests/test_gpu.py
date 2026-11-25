@@ -62,8 +62,13 @@ def main():
      harness=root/'device_loss.c';harness.write_text("#define main generated_main\n#include \"generated.c\"\n#undef main\n#include <assert.h>\nint main(void){\n    Epoch e; size_t target; epoch_init(&e,states,sizeof(states)/sizeof(states[0]));\n    gpu_mode=2; assert(gpu_open(e.n));\n    epoch_begin(&e); assert(batch(&e,0,NULL,&target)); epoch_finish(&e,1);\n    assert(gpu_dispatches>0);\n    V *saved=calloc(e.n,sizeof(V)); unsigned char *dirty=malloc(e.n),*have=malloc(e.n);\n    assert(saved&&dirty&&have);\n    for(size_t i=0;i<e.n;i++)if(states[i].name)saved[i]=*states[i].slot;\n    memcpy(dirty,e.dirty,e.n);memcpy(have,e.have,e.n);\n    wgpuDeviceDestroy(gpu_device);\n    gpu_wait(&gpu_device_lost,0);\n    assert(!gpu_healthy());\n    char *updates[]={\"x=3\",\"xs=[4]\"};\n    epoch_begin(&e);assert(!batch(&e,2,updates,&target));epoch_finish(&e,0);\n    assert(!memcmp(dirty,e.dirty,e.n)&&!memcmp(have,e.have,e.n));\n    for(size_t i=0;i<e.n;i++)if(states[i].name)assert(equal(saved[i],*states[i].slot));\n    free(saved);free(dirty);free(have);\n    /* Only an explicit host decision may recover on CPU. */\n    gpu_close();gpu_mode=0;\n    epoch_begin(&e);assert(batch(&e,2,updates,&target));epoch_finish(&e,1);\n    size_t x=find_state(&e,\"x\",1),g3=find_state(&e,\"g3\",2),c0=find_state(&e,\"c0\",2);\n    assert(x<e.n&&g3<e.n&&c0<e.n);\n    assert(num(*states[x].slot)==3&&truth(*states[g3].slot));\n    V v=*states[c0].slot;assert(v.kind==L&&v.n==2&&((const int64_t*)v.p)[0]==4&&((const int64_t*)v.p)[1]==0);\n    epoch_free(&e);assert(live_bytes==0);\n    puts(\"DOC11_GPU_DEVICE_LOSS_PASS: actual device destroyed; rollback and explicit CPU recovery; live=0\");\n    return 0;\n}\n")
      loss=root/'device_loss';check(['cc','-std=gnu11','-O1','-pthread','-DDOC_ENABLE_GPU','-I',root,'-I',headers,'-I',wgpu/'include',harness,'-L',wgpu/'lib','-Wl,-rpath,'+str(wgpu/'lib'),'-lwgpu_native','-o',loss],root)
      if a.artifacts:shutil.copy2(loss,a.artifacts/'device_loss')
-    lost=run([loss],root,a.physical);assert lost.returncode==0 and b'DOC11_GPU_DEVICE_LOSS_PASS:' in lost.stdout,(lost.stdout,lost.stderr)
-    print(lost.stdout.decode().strip(),flush=True)
+    lost=run([loss],root,a.physical)
+    if a.artifacts:
+     (a.artifacts/'device_loss.stdout').write_bytes(lost.stdout)
+     (a.artifacts/'device_loss.stderr').write_bytes(lost.stderr)
+    assert lost.returncode==0 and b'DOC11_GPU_DEVICE_LOSS_PASS:' in lost.stdout,(lost.stdout,lost.stderr)
+    if a.physical:assert b'physical=1' in lost.stderr,lost.stderr
+    print(lost.stdout.decode().strip(),lost.stderr.decode(),flush=True)
     if a.prebuilt:
      authority=a.prebuilt.resolve()/'gpu_epoch_authority'
     else:
