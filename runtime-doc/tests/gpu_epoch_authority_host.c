@@ -35,9 +35,17 @@ static void *cancelled_writer(void *raw){
 }
 int main(void){
     Epoch e;size_t target;epoch_init(&e,states,sizeof(states)/sizeof(states[0]));
-    gpu_mode=2;assert(gpu_open(e.n));assert(epoch_begin(&e));assert(batch(&e,0,NULL,&target));assert(epoch_finish(&e,1));
-    assert(e.committed==1&&gpu_dispatches>0);size_t dispatches=gpu_dispatches,baseline=atomic_load(&live_bytes);assert(baseline>0);
-    Expected old={&e,1,2,3,1,2};read_expected(&old);
+    /* A narrow explicit GPU demand establishes a one-lane pool. The
+       same graph's full automatic frontier must grow it, not allocate a
+       separate device or reuse storage before completion. */
+    gpu_mode=1;assert(gpu_open(e.n));char *demand[]={"--demand=g0"};
+    assert(epoch_begin(&e));assert(batch(&e,1,demand,&target));assert(epoch_finish(&e,1));assert(gpu_capacity==1);
+    assert(gpu_pool_metrics.live==(uint64_t)e.n*4+20);
+    gpu_mode=2;assert(epoch_begin(&e));assert(batch(&e,0,NULL,&target));assert(epoch_finish(&e,1));
+    assert(gpu_capacity>=95&&gpu_pool_metrics.live==(uint64_t)e.n*4+(uint64_t)gpu_capacity*20);
+    assert(gpu_pool_metrics.peak>=gpu_pool_metrics.live+20&&gpu_pool_metrics.released>=20);
+    assert(e.committed==2&&gpu_dispatches>0);size_t dispatches=gpu_dispatches,baseline=atomic_load(&live_bytes);assert(baseline>0);
+    Expected old={&e,2,2,3,1,2};read_expected(&old);
     /* Hold host acknowledgement after a genuine submit; the device may
        already have finished, but its completion has not been consumed. */
     gpu_test_after_submit=hold_submission;assert(epoch_begin(&e));int64_t ticket=epoch_ticket(&e);
@@ -46,25 +54,25 @@ int main(void){
     read_expected(&old);assert(epoch_cancel(&e,ticket));
     pthread_mutex_lock(&gate);released=1;pthread_cond_broadcast(&ready);pthread_mutex_unlock(&gate);
     assert(!pthread_join(writer,NULL));gpu_test_after_submit=NULL;
-    assert(gpu_healthy()&&gpu_dispatches>dispatches&&e.committed==1&&!epoch_cancel(&e,ticket));
+    assert(gpu_healthy()&&gpu_dispatches>dispatches&&e.committed==2&&!epoch_cancel(&e,ticket));
     read_expected(&old);assert(atomic_load(&live_bytes)==baseline);
     /* Cancellation is not device failure: a later epoch reuses the pool and
        publishes the new mixed values only after actual GPU completion. */
     char *retry[]={"x=3","xs=[4]"};assert(epoch_begin(&e));assert(batch(&e,2,retry,&target));assert(epoch_finish(&e,1));
-    Expected current={&e,3,3,2,4,0};read_expected(&current);baseline=atomic_load(&live_bytes);
+    Expected current={&e,4,3,2,4,0};read_expected(&current);baseline=atomic_load(&live_bytes);
     /* Abandon a real submission without a successful map. Its queue must
        acknowledge completion before host resource retirement and pool reuse. */
     gpu_test_after_submit=abandon_submission;char *next[]={"x=4","xs=[8]"};assert(epoch_begin(&e));
     assert(!batch(&e,2,next,&target));assert(!epoch_finish(&e,1));gpu_test_after_submit=NULL;
-    assert(gpu_healthy()&&e.committed==3);read_expected(&current);assert(atomic_load(&live_bytes)==baseline);
+    assert(gpu_healthy()&&e.committed==4);read_expected(&current);assert(atomic_load(&live_bytes)==baseline);
     assert(epoch_begin(&e));assert(batch(&e,2,next,&target));assert(epoch_finish(&e,1));
-    Expected newer={&e,5,4,2,8,0};read_expected(&newer);baseline=atomic_load(&live_bytes);
+    Expected newer={&e,6,4,2,8,0};read_expected(&newer);baseline=atomic_load(&live_bytes);
     /* A subsequent actual submission loses its device before readback admission. */
     gpu_test_after_submit=destroy_submission;char *lost[]={"x=5","xs=[9]"};assert(epoch_begin(&e));
     assert(!batch(&e,2,lost,&target));assert(!epoch_finish(&e,1));gpu_test_after_submit=NULL;
-    assert(!gpu_healthy()&&atomic_load(&gpu_device_lost)&&e.committed==5);
+    assert(!gpu_healthy()&&atomic_load(&gpu_device_lost)&&e.committed==6);
     read_expected(&newer);assert(atomic_load(&live_bytes)==baseline);
-    gpu_close();gpu_mode=0;epoch_free(&e);assert(atomic_load(&live_bytes)==0);
+    gpu_close();assert(!gpu_pool_metrics.live&&gpu_pool_metrics.admitted==gpu_pool_metrics.released);gpu_mode=0;epoch_free(&e);assert(atomic_load(&live_bytes)==0);
     puts("DOC11_GPU_EPOCH_AUTHORITY_PASS: real submitted mixed frontier cancellation, protected old snapshot, rollback, pool reuse, abandoned submission queue completion, submitted device loss, retirement and live=0");
     return 0;
 }

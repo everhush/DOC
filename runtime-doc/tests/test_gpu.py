@@ -26,6 +26,10 @@ def main():
  mixed='source x:int=2\nsource xs:ints=[1,2]\n'+''.join(f'derive g{i}:bool(x)=eq(x,{i})\n' for i in range(96))+''.join(f'derive c{i}:ints(xs)=append(xs,{i})\n' for i in range(32))
  with tempfile.TemporaryDirectory() as tmp:
   root=Path(tmp);src=root/'test.doc';c=root/'generated.c';exe=root/'app';gh=root/'gpu_generated.h'
+  if not a.prebuilt:
+   metric_exe=root/'pool_metrics'
+   check(['cc','-std=c11','-O2','-Wall','-Wextra','-Werror','-I',headers,Path(__file__).resolve().parent/'gpu_pool_metrics_test.c','-o',metric_exe],root)
+   print(check([metric_exe],root).decode().strip(),flush=True)
   for name,program,args,mode in [('scalar',scalar,['--next','a=0'],'gpu'),('arithmetic',arithmetic,['--next','a=4'],'gpu'),('wide',wide,['--next','x=3'],'gpu'),('mixed',mixed,['--next','x=3','xs=[4]'],'auto')]:
    src.write_text(program);snapshot=program.encode()
    if a.prebuilt:
@@ -81,7 +85,7 @@ def main():
      (a.artifacts/'gpu_epoch_authority.stdout').write_bytes(retired.stdout)
      (a.artifacts/'gpu_epoch_authority.stderr').write_bytes(retired.stderr)
     assert retired.returncode==0 and b'DOC11_GPU_EPOCH_AUTHORITY_PASS:' in retired.stdout and b'DOC11_GPU_RETIRED: outcome=device-lost' in retired.stderr and b'DOC11_GPU_RETIRED: outcome=queue-complete' in retired.stderr,(retired.stdout,retired.stderr)
-    assert b'DOC11_GPU_DISPATCH: lanes=96 workgroups=2' in retired.stderr and b'DOC11_GPU_BUFFER_POOL: action=reused' in retired.stderr,retired.stderr
+    assert b'DOC11_GPU_DISPATCH: lanes=96 workgroups=2' in retired.stderr and b'DOC11_GPU_BUFFER_POOL: action=reused' in retired.stderr and b'DOC11_GPU_BUFFER_POOL: action=grown' in retired.stderr and b'DOC11_GPU_POOL_METRICS: event=closed' in retired.stderr,retired.stderr
     if a.physical:assert b'physical=1' in retired.stderr
     print(retired.stdout.decode().strip(),retired.stderr.decode(),flush=True)
     assert b'DOC11_GPU_FRONTIER: cpu=32 gpu=96' in actual.stderr,actual.stderr;bad=run([exe,'--backend=gpu'],root,a.physical);assert bad.returncode and not bad.stdout and b'DOC_GPU_UNSUPPORTED' in bad.stderr,bad
