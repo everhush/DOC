@@ -1,5 +1,5 @@
 name: DOC Rust Linux validation
-# Keep this workflow name registered on the private default branch master.
+# Keep this workflow name registered on the private CI fork default branch master.
 # This is a manual reference validation, not an independent DOC release gate.
 
 # Initial release and CI acceptance target: Linux x86_64 only.
@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   rust:
-    if: ${{ github.repository_id == '1317169134' && github.ref_name == 'master' }}
+    if: ${{ github.repository_id == '1471748051' && github.ref_name == 'master' }}
     name: Rust DOC language, CPU safety and WGSL checks
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -28,7 +28,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$GITHUB_REPOSITORY_ID" = '1317169134'
+          test "$GITHUB_REPOSITORY_ID" = '1471748051'
           test "$GITHUB_REF_NAME" = 'master'
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           mkdir -p validation-logs

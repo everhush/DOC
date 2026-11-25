@@ -2,7 +2,7 @@
 
 The sole active development repository is **imxade/DOC, master (private)**, repository ID 1317169134. The user designates **xad3play/DOC** as the CI-only fork. All code, tests, workflows and issue updates originate in the upstream; synchronize the fork from upstream without authoring fork-only commits. The former rtu0/doc2 and x0796666-ui/doc2 repositories are historical only. Do not write engineering commits or request CI in them.
 
-Before synchronization, verify that the named fork is private, belongs to this repository's fork network, and permits fast-forward synchronization. Before running CI, update repository-specific guards in the upstream against the verified fork ID and branch, synchronize, verify matching upstream/fork commit and tree hashes, and enable Actions in the fork. As of 2026-11-25 the fork returns HTTP 404 through all three connected GitHub accounts; its identity, branch and access are unverified. Do not run private-upstream Actions as a substitute or weaken the existing guards. No fork writes or workflow requests were made.
+Before synchronization, verify that the named fork is private, belongs to this repository's fork network, and permits fast-forward synchronization. Before running CI, update repository-specific guards in the upstream against the verified fork ID and branch, synchronize, verify matching upstream/fork commit and tree hashes, and enable Actions in the fork. On 2026-11-25 access was granted and verified: private fork ID 1471748051, parent and source imxade/DOC, default branch master, administrator access. CI guards now admit only that repository ID and master; upstream job execution remains disabled. Synchronization is a non-forced ref fast-forward, never a fork-authored commit.
 
 ## Verified imported source
 

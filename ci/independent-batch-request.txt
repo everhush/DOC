@@ -3,3 +3,4 @@ Implementation parent: 4f993daa47621768a03fdcec06e99830d21f27db
 Local transport ASan/UBSan: PASS (17 Python rejections, 21 corrupted packets, 493 truncations, 17 replay frames).
 Run independent bootstrap, native conformance, Stage-2 self-reproduction, game replay, benchmark, QEMU scalar, WebGPU compute and offscreen pixel parity.
 Physical GPU acceptance is separate. Do not treat software execution as physical proof.
+2026-11-25: verified private CI fork; consolidated Stage-2 regression including mesh allocation fault sweep.
