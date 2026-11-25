@@ -1,0 +1,136 @@
+# General pure frontend: declaration directory, lexical resolution, and
+# compile-time type inference. All traversal state is DOC-owned data.
+# Types: int=0 bool=1 nat=2 ints=3 maybe_int=4 text=5. fn=-1.
+# Directory records: name event, role, declared type, formal count, body, end.
+fn gkind(w) = if(eq(w,text("int")),0,if(eq(w,text("bool")),1,if(eq(w,text("nat")),2,if(eq(w,text("ints")),3,if(eq(w,text("maybe_int")),4,if(eq(w,text("text")),5,bad()))))))
+fn gf(ds,d,k) = get(ds,add(mul(d,6),k))
+fn gn(ds) = quot(len(ds),6)
+fn grole(ds,d) = gf(ds,d,1)
+fn gname(ds,d) = gf(ds,d,0)
+fn gtype(ds,d) = gf(ds,d,2)
+fn gargc(ds,d) = gf(ds,d,3)
+fn gbody(ds,d) = gf(ds,d,4)
+fn gend(ds,d) = gf(ds,d,5)
+fn formal_event(ds,d,j) = add(add(gname(ds,d),if(eq(grole(ds,d),3),2,4)),mul(j,2))
+fn gdir_begin(s,r) = if(if(le(1,r),if(le(r,3),true,eq(r,5)),false),replace_at(replace_at(replace_at(s,2,r),3,-1),4,0),preject(s))
+fn gdir_end(s) = append(append(append(append(append(append(s,get(s,1)),get(s,2)),get(s,3)),get(s,4)),get(s,5)),get(s,0))
+fn gdir_piece(s,es,ts,bs,k,i) = if(eq(k,1),gdir_begin(s,ea(es,i)),if(eq(k,2),replace_at(s,1,i),if(eq(k,4),replace_at(s,3,gkind(ename(es,ts,bs,i))),if(eq(k,6),replace_at(s,4,add(get(s,4),1)),if(eq(k,7),replace_at(s,5,i),if(eq(k,16),gdir_end(s),s))))))
+fn gdir_step(s,es,ts,bs) = replace_at(gdir_piece(s,es,ts,bs,ev(es,get(s,0)),get(s,0)),0,add(get(s,0),1))
+fn gowner_step(s,k) = append(replace_at(s,0,if(eq(k,16),add(get(s,0),1),get(s,0))),get(s,0))
+# Operator numbers are compile-time only. The emitted native code must use
+# direct functions, never a bytecode interpreter.
+fn op_low(w) = if(eq(w,text("add")),1,if(eq(w,text("sub")),2,if(eq(w,text("mul")),3,if(eq(w,text("eq")),4,if(eq(w,text("lt")),5,if(eq(w,text("le")),6,if(eq(w,text("if")),7,if(eq(w,text("empty")),8,if(eq(w,text("append")),9,if(eq(w,text("remove_at")),10,if(eq(w,text("replace_at")),11,if(eq(w,text("len")),12,0))))))))))))
+fn op_mid(w) = if(eq(w,text("get")),13,if(eq(w,text("tail")),14,if(eq(w,text("slice")),15,if(eq(w,text("none")),16,if(eq(w,text("some")),17,if(eq(w,text("try_get")),18,if(eq(w,text("unwrap_or")),19,if(eq(w,text("concat")),20,if(eq(w,text("starts_with")),21,if(eq(w,text("nat")),22,if(eq(w,text("text")),23,0)))))))))))
+fn op_high(w) = if(eq(w,text("quot")),24,if(eq(w,text("rem")),25,if(eq(w,text("bit_and")),26,if(eq(w,text("bit_or")),27,if(eq(w,text("bit_xor")),28,if(eq(w,text("bit_not")),29,if(eq(w,text("shift_left")),30,if(eq(w,text("shift_right")),31,if(eq(w,text("utf8_bytes")),32,if(eq(w,text("utf8_text")),33,if(eq(w,text("map_ints")),34,if(eq(w,text("recur")),35,0))))))))))))
+fn pick_op(a,b,c) = if(lt(0,a),a,if(lt(0,b),b,c))
+fn gop(w) = pick_op(op_low(w),op_mid(w),op_high(w))
+fn greserved(w) = if(is_bool(w),true,if(eq(w,text("none")),true,lt(0,gop(w))))
+fn gcall(es,ts,bs,i) = if(eq(ev(es,i),13),gop(ename(es,ts,bs,i)),0)
+fn gdyn(es,ts,bs,ds,d) = if(eq(grole(ds,d),2),if(le(34,gcall(es,ts,bs,add(gbody(ds,d),1))),gcall(es,ts,bs,add(gbody(ds,d),1)),0),0)
+fn binder_event(ds,d) = add(gbody(ds,d),5)
+fn atom_id(es,i) = if(eq(ev(es,i),10),eq(ea(es,i),1),false)
+fn dyn_shape(es,ds,d) = if(lt(add(gbody(ds,d),6),gend(ds,d)),if(atom_id(es,add(gbody(ds,d),3)),if(eq(ev(es,add(gbody(ds,d),4)),9),if(atom_id(es,binder_event(ds,d)),eq(ev(es,add(gbody(ds,d),6)),9),false),false),false),false)
+fn binder_name(es,ts,bs,ds,d,i) = same_name(es,ts,bs,binder_event(ds,d),i)
+# Hash only identifier token bytes. The table is built before name admission
+# and exact token equality resolves collisions; no hash is trusted as identity.
+fn hash_start() = 2166136261
+fn hash_byte(h,b) = bit_and(mul(bit_xor(h,b),16777619),4294967295)
+fn hash_at(ts,t,k) = get(ts,add(mul(t,3),k))
+fn hash_done(s,v) = append(replace_at(replace_at(replace_at(s,0,add(get(s,0),1)),1,0),2,hash_start()),v)
+fn hash_piece(s,ts,bs,t,b,h) = if(eq(hash_at(ts,t,0),1),if(eq(b,hash_at(ts,t,2)),hash_done(s,h),replace_at(replace_at(s,1,add(b,1)),2,hash_byte(h,get(bs,add(hash_at(ts,t,1),b))))),hash_done(s,0))
+fn hash_step(s,ts,bs) = hash_piece(s,ts,bs,get(s,0),get(s,1),get(s,2))
+fn hslot(hs,es,i,n) = rem(get(hs,et(es,i)),n)
+# Index state [declaration, slot] + one ordinal per bucket. Open addressing
+# uses exact spelling, and load <= 1/2 ensures an empty bucket is available.
+fn index_store(s,es,ds,hs,n,d,j) = replace_at(replace_at(replace_at(s,add(j,2),d),0,add(d,1)),1,if(lt(add(d,1),gn(ds)),hslot(hs,es,gname(ds,add(d,1)),n),0))
+fn index_probe(s,es,ts,bs,ds,hs,n,d,j,v) = if(eq(v,-1),index_store(s,es,ds,hs,n,d,j),if(same_name(es,ts,bs,gname(ds,d),gname(ds,v)),preject(s),replace_at(s,1,rem(add(j,1),n))))
+fn index_step(s,es,ts,bs,ds,hs,n) = index_probe(s,es,ts,bs,ds,hs,n,get(s,0),get(s,1),get(s,add(get(s,1),2)))
+# Resolution links: declaration >=0; formal -1000-ordinal; binder -2;
+# builtin -100-op; literals and structural events -1.
+# State [event, search ordinal, search mode] + links, one per event.
+# modes 1 previous declarations, 2 previous formals, 3 current formals.
+fn link(s,v) = append(replace_at(replace_at(s,0,add(get(s,0),1)),2,0),v)
+fn seek(s,m,j) = replace_at(replace_at(s,2,m),1,j)
+fn link_at(s,i) = get(s,add(3,i))
+fn gprev(s) = replace_at(s,1,sub(get(s,1),1))
+fn gformal_index(ds,d,i) = quot(sub(i,formal_event(ds,d,0)),2)
+fn gformal_start(s,ds,d,w,i) = if(if(eq(grole(ds,d),3),greserved(w),false),preject(s),seek(s,2,sub(gformal_index(ds,d,i),1)))
+fn gnew_decl(s,ds,d,w) = if(if(eq(grole(ds,d),3),greserved(w),false),preject(s),link(s,d))
+fn gcall_link(s,es,ts,bs,ds,hs,table,d,i,op) = if(eq(op,0),if(eq(grole(ds,d),1),preject(s),seek(s,1,hslot(hs,es,i,len(table)))),if(le(34,op),if(if(eq(grole(ds,d),2),eq(i,add(gbody(ds,d),1)),false),if(dyn_shape(es,ds,d),link(s,sub(-100,op)),preject(s)),preject(s)),if(eq(grole(ds,d),1),if(eq(op,17),link(s,-117),preject(s)),link(s,sub(-100,op)))))
+fn gvar_link(s,es,ts,bs,ds,d,i,w,dyn) = if(eq(grole(ds,d),1),if(if(is_bool(w),true,eq(w,text("none"))),link(s,-1),preject(s)),if(if(lt(0,dyn),binder_name(es,ts,bs,ds,d,i),false),if(eq(i,binder_event(ds,d)),if(greserved(w),preject(s),seek(s,3,sub(gargc(ds,d),1))),link(s,-2)),if(is_bool(w),link(s,-1),seek(s,3,sub(gargc(ds,d),1)))))
+fn gresolve_pure(s,es,ts,bs,ds,hs,table,d,i,k) = if(eq(k,2),gnew_decl(s,ds,d,ename(es,ts,bs,i)),if(eq(k,6),gformal_start(s,ds,d,ename(es,ts,bs,i),i),if(eq(k,13),gcall_link(s,es,ts,bs,ds,hs,table,d,i,gcall(es,ts,bs,i)),if(atom_id(es,i),gvar_link(s,es,ts,bs,ds,d,i,ename(es,ts,bs,i),gdyn(es,ts,bs,ds,d)),if(eq(k,11),if(if(eq(ea(es,i),43),if(eq(grole(ds,d),1),false,true),false),preject(s),link(s,-1)),link(s,-1))))))
+fn gresolve_begin(s,es,ts,bs,ds,hs,table,d,i,k) = if(eq(grole(ds,d),5),if(eq(k,2),gnew_decl(s,ds,d,ename(es,ts,bs,i)),link(s,-1)),gresolve_pure(s,es,ts,bs,ds,hs,table,d,i,k))
+fn gglobal_found(s,ds,k,j) = if(eq(k,2),preject(s),if(eq(k,6),if(eq(grole(ds,j),3),preject(s),link(s,j)),if(eq(grole(ds,j),3),link(s,j),preject(s))))
+fn gglobal_probe(s,es,ts,bs,ds,table,d,i,k,j,v) = if(eq(v,-1),preject(s),if(same_name(es,ts,bs,i,gname(ds,v)),if(lt(v,d),gglobal_found(s,ds,k,v),preject(s)),replace_at(s,1,rem(add(j,1),len(table)))))
+fn gglobal(s,es,ts,bs,ds,table,d,i,k,j) = gglobal_probe(s,es,ts,bs,ds,table,d,i,k,j,get(table,j))
+fn gformal_done(s,es,ds,hs,table,d,i) = if(eq(grole(ds,d),3),link(s,sub(-1000,gformal_index(ds,d,i))),seek(s,1,hslot(hs,es,i,len(table))))
+fn gformal_dup(s,es,ts,bs,ds,hs,table,d,i,j) = if(lt(j,0),gformal_done(s,es,ds,hs,table,d,i),if(same_name(es,ts,bs,i,formal_event(ds,d,j)),preject(s),gprev(s)))
+fn gvar_found(s,es,ts,bs,ds,d,i,j,dyn) = if(if(lt(0,dyn),eq(i,binder_event(ds,d)),false),preject(s),link(s,link_at(s,formal_event(ds,d,j))))
+fn gvar_miss(s,ds,d,i,dyn) = if(if(lt(0,dyn),eq(i,binder_event(ds,d)),false),link(s,-2),preject(s))
+fn gvar_seek(s,es,ts,bs,ds,d,i,j,dyn) = if(lt(j,0),gvar_miss(s,ds,d,i,dyn),if(same_name(es,ts,bs,i,formal_event(ds,d,j)),gvar_found(s,es,ts,bs,ds,d,i,j,dyn),gprev(s)))
+fn gresolve_at(s,es,ts,bs,ds,hs,table,d,i,m,j) = if(eq(m,0),gresolve_begin(s,es,ts,bs,ds,hs,table,d,i,ev(es,i)),if(eq(m,1),gglobal(s,es,ts,bs,ds,table,d,i,ev(es,i),j),if(eq(m,2),gformal_dup(s,es,ts,bs,ds,hs,table,d,i,j),gvar_seek(s,es,ts,bs,ds,d,i,j,gdyn(es,ts,bs,ds,d)))))
+fn gresolve(s,es,ts,bs,ds,owners,hs,table) = gresolve_at(s,es,ts,bs,ds,hs,table,get(owners,get(s,0)),get(s,0),get(s,2),get(s,1))
+# Compile-time structural and type admission. User calls are instantiated
+# with the actual argument types in a private inference frame.
+fn arity(op) = if(if(eq(op,8),true,eq(op,16)),0,if(eq(op,35),4,if(if(eq(op,7),true,if(eq(op,11),true,if(eq(op,15),true,eq(op,34)))),3,if(if(eq(op,12),true,if(eq(op,14),true,if(eq(op,17),true,if(eq(op,22),true,if(eq(op,23),true,if(eq(op,29),true,if(eq(op,32),true,eq(op,33)))))))),1,2))))
+fn op_of(link) = sub(-100,link)
+fn call_arity(ds,link) = if(le(0,link),gargc(ds,link),arity(op_of(link)))
+fn is_atom(es,i,k) = if(eq(ev(es,i),10),eq(ea(es,i),k),false)
+fn literal_call(es,i,kind) = if(eq(ev(es,add(i,1)),14),if(is_atom(es,add(i,2),kind),eq(ev(es,add(i,3)),15),false),false)
+fn literal_ok(es,i,link) = if(eq(link,-122),literal_call(es,i,2),if(eq(link,-123),literal_call(es,i,3),true))
+fn quoted_ok(es,links,i) = if(le(2,i),if(eq(get(links,sub(i,2)),-123),literal_call(es,sub(i,2),3),false),false)
+fn signed_num(es,ts,b,e) = if(eq(e,add(b,2)),is_atom(es,add(b,1),2),if(eq(e,add(b,3)),if(eq(ev(es,add(b,1)),11),if(is_atom(es,add(b,2),2),adjacent(ts,et(es,add(b,1)),et(es,add(b,2))),false),false),false))
+fn source_maybe(es,ts,bs,b,e) = if(eq(e,add(b,2)),if(is_atom(es,add(b,1),1),eq(ename(es,ts,bs,add(b,1)),text("none")),false),if(if(eq(e,add(b,5)),true,eq(e,add(b,6))),if(eq(gcall(es,ts,bs,add(b,1)),17),signed_num(es,ts,add(b,2),sub(e,1)),false),false))
+fn source_scalar(es,ts,bs,t,b,e) = if(eq(t,0),signed_num(es,ts,b,e),if(eq(t,1),if(eq(e,add(b,2)),if(is_atom(es,add(b,1),1),is_bool(ename(es,ts,bs,add(b,1))),false),false),if(eq(t,2),if(eq(e,add(b,2)),is_atom(es,add(b,1),2),false),if(eq(t,3),if(eq(ev(es,add(b,1)),17),eq(ev(es,sub(e,1)),18),false),if(eq(t,4),source_maybe(es,ts,bs,b,e),if(eq(e,add(b,2)),is_atom(es,add(b,1),3),false))))))
+fn source_ok(es,ts,bs,ds,d) = source_scalar(es,ts,bs,gtype(ds,d),gbody(ds,d),gend(ds,d))
+fn syntax_arity_ok(s,n,base) = if(le(add(base,add(n,1)),len(s)),eq(top(s,n),-99),false)
+# Reverse structural pass also checks uncalled generic functions' arity.
+fn structure_call(s,es,ds,links,i) = if(if(literal_ok(es,i,get(links,i)),syntax_arity_ok(s,call_arity(ds,get(links,i)),1),false),tpop(s,call_arity(ds,get(links,i)),1),preject(s))
+# Effects are explicit typed startup reads, never pure calls or imported declarations.
+fn effect_shape(es,ts,bs,b,e) = if(eq(e,add(b,5)),if(eq(ev(es,add(b,1)),13),if(eq(ename(es,ts,bs,add(b,1)),text("read")),literal_call(es,add(b,1),3),false),false),false)
+fn effect_ok(es,ts,bs,ds,d) = effect_shape(es,ts,bs,gbody(ds,d),gend(ds,d))
+fn structure_atom(s,es,links,i) = if(eq(ea(es,i),3),if(quoted_ok(es,links,i),append(s,1),preject(s)),append(s,1))
+fn structure_body(s,es,ds,links,i,k) = if(eq(k,15),append(s,-99),if(eq(k,10),structure_atom(s,es,links,i),if(eq(k,13),structure_call(s,es,ds,links,i),if(eq(k,7),if(eq(len(s),2),slice(s,0,1),preject(s)),s))))
+fn structure_at(s,es,ts,bs,ds,links,d,i) = if(eq(grole(ds,d),5),if(eq(ev(es,i),16),if(effect_ok(es,ts,bs,ds,d),s,preject(s)),s),if(eq(grole(ds,d),1),if(eq(ev(es,i),16),if(source_ok(es,ts,bs,ds,d),s,preject(s)),s),structure_body(s,es,ds,links,i,ev(es,i))))
+fn structure_step(s,es,ts,bs,ds,links,owners) = replace_at(structure_at(s,es,ts,bs,ds,links,get(owners,get(s,0)),get(s,0)),0,sub(get(s,0),1))
+# Checked numeric literals, excluding arbitrary-precision natural digits.
+fn nat_digits(es,ds,links,d,i) = if(if(eq(grole(ds,d),1),eq(gtype(ds,d),2),false),true,if(le(2,i),eq(get(links,sub(i,2)),-122),false))
+fn gnstep(s,es,ts,bs,ds,links,owners) = if(if(eq(get(s,2),0),if(is_atom(es,get(s,0),2),nat_digits(es,ds,links,get(owners,get(s,0)),get(s,0)),false),false),ndone(s,0),nstep(s,es,ts,bs))
+# Types in concrete call frames: 0..5. Frames are compiler-only and no
+# runtime operation interpreter is emitted. Each fn call is lexical, to an
+# earlier definition, so the explicit inference stack cannot form cycles.
+fn same_numeric(a,b) = if(eq(a,b),if(eq(a,0),true,eq(a,2)),false)
+fn both(a,b,x,y) = if(eq(a,x),eq(b,y),false)
+fn type_or(ok,t) = if(ok,t,bad())
+fn result_low(op,a,b,c) = if(le(op,3),type_or(same_numeric(a,b),a),if(eq(op,4),type_or(eq(a,b),1),if(le(op,6),type_or(same_numeric(a,b),1),if(eq(op,7),type_or(if(eq(a,1),eq(b,c),false),b),if(eq(op,8),3,if(le(op,10),type_or(both(a,b,3,0),3),if(eq(op,11),type_or(if(both(a,b,3,0),eq(c,0),false),3),type_or(if(eq(a,3),true,eq(a,5)),0))))))))
+fn result_mid(op,a,b,c) = if(eq(op,13),type_or(both(a,b,3,0),0),if(eq(op,14),type_or(eq(a,3),3),if(eq(op,15),type_or(if(both(a,b,3,0),eq(c,0),false),3),if(eq(op,16),4,if(eq(op,17),type_or(eq(a,0),4),if(eq(op,18),type_or(both(a,b,3,0),4),if(eq(op,19),type_or(both(a,b,4,0),0),if(eq(op,20),type_or(both(a,b,5,5),5),if(eq(op,21),type_or(both(a,b,5,5),1),if(eq(op,22),type_or(eq(a,0),2),type_or(eq(a,5),5)))))))))))
+fn result_high(op,a,b,c,d) = if(eq(op,29),type_or(eq(a,0),0),if(le(op,31),type_or(both(a,b,0,0),0),if(eq(op,32),type_or(eq(a,5),3),if(eq(op,33),type_or(eq(a,3),5),if(eq(op,34),type_or(if(both(a,b,3,0),eq(c,0),false),3),type_or(if(eq(a,b),if(eq(c,1),eq(a,d),false),false),a))))))
+fn builtin_result(op,a,b,c,d) = if(le(op,12),result_low(op,a,b,c),if(le(op,23),result_mid(op,a,b,c),result_high(op,a,b,c,d)))
+fn type_arg(s,n,k) = if(lt(k,n),top(s,k),-1)
+fn inferred_builtin(s,op,n) = builtin_result(op,type_arg(s,n,0),type_arg(s,n,1),type_arg(s,n,2),type_arg(s,n,3))
+# Inference state header: outer decl, current decl, reverse event cursor,
+# frame base, first argument type index, type stack base, mode. Then completed
+# declaration types followed by private type frames. Arguments are retained
+# in reverse order at the caller's type-stack tail; metadata restores caller.
+fn infer_done(s,v) = append(replace_at(replace_at(s,0,add(get(s,0),1)),6,0),v)
+fn enter_outer(s,ds,d) = replace_at(replace_at(replace_at(replace_at(replace_at(replace_at(s,1,d),2,sub(gend(ds,d),1)),3,len(s)),4,-1),5,len(s)),6,1)
+fn infer_begin(s,ds,d) = if(eq(grole(ds,d),3),infer_done(s,-1),if(if(eq(grole(ds,d),1),true,eq(grole(ds,d),5)),infer_done(s,gtype(ds,d)),enter_outer(s,ds,d)))
+fn infer_dec(s) = replace_at(s,2,sub(get(s,2),1))
+fn binder_type(es,ts,bs,ds,links,d) = if(eq(gdyn(es,ts,bs,ds,d),34),0,gtype(ds,get(links,add(gbody(ds,d),3))))
+fn atom_link_type(s,es,ts,bs,ds,links,d,i,l) = if(eq(l,-1),1,if(eq(l,-2),binder_type(es,ts,bs,ds,links,d),if(le(l,-1000),get(s,sub(get(s,4),sub(-1000,l))),gtype(ds,l))))
+fn gatom_type(s,es,ts,bs,ds,links,d,i) = if(eq(ea(es,i),2),0,if(eq(ea(es,i),3),5,atom_link_type(s,es,ts,bs,ds,links,d,i,get(links,i))))
+fn frame_metadata(s) = append(append(append(append(append(s,get(s,1)),sub(get(s,2),1)),get(s,3)),get(s,4)),get(s,5))
+fn enter_call(s,ds,callee,n) = replace_at(replace_at(replace_at(replace_at(replace_at(frame_metadata(s),1,callee),2,sub(gend(ds,callee),1)),3,sub(len(s),add(n,1))),4,sub(len(s),1)),5,add(len(s),5))
+fn restore_call(s,base,m,v) = append(replace_at(replace_at(replace_at(replace_at(replace_at(slice(s,0,base),1,get(s,m)),2,get(s,add(m,1))),3,get(s,add(m,2))),4,get(s,add(m,3))),5,get(s,add(m,4))),v)
+fn infer_return(s,ds,v) = if(eq(get(s,1),get(s,0)),if(eq(v,gtype(ds,get(s,0))),infer_done(slice(s,0,get(s,3)),v),preject(s)),restore_call(s,get(s,3),sub(get(s,5),5),v))
+fn infer_call(s,ds,l,n) = if(syntax_arity_ok(s,n,get(s,5)),if(le(0,l),enter_call(s,ds,l,n),infer_dec(tpop(s,n,inferred_builtin(s,op_of(l),n)))),preject(s))
+fn infer_at(s,es,ts,bs,ds,links,d,i,k) = if(eq(i,gbody(ds,d)),if(eq(len(s),add(get(s,5),1)),infer_return(s,ds,top(s,0)),preject(s)),if(eq(k,15),infer_dec(append(s,-99)),if(eq(k,10),infer_dec(append(s,gatom_type(s,es,ts,bs,ds,links,d,i))),if(eq(k,13),infer_call(s,ds,get(links,i),call_arity(ds,get(links,i))),infer_dec(s)))))
+fn infer_step(s,es,ts,bs,ds,links) = if(eq(get(s,6),0),infer_begin(s,ds,get(s,0)),infer_at(s,es,ts,bs,ds,links,get(s,1),get(s,2),ev(es,get(s,2))))
+# Validate each startup asset path before emitting any C. The host repeats
+# the confinement check at openat, so filesystem authority stays explicit.
+fn aseg(n,dots) = if(lt(0,n),if(dots,lt(2,n),true),false)
+fn anext(s) = replace_at(replace_at(s,0,add(get(s,0),1)),1,-1)
+fn astart_at(s,a,n) = if(if(le(3,n),if(le(n,258),lt(get(s,5),64),false),false),replace_at(replace_at(replace_at(replace_at(replace_at(s,1,add(a,1)),2,sub(add(a,n),1)),3,0),4,1),5,add(get(s,5),1)),preject(s))
+fn astart(s,es,ts,ds,d) = if(eq(grole(ds,d),5),astart_at(s,hash_at(ts,et(es,add(gbody(ds,d),3)),1),hash_at(ts,et(es,add(gbody(ds,d),3)),2)),anext(s))
+fn abyte(s,c) = if(eq(c,47),if(aseg(get(s,3),eq(get(s,4),1)),replace_at(replace_at(s,3,0),4,1),preject(s)),if(if(letter(c),true,if(digit(c),true,if(eq(c,45),true,eq(c,46)))),replace_at(replace_at(s,3,add(get(s,3),1)),4,if(if(eq(get(s,4),1),eq(c,46),false),1,0)),preject(s)))
+fn astep(s,es,ts,bs,ds) = if(lt(get(s,1),0),astart(s,es,ts,ds,get(s,0)),if(eq(get(s,1),get(s,2)),if(aseg(get(s,3),eq(get(s,4),1)),anext(s),preject(s)),replace_at(abyte(s,get(bs,get(s,1))),1,add(get(s,1),1))))

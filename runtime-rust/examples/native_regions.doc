@@ -1,0 +1,12 @@
+# The caller grants valid, aligned, disjoint regions and element counts.
+# These are explicit privileged effects, not ordinary DOC allocation.
+native region device: u8 volatile
+native region counter: u32 atomic
+source index: int = 0
+source byte: int = 42
+source delta: int = 2
+native store written: bool (index,byte) = device(index,byte)
+native load read_back: int (index,written) = device(index)
+native fetch_add previous: int (index,delta,read_back) = counter(index,delta)
+native fence ordered: bool (previous) = seq_cst()
+native load total: int (index,ordered) = counter(index)

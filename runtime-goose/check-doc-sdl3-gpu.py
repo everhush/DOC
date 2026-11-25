@@ -62,14 +62,20 @@ def run(mode,lanes,extra=(),good=True):
     cmd=[binary,sources[mode],mode,str(lanes),*extra]
     p=subprocess.run(cmd,capture_output=True,text=True,timeout=90)
     if good and p.returncode:
-        raise AssertionError(f"Native Goose SDL3 GPU failed: {cmd}\n{p.stdout}\n{p.stderr}")
+        # Signals often terminate SDL/Vulkan processes with NO stdout or
+        # stderr. Preserve the numeric status to distinguish a native crash
+        # from a controlled DOC_GPU_* rejection or missing display.
+        raise AssertionError(
+            f"Native Goose SDL3 GPU failed: returncode={p.returncode} "
+            f"cmd={cmd}\nstdout={p.stdout!r}\nstderr={p.stderr!r}")
     if not good:
         if p.returncode==0 or "DOC_GOOSE_SDL3_GPU_PASS:" in p.stdout:
             raise AssertionError(f"Invalid SDL3 GPU request was accepted: {cmd}")
     return p.stdout,p.stderr
 cases=0
 for mode in sources:
-    for lanes in (1,63,64,65,129,257,1024):
+    widths=(1,63,64,65,129,257,1024,4097,8192) if mode=="eq" else (1,63,64,65,129,257,1024)
+    for lanes in widths:
         out,err=run(mode,lanes)
         records=[]
         for line in out.splitlines():
@@ -84,12 +90,12 @@ for mode in sources:
         for op,epoch,n,count,backend in records:
             if op!=mode or n!=lanes or count!=oracle(mode,epoch,lanes):
                 raise AssertionError(f"GPU vs independent Python oracle: {records}")
-            if backend not in ("vulkan","metal","direct3d12"):
+            if backend != "vulkan":
                 raise AssertionError(f"SDL3 reported non-GPU backend: {backend}")
         cases+=2
         (evidence/f"sdl3-{mode}-{lanes}.log").write_text(out+"\n"+err)
 for mode,lanes,extra in (
-    ("eq",0,()),("lt",4097,()),("bool",-1,()),
+    ("eq",0,()),("lt",4194241,()),("bool",-1,()),
     ("eq",65,("--inject-wide",)),
     ("staged",64,("--inject-wide",)),
 ):

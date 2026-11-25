@@ -1,11 +1,8 @@
 name: DOC Kaggle API permission diagnosis (no GPU)
 
 # This job consumes GitHub CPU only. It never submits a notebook or creates
-# a dataset. Runs on initial push and can be manually rerun after changes.
+# a dataset. Manually run only when credential preflight is needed.
 on:
-  push:
-    branches: [master]
-    paths: ['.github/workflows/doc-kaggle-permissions.yml']
   workflow_dispatch:
 
 permissions:
@@ -13,6 +10,7 @@ permissions:
 
 jobs:
   kaggle-auth:
+    if: ${{ github.repository == 'x0796666-ui/doc2' && github.ref_name == 'main' }}
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
@@ -27,7 +25,7 @@ jobs:
           # python-dateutil >=4 is installed. This is NOT an auth failure.
           python3 -m pip install --disable-pip-version-check 'kaggle>=2.2.1,<3' 'six>=1.16'
           python3 -c "import kaggle, six; print('DOC_KAGGLE_CLI_IMPORT_PASS')"
-      - name: Test exact dataset owner and token permissions without GPU spend
+      - name: Read-only Kaggle owner, quota and token preflight (no GPU spend)
         env:
           KAGGLE_DOC_1: ${{ secrets.KAGGLE_DOC_1 }}
           DOC_KAGGLE_USERNAME: ${{ vars.DOC_KAGGLE_USERNAME }}
@@ -37,31 +35,28 @@ jobs:
           python3 - <<'PY'
           import json, os, re, subprocess, tempfile
           from pathlib import Path
+          from ci.kaggle.dispatch import auth_environment
 
           with tempfile.TemporaryDirectory(prefix="doc-kaggle-auth-") as td:
-              env = dict(os.environ)
-              token = env.pop("KAGGLE_DOC_1", "").strip()
-              owner = env.get("DOC_KAGGLE_USERNAME", "").strip().lower()
-              env["KAGGLE_CONFIG_DIR"] = td
-              if not token:
-                  raise SystemExit("DOC_KAGGLE_PERMISSION_RESULT: missing KAGGLE_DOC_1")
+              token = os.environ.get("KAGGLE_DOC_1","").strip()
+              hint = os.environ.get("DOC_KAGGLE_USERNAME","").strip().lower()
+              try:
+                  # Production dispatch and read-only credential diagnosis now
+                  # use the SAME native Python auth setup: no duplicate token
+                  # parsing, unsafe permissions or alternate secret precedence.
+                  env, owner = auth_environment(token,Path(td),hint)
+              except (ValueError,KeyError,TypeError) as error:
+                  raise SystemExit("DOC_KAGGLE_PERMISSION_RESULT: " +
+                                   type(error).__name__ + " in shared auth preflight")
               if token.startswith("{"):
-                  try:
-                      parsed = json.loads(token)
-                      expected_owner = str(parsed.get("username", "")).lower()
-                      env_file = Path(td) / "kaggle.json"
-                      env_file.write_text(json.dumps({"username":parsed["username"],"key":parsed["key"]}))
-                      env_file.chmod(0o600)
-                  except Exception:
-                      raise SystemExit("DOC_KAGGLE_PERMISSION_RESULT: invalid legacy JSON secret")
-                  print("DOC_KAGGLE_OWNER_MATCHES_SECRET:", owner == expected_owner)
-                  if not owner:
-                      owner = expected_owner
-              else:
-                  env["KAGGLE_API_TOKEN"] = token
+                  parsed=json.loads(token)
+                  print("DOC_KAGGLE_OWNER_MATCHES_SECRET:",
+                        hint==str(parsed.get("username","")).strip().lower())
               # Report credential SHAPE only, never any of its bytes.
-              print("DOC_KAGGLE_SECRET_SHAPE:",
-                    "legacy_json" if token.startswith("{") else "raw_token",
+              shape = ("legacy_json" if token.startswith("{") else
+                       "raw_legacy_key" if re.fullmatch(r"[a-fA-F0-9]{32}",token)
+                       else "raw_token")
+              print("DOC_KAGGLE_SECRET_SHAPE:",shape,
                     "wrapped_in_quotes=" + str(token[:1] in ("'", '"')),
                     "contains_newline=" + str(chr(10) in token),
                     "env_assignment=" + str(token.startswith("KAGGLE_API_TOKEN=")))
@@ -124,8 +119,6 @@ jobs:
                   ("quota", ["kaggle","quota","--format","json"]),
                   ("private_list",["kaggle","datasets","list","--mine","--search","doc-gpu"]),
                   ("owner_list",["kaggle","datasets","list","--user",owner,"--search","doc-gpu"]),
-                  ("private_status",["kaggle","datasets","status",owner+"/doc-gpu-44953036963-1-bundle"]),
-                  ("private_files",["kaggle","datasets","files",owner+"/doc-gpu-44953036963-1-bundle"]),
                   ("notebook_list",["kaggle","kernels","list","--mine","--search","doc-gpu"]),
               ]
               statuses = {}
@@ -147,7 +140,14 @@ jobs:
                       statuses[name]=False
                       print(f"DOC_KAGGLE_PROBE: {name} timeout")
               print("DOC_KAGGLE_PERMISSION_RESULT:",json.dumps(statuses,sort_keys=True))
-              if not statuses.get("quota") or not statuses.get("private_list") or not statuses.get("private_status"):
-                  raise SystemExit("DOC_KAGGLE_PERMISSION_BLOCKED: private dataset API needs attention")
-              print("DOC_KAGGLE_PERMISSION_PASS: quota + own datasets + exact status")
+              # A fresh fork cannot be required to have a dataset created by
+              # the old fork/account. Listing proves only read permission;
+              # the actual exact-SHA dispatcher must still prove dataset
+              # CREATE, STATUS and FILE access before physical GPU use.
+              if not statuses.get("quota") or not statuses.get("private_list"):
+                  raise SystemExit(
+                      "DOC_KAGGLE_PERMISSION_BLOCKED: account quota/read API needs attention")
+              print("DOC_KAGGLE_READ_PREFLIGHT_PASS: quota + own datasets")
+              print("DOC_KAGGLE_DATASET_WRITE_STATUS_UNVERIFIED: "
+                    "actual exact-SHA dispatch must verify create/status/files")
           PY

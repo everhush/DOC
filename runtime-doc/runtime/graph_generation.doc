@@ -1,0 +1,4 @@
+# Replacement admission and transfer policy; native host transports only values.
+fn graph_admit(stable,current,requested) = if(stable,if(eq(current,requested),lt(current,9223372036854775807),false),false)
+fn graph_source(role) = if(eq(role,1),true,eq(role,5))
+fn graph_carry(old_role,new_role,old_kind,new_kind,same_name) = if(same_name,if(graph_source(old_role),if(graph_source(new_role),eq(old_kind,new_kind),false),false),false)

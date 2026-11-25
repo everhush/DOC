@@ -1,7 +1,7 @@
 //! Executes a DOC-derived signed-integer equality on WebGPU.
 //! DOC Int is i64. The host MUST prove every input fits portable WGSL i32.
 //! This example checks CPU and GPU results over two source-repair episodes.
-//! A software Vulkan adapter validates dispatch, NOT physical acceleration.
+//! A software WebGPU adapter validates dispatch, NOT physical acceleration.
 use doc_runtime::{wgsl, Cutoff, Graph, Runtime, Value};
 use std::{error::Error, time::Instant};
 use wgpu::util::DeviceExt;
@@ -60,7 +60,15 @@ async fn run() -> Result<(), Box<dyn Error>> {
     };
     let count: usize = std::env::var("DOC_GPU_LANES")
         .unwrap_or_else(|_| "130".into()).parse()?;
-    if !(1..=4096).contains(&count) { return Err("invalid signed GPU batch size".into()); }
+    // wgpu DeviceDescriptor::default() requests this portable profile.
+    // Validate before constructing one CPU reference runtime per GPU lane.
+    let profile=wgpu::Limits::default();
+    let requested_bytes=count.checked_mul(4).ok_or("signed DOC byte length overflow")?;
+    if count==0 ||
+       requested_bytes as u64>u64::from(profile.max_storage_buffer_binding_size) ||
+       count.div_ceil(64)>profile.max_compute_workgroups_per_dimension as usize {
+        return Err("signed DOC batch exceeds requested WebGPU profile".into());
+    }
     let forced_cpu = std::env::var("DOC_GPU_EXECUTION").unwrap_or_else(|_| "gpu".into());
     if forced_cpu != "gpu" && forced_cpu != "cpu" {
         return Err("DOC_GPU_EXECUTION must be gpu or cpu".into());
@@ -116,20 +124,34 @@ async fn run() -> Result<(), Box<dyn Error>> {
         }
         return Ok(());
     }
-    let instance=wgpu::Instance::new(&wgpu::InstanceDescriptor {
-        backends:wgpu::Backends::VULKAN,..Default::default()
-    });
-    let adapter=instance.request_adapter(&wgpu::RequestAdapterOptions {
-        power_preference:wgpu::PowerPreference::HighPerformance,
-        ..Default::default()
-    }).await.ok_or("No WebGPU Vulkan device for signed integer test")?;
+    let instance=wgpu::Instance::default();
+    // Physical admission uses only wgpu adapter classes; wgpu owns all
+    // native-provider selection. Report what wgpu can see if no GPU exists.
+    let adapters=instance.enumerate_adapters(wgpu::Backends::all());
+    for candidate in &adapters {
+        let info=candidate.get_info();
+        eprintln!("DOC_WEBGPU_AVAILABLE_ADAPTER: name={} type={:?}",
+            info.name,info.device_type);
+    }
+    let index=if require_hardware {
+        adapters.iter().position(|candidate|matches!(
+            candidate.get_info().device_type,
+            wgpu::DeviceType::DiscreteGpu | wgpu::DeviceType::IntegratedGpu))
+    } else {
+        adapters.iter().position(|candidate|matches!(
+            candidate.get_info().device_type,
+            wgpu::DeviceType::DiscreteGpu | wgpu::DeviceType::IntegratedGpu))
+            .or_else(||adapters.iter().position(|candidate|
+                candidate.get_info().device_type==wgpu::DeviceType::Cpu))
+    }.ok_or("No eligible WebGPU adapter for signed integer test")?;
+    let adapter=adapters.into_iter().nth(index).ok_or("WebGPU adapter vanished")?;
     let info=adapter.get_info();
     if require_hardware && !matches!(info.device_type,
         wgpu::DeviceType::DiscreteGpu | wgpu::DeviceType::IntegratedGpu) {
         return Err("signed DOC hardware gate rejected software adapter".into());
     }
-    println!("DOC_SIGNED_WEBGPU_ADAPTER: {} type={:?} backend={:?} driver={}",
-        info.name,info.device_type,info.backend,info.driver);
+    println!("DOC_SIGNED_WEBGPU_ADAPTER: {} type={:?} vendor={} device={}",
+        info.name,info.device_type,info.vendor,info.device);
     let (device,queue)=adapter.request_device(&wgpu::DeviceDescriptor::default(),None).await?;
     let nbytes=u64::try_from(count)?.checked_mul(4).ok_or("input byte count overflow")?;
     let limits=device.limits();

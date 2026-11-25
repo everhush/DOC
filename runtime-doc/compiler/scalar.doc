@@ -1,0 +1,26 @@
+import lexer_core.doc
+import parser_core.doc
+import common_core.doc
+import scalar_core.doc
+source input: ints = []
+derive validated: ints (input) = utf8_bytes(utf8_text(input))
+derive seed: ints () = append(append(append(empty(),0),0),0)
+derive scanned: ints (seed,validated) = recur(seed,s,eq(get(s,0),len(validated)),step(s,get(validated,get(s,0))))
+derive completed: ints (scanned) = finish(scanned)
+derive tokens: ints (completed) = slice(completed,3,sub(len(completed),3))
+derive end_tokens: ints (tokens,validated) = append(append(append(tokens,10),len(validated)),0)
+derive parse_seed: ints () = append(append(append(append(empty(),0),0),0),0)
+derive parsed: ints (parse_seed,end_tokens,validated) = recur(parse_seed,s,eq(get(s,0),quot(len(end_tokens),3)),pstep(s,end_tokens,validated))
+derive syntax: ints (parsed) = if(eq(get(parsed,1),0),slice(parsed,4,sub(len(parsed),4)),preject(parsed))
+derive event_count: int (syntax) = quot(len(syntax),3)
+derive r_seed: ints () = append(append(append(append(append(empty(),0),0),0),0),0)
+derive resolved_state: ints (r_seed,syntax,end_tokens,validated,event_count) = recur(r_seed,s,eq(get(s,0),event_count),rstep(s,syntax,end_tokens,validated))
+derive resolved: ints (resolved_state) = slice(resolved_state,5,sub(len(resolved_state),5))
+derive n_seed: ints () = append(append(append(append(append(empty(),0),0),0),0),0)
+derive numeric_state: ints (n_seed,syntax,end_tokens,validated,event_count) = recur(n_seed,s,eq(get(s,0),event_count),nstep(s,syntax,end_tokens,validated))
+derive numbers: ints (numeric_state) = slice(numeric_state,5,sub(len(numeric_state),5))
+derive t_seed: ints (event_count) = append(append(empty(),sub(event_count,1)),0)
+derive checked: ints (t_seed,syntax,end_tokens,validated,resolved) = recur(t_seed,s,lt(get(s,0),0),tstep(s,syntax,end_tokens,validated,resolved))
+derive e_seed: ints (checked,event_count) = if(if(eq(len(checked),2),lt(0,event_count),false),append(append(utf8_bytes(cheader()),0),0),preject(checked))
+derive emitted: ints (e_seed,syntax,end_tokens,validated,resolved,numbers,event_count) = recur(e_seed,s,eq(e_cursor(s),mul(event_count,2)),estep(s,syntax,end_tokens,validated,resolved,numbers))
+derive code: text (emitted) = concat(utf8_text(slice(emitted,0,sub(len(emitted),2))),concat(text("return 0;}"),nl()))

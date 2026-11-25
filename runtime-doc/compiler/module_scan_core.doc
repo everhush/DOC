@@ -1,0 +1,11 @@
+# Compiler-owned import admission: the host only copies approved spans.
+# Records: role, declaration start/end offsets, import path start/end (-1 otherwise).
+fn ms_offset(ts,t) = get(ts,add(mul(t,3),1))
+fn ms_end(ts,t) = add(ms_offset(ts,t),get(ts,add(mul(t,3),2)))
+fn ms_role(s,r,off,m) = if(if(m,eq(r,3),true),replace_at(replace_at(replace_at(replace_at(s,1,r),2,off),3,-1),4,-1),preject(s))
+fn ms_path(s,a,b,bs) = if(eq(get(s,3),-1),if(if(lt(add(get(s,2),6),a),eq(get(bs,add(get(s,2),6)),32),false),replace_at(replace_at(s,3,a),4,b),preject(s)),if(eq(a,get(s,4)),replace_at(s,4,b),preject(s)))
+fn ms_suffix(bs,a,b) = if(if(le(5,sub(b,a)),le(sub(b,a),256),false),eq(slice(bs,sub(b,4),4),append(append(append(append(empty(),46),100),111),99)),false)
+fn ms_record(s) = append(append(append(append(append(s,get(s,1)),get(s,2)),get(s,5)),get(s,3)),get(s,4))
+fn ms_finish(s,bs) = if(eq(get(s,1),4),if(ms_suffix(bs,get(s,3),get(s,4)),ms_record(s),preject(s)),ms_record(s))
+fn ms_event(s,es,ts,bs,m,i,k,t) = if(eq(k,16),ms_finish(s,bs),replace_at(if(eq(k,1),ms_role(s,get(es,add(mul(i,3),2)),ms_offset(ts,t),m),if(eq(k,19),ms_path(s,ms_offset(ts,t),ms_end(ts,t),bs),s)),5,ms_end(ts,t)))
+fn ms_step(s,es,ts,bs,m) = replace_at(ms_event(s,es,ts,bs,m,get(s,0),get(es,mul(get(s,0),3)),get(es,add(mul(get(s,0),3),1))),0,add(get(s,0),1))

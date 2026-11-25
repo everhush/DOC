@@ -22,8 +22,11 @@ codegen-units = 1
 
 [features]
 webgpu = ["dep:wgpu", "dep:pollster", "dep:env_logger"]
+window = ["webgpu", "dep:winit"]
 
 [dependencies]
+libc = "0.2"
+winit = { version = "0.30.12", default-features = false, features = ["x11", "rwh_06"], optional = true }
 wgpu = { version = "24.0.3", optional = true }
 pollster = { version = "0.4", optional = true }
 env_logger = { version = "0.11", optional = true }
@@ -40,3 +43,27 @@ required-features = ["webgpu"]
 
 [dev-dependencies]
 naga = { version = "24", features = ["wgsl-in"] }
+
+[[bin]]
+name = "doc-game-window"
+path = "src/bin/doc_game_window.rs"
+required-features = ["window"]
+
+[[bin]]
+name = "doc-game"
+path = "src/bin/doc_game.rs"
+
+[[bin]]
+name = "doc-scene3d"
+path = "src/bin/doc_scene3d.rs"
+required-features = ["webgpu"]
+
+[[example]]
+name = "scene3d_gpu_proof"
+path = "examples/scene3d_gpu_proof.rs"
+required-features = ["webgpu"]
+
+[[example]]
+name = "dependency_family_proof"
+path = "examples/dependency_family_proof.rs"
+required-features = ["webgpu"]

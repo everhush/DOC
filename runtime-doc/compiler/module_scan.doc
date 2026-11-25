@@ -1,0 +1,18 @@
+import lexer_core.doc
+import parser_core.doc
+import module_scan_core.doc
+source input: ints = []
+source module: bool = false
+derive validated: ints (input) = utf8_bytes(utf8_text(input))
+derive seed: ints () = append(append(append(empty(),0),0),0)
+derive scanned: ints (seed,validated) = recur(seed,s,eq(get(s,0),len(validated)),step(s,get(validated,get(s,0))))
+derive completed: ints (scanned) = finish(scanned)
+derive tokens: ints (completed) = slice(completed,3,sub(len(completed),3))
+derive end_tokens: ints (tokens,validated) = append(append(append(tokens,10),len(validated)),0)
+derive parse_seed: ints () = append(append(append(append(empty(),0),0),0),0)
+derive parsed: ints (parse_seed,end_tokens,validated) = recur(parse_seed,s,eq(get(s,0),quot(len(end_tokens),3)),pstep(s,end_tokens,validated))
+derive syntax: ints (parsed) = if(eq(get(parsed,1),0),slice(parsed,4,sub(len(parsed),4)),preject(parsed))
+derive event_count: int (syntax) = quot(len(syntax),3)
+derive ms_seed: ints () = append(append(append(append(append(append(empty(),0),0),0),0),0),0)
+derive ms_state: ints (ms_seed,syntax,end_tokens,validated,module,event_count) = recur(ms_seed,s,eq(get(s,0),event_count),ms_step(s,syntax,end_tokens,validated,module))
+derive plan: ints (ms_state) = slice(ms_state,6,sub(len(ms_state),6))

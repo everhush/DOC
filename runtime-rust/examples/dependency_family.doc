@@ -1,0 +1,8 @@
+# Runtime-sized derivation: each element depends on the same bias,
+# not on an ordering of instructions, worker count, or backend.
+source xs: ints = [1,2,3]
+source bias: int = 5
+source flag: bool = false
+derive ys: ints (xs,bias) = map_ints(xs,item,add(item,bias))
+derive unrelated: bool (flag,xs) = if(flag,eq(len(xs),0),true)
+derive count: int (ys) = len(ys)

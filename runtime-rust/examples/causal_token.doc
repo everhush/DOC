@@ -1,0 +1,10 @@
+# Compiler-relevant input-dependent token accumulation.
+# Each pair represents (consumed input count, decimal token value).
+# A successor depends on the current pair; unrelated derives remain ready.
+source digits: ints = [1,2,3]
+source seed: ints = [0,0]
+source start: int = 0
+source limit: int = 10
+derive token: ints (seed,digits) = recur(seed,pair,eq(get(pair,0),len(digits)),append(append(empty(),add(get(pair,0),1)),add(mul(get(pair,1),10),get(digits,get(pair,0)))))
+derive value: int (token) = get(token,1)
+derive other: int (start,limit) = recur(start,previous,le(limit,previous),add(previous,1))

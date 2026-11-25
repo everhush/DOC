@@ -1,0 +1,26 @@
+# Orthographic isometric camera and directional flat material lighting.
+# No GPU stage syntax, binding declarations or native graphics API.
+source x: int = 0
+source y: int = 0
+source z: int = 0
+source nx: int = 0
+source ny: int = 1
+source shift_x: int = 0
+source shift_y: int = 0
+source shift_z: int = 0
+source red: int = 200
+source green: int = 150
+source blue: int = 100
+source scale: int = 1
+source camera_w: int = 1024
+derive world_x: int (x,shift_x,scale) = add(mul(x,scale),shift_x)
+derive world_y: int (y,shift_y,scale) = add(mul(y,scale),shift_y)
+derive world_z: int (z,shift_z,scale) = add(mul(z,scale),shift_z)
+derive clip_x: int (world_x,world_z) = mul(sub(world_x,world_z),2)
+derive clip_y: int (world_x,world_y,world_z) = sub(mul(world_y,3),add(world_x,world_z))
+derive clip_z: int (world_x,world_y,world_z) = sub(512,add(add(world_x,world_z),world_y))
+derive clip_w: int (camera_w) = camera_w
+fn lit(c,nx,ny) = if(eq(ny,1),c,if(eq(nx,1),sub(c,30),sub(c,60)))
+derive lit_r: int (red,nx,ny) = lit(red,nx,ny)
+derive lit_g: int (green,nx,ny) = lit(green,nx,ny)
+derive lit_b: int (blue,nx,ny) = lit(blue,nx,ny)

@@ -1,0 +1,11 @@
+# Linux target C ABI. No handwritten C adapter; the compiler emits
+# direct imported calls. Socket ownership is explicit at this privileged
+# effect boundary. No connection or external network traffic is required.
+native import socket(i32,i32,i32) -> i32
+native import close(i32) -> i32
+source domain: int = 1
+source socket_type: int = 1
+source protocol: int = 0
+native call fd: int (domain,socket_type,protocol) = socket(domain,socket_type,protocol)
+native call closed: int (fd) = close(fd)
+derive success: bool (fd,closed) = if(lt(fd,0),false,eq(closed,0))

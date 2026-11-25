@@ -1,6 +1,6 @@
 //! Executes a DOC-derived Boolean computation through WebGPU compute.
 //! This is an experimental native host example, not general-purpose offloading.
-//! Linux CI's lavapipe adapter is software Vulkan; it validates functionality,
+//! Software WebGPU adapters validate functionality only, not physical speed,
 //! not hardware acceleration or CPU/GPU speedup.
 use doc_runtime::{wgsl, Cutoff, Graph, Runtime, Value};
 use std::error::Error;
@@ -62,8 +62,17 @@ async fn run() -> Result<(), Box<dyn Error>> {
         Err(std::env::VarError::NotPresent) => 130,
         Err(_) => return Err("DOC_GPU_LANES must be valid UTF-8".into()),
     };
-    if !(1..=4096).contains(&lane_count) {
-        return Err("DOC_GPU_LANES must be within 1..=4096".into());
+    // The required wgpu device profile uses its portable, published
+    // storage/dispatch limits. Preflight BEFORE creating per-lane CPU
+    // reference runtimes to prevent an oversized request from allocating
+    // millions of host objects before device admission.
+    let profile=wgpu::Limits::default();
+    let requested_bytes=lane_count.checked_mul(4)
+        .ok_or("DOC GPU input byte length overflow")?;
+    if lane_count==0 ||
+       requested_bytes as u64>u64::from(profile.max_storage_buffer_binding_size) ||
+       lane_count.div_ceil(64)>profile.max_compute_workgroups_per_dimension as usize {
+        return Err("DOC_GPU_LANES exceeds requested GPU device storage/dispatch limits".into());
     }
     // This dedicated GPU regression tool defaults to GPU; general-purpose DOC defaults to CPU.
     // Do not silently switch execution backends.
@@ -127,20 +136,30 @@ async fn run() -> Result<(), Box<dyn Error>> {
     let adapter = if execution == "cpu" {
         None
     } else {
-        let instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::VULKAN,
-            ..Default::default()
-        });
-        instance.request_adapter(&wgpu::RequestAdapterOptions {
-            power_preference: if require_hardware=="1" {
-                wgpu::PowerPreference::HighPerformance
-            }else{wgpu::PowerPreference::LowPower},
-            ..Default::default()
-        }).await
+        let instance = wgpu::Instance::default();
+        if require_hardware=="1" {
+            // Physical test selects only from adapters that wgpu exposes.
+            // No native API name, loader or driver is touched by DOC.
+            let adapters=instance.enumerate_adapters(wgpu::Backends::all());
+            for candidate in &adapters {
+                let info=candidate.get_info();
+                eprintln!("DOC_WEBGPU_AVAILABLE_ADAPTER: name={} type={:?}",
+                    info.name,info.device_type);
+            }
+            let index=adapters.iter().position(|candidate|matches!(
+                candidate.get_info().device_type,
+                wgpu::DeviceType::DiscreteGpu | wgpu::DeviceType::IntegratedGpu));
+            index.and_then(|n|adapters.into_iter().nth(n))
+        } else {
+            instance.request_adapter(&wgpu::RequestAdapterOptions {
+                power_preference:wgpu::PowerPreference::LowPower,
+                ..Default::default()
+            }).await
+        }
     };
     let Some(adapter) = adapter else {
         if execution == "gpu" {
-            return Err("No conforming Vulkan WebGPU adapter available; no CPU fallback".into());
+            return Err("No conforming WebGPU adapter available; no CPU fallback".into());
         }
         for (episode, (_, _, expected)) in cases.iter().enumerate() {
             println!("DOC_CPU_ONLY_PASS: episode={episode} lanes={lane_count} output={expected:?}");
@@ -152,9 +171,9 @@ async fn run() -> Result<(), Box<dyn Error>> {
         wgpu::DeviceType::IntegratedGpu | wgpu::DeviceType::DiscreteGpu) {
         return Err("DOC hardware-GPU gate rejected a software/unknown adapter".into());
     }
-    println!("WebGPU adapter: {} ({:?}, {:?})", info.name, info.device_type, info.backend);
-    println!("DOC_WEBGPU_ADAPTER: vendor={} device={} type={:?} backend={:?} driver={}",
-        info.vendor, info.device, info.device_type, info.backend, info.driver);
+    println!("WebGPU adapter: {} ({:?})", info.name, info.device_type);
+    println!("DOC_WEBGPU_ADAPTER: vendor={} device={} type={:?}",
+        info.vendor, info.device, info.device_type);
     let (device, queue) = match adapter
         .request_device(&wgpu::DeviceDescriptor::default(), None)
         .await

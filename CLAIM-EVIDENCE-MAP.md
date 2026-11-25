@@ -1,4 +1,24 @@
-# DOC claim-to-evidence map — active Rust + Goose project
+# DOC claim-to-evidence map
+
+## Active scope reconciliation — 2026-11-25
+
+The following legacy dual-runtime tables and historical explicit-only GPU descriptions are retained for provenance and must not be read as the current acceptance record. The active reference is Rust on rtu0/doc2/main, with generated WGSL, automatic CPU/GPU placement in admitted host entry points and strict explicitly selected GPU execution; see [BACKEND-EXECUTION-CONTRACT.md](BACKEND-EXECUTION-CONTRACT.md). Goose is archived, not an acceptance requirement. #24 closed on 11e22c484a35a183ed9f77a2125afa5f22746c41; #15 reviews that combined foundation before the independent #11 handoff. The normative paper and original C++20 empirical results are unchanged. See [current #15 conformance ledger](docs/PRE-SELF-HOSTING-AUDIT.md) for current source-linked decisions, gaps and explicit production obligations. No claim of universal conformance or inherited empirical speedup.
+
+---
+
+
+## Current Linux x86_64 acceptance ledger (2026-11-23; feature SHA `82d739eb1bdb6f3052d47f392c4459a6d5220b03`)
+
+**This section supersedes older implementation-status statements and old-fork CI blocker descriptions below; historical records are retained for provenance, not treated as current signoff.** Active source and CI: private [rtu0/DOC feature branch](https://github.com/rtu0/DOC/tree/feat/webgpu-dual-runtime-ci); `master` and canonical [imxade/DOC](https://github.com/imxade/DOC) are not automatic release targets. The only initial host target is Linux x86_64.
+
+- **Executed software validation:** exact feature-SHA [push 45081374463](https://github.com/rtu0/DOC/actions/runs/45081374463) and [PR 45081379899](https://github.com/rtu0/DOC/actions/runs/45081379899) each completed **five successful native Linux jobs with executed steps**: Rust typed/finite/WGSL, Goose CPU/differential, Rust wgpu Mesa, Goose native SDL3 gfx Mesa, and independent GPU-result parity. This proves those tested programs and software Vulkan adapters, **not physical GPU acceleration** or complete language semantics.
+- **Selected GPU subset:** Both independent native CLIs accept explicitly selected GPU execution for admitted pure finite Boolean/signed-i32 source DAGs, including bounded nested arithmetic and independent ready-frontier workgroups; unsupported source/device paths must fail closed. Rust uses wgpu; Goose uses SDL3 gfx Vulkan, **not** Rust dispatch or a Goose WGSL generator. The 128-independent-node case uses two 64-thread workgroups. GPU recurrence, heterogeneous dynamic values, arbitrary graphs/effects, device-loss recovery and complete general-purpose coverage are **OPEN**.
+- **CPU scheduling:** Hardware-aware ready-frontier scheduling is implemented independently in Rust and Goose. The executed 512-node oracle covers worker requests 1/2/4/8/17/auto with hardware-bound effective workers. Three-trial, two-logical-core whole-CLI medians at this SHA: Rust 1=1.827508 ms, auto=1.862291 ms; Goose 1=3.476167 ms, auto=3.950140 ms. These are workload-specific and show **no speedup** for auto on this cheap workload; they are not isolated kernel timings.
+- **Physical GPU is INFRA_BLOCKED:** [Kaggle 45081722864](https://github.com/rtu0/DOC/actions/runs/45081722864) verified private exact-byte binary transport and requested NvidiaTeslaT4, but the notebook had zero NVIDIA device nodes, no NVIDIA kernel driver, no CUDA driver library, and zero Torch CUDA devices. Consequently **no physical Vulkan GPU workload ran**. This is neither a GPU PASS nor an observed runtime shader failure. No DOC-imposed Kaggle quotas, cooldowns, dedup restrictions or session caps apply.
+- **Remaining non-game gates OPEN:** full shared typed language/IR equivalence; demand/recurrence and typed failure coverage on selected GPU; graph generations and protected-reader lifetime/reclamation in both runtimes; effect/cancellation/fail-stop and recovery; physical selected-adapter parity and raw benchmarks; Linux native install/release, stress/fuzz and paragraph-level manuscript trace at a final exact SHA. Prior local AMD physical evidence is historical bounded-kernel evidence, not proof of the current feature SHA or general-purpose execution. Canonical [acceptance #7](https://github.com/imxade/DOC/issues/7) and [evidence #9](https://github.com/imxade/DOC/issues/9) remain open; [game #10](https://github.com/imxade/DOC/issues/10) remains deferred. [rtu0 PR #1](https://github.com/rtu0/DOC/pull/1) remains draft.
+
+---
+
 
 **Execution backend acceptance update (2026-11-22):** CPU is the default for both native general-purpose CLIs, explicit `--backend=cpu|gpu` is strict, and there is no `auto` or silent CPU fallback. The two general-purpose GPU branches currently reject `--backend=gpu`; bounded native GPU parity does **not** establish HVM-like general-purpose GPU execution. See [BACKEND-EXECUTION-CONTRACT.md](BACKEND-EXECUTION-CONTRACT.md). This is a new OPEN implementation/acceptance requirement, not a claim of passing evidence.
 
@@ -42,7 +62,7 @@ independence theorem obligations, or the conditional safe-realization proofs.
 
 - **Executed secondary CI:** [44980780808](https://github.com/x0796666-ui/DOC/actions/runs/44980780808),
   revision `d76bebc`: seven native CPU, Rust wgpu/Goose SDL3 Mesa Vulkan,
-  independent result-parity and portability jobs passed. Newer revisions,
+  independent GPU-result parity and native packaging jobs passed. Newer revisions,
   including the physical branch merge, have not yet produced an executing
   seven-job pass due jobs failing before recording steps.
 - **Hardware evidence:** Physical local Rust wgpu adapter was AMD Radeon
@@ -92,8 +112,8 @@ Final local validation of Gates 1–8 was executed on the physical development w
   - **Hosted CI Status (BLOCKED / OPEN):** GitHub Actions runs 45036875107 and 45033392874 failed with
     zero executed steps (`steps: []`) in 1–3s across all jobs due to private repository runner quota / billing
     limits on `x0796666-ui/DOC`. Per gate rules, this gate remains OPEN pending repository owner intervention.
-  - **Cross-Platform Disclosures:** macOS and Windows native execution are disclosed as unavailable locally
-    on the Linux development workstation without hosted runners.
+  - **Linux initial target:** native Rust/Goose compilation, packaged installation, CPU parity,
+    software Vulkan and physical GPU evidence are the platform acceptance gates.
 - **Gate 8 Ledger & Signoff:** Machine-readable final manifest published at `local-evidence/final-manifest.json`.
 
 Implementation handoff is [secondary Issue #1](https://github.com/x0796666-ui/DOC/issues/1);

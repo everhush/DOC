@@ -1,0 +1,5 @@
+# Reusable, pure DOC library. No input, output or platform decisions.
+fn min2(x,y) = if(le(x,y),x,y)
+fn max2(x,y) = if(le(x,y),y,x)
+fn clamp(x,lo,hi) = min2(max2(x,lo),hi)
+fn same_cell(ax,ay,bx,by) = if(eq(ax,bx),eq(ay,by),false)

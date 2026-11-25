@@ -3,6 +3,7 @@
 import std;
 import os;
 import .doc_typed_core;
+import .doc_typed_proofs;
 namespace doc_typed;
 
 fn run_doc_cli() {

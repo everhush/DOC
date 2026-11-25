@@ -1,0 +1,6 @@
+# Target/toolchain-supplied intrinsic. The caller must grant the external
+# symbol with --allow-native-intrinsic target_transform.
+native intrinsic target_transform(i64,bool8) -> i32 = external(target_transform)
+source input: int = 7
+source enabled: bool = true
+native call transformed: int (input,enabled) = target_transform(input,enabled)

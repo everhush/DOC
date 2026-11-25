@@ -1,0 +1,10 @@
+# Same authored DOC arithmetic DAG on selected CPU and GPU.
+# For nested i32 arithmetic GPU admission, every integer source is in [-4,4].
+source a: int = 2
+source b: int = 3
+source c: int = 4
+source gate: bool = true
+derive sum: int (a,b,c) = add(mul(a,b),sub(c,a))
+derive chosen: bool (sum,b) = lt(b,sum)
+derive branched: int (gate,a,b) = if(gate,sub(mul(a,b),a),add(a,b))
+derive ok: bool (sum,branched) = eq(sum,branched)

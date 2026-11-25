@@ -1,0 +1,307 @@
+name: DOC independent bootstrap
+
+on:
+  push:
+    branches: [main]
+    paths: ['ci/independent-batch-request.txt']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  bootstrap-stages:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify frozen Rust tree
+        run: |
+          set -eu
+          test "$(git rev-parse HEAD:runtime-rust)" = a95a38bc6e9300aae815f83b570db5f99d32f221
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build frozen bootstrap and independent compiler stages
+        run: |
+          set -eu
+          cargo build --release --manifest-path runtime-rust/Cargo.toml --bin doc --bin doc-compile
+          mkdir -p doc11-evidence
+          cp runtime-rust/target/release/doc doc11-evidence/doc
+          runtime-rust/target/release/doc-compile runtime-doc/compiler/lexer.doc --emit-c doc11-evidence/lexer.c --emit-ir doc11-evidence/lexer.ir --out doc11-evidence/lexer
+          for stage in parser scalar reactive general managed managed_reactive module_scan gpu_plan; do
+            runtime-rust/target/release/doc-compile runtime-doc/compiler/$stage.doc --emit-c doc11-evidence/$stage.c --emit-ir doc11-evidence/$stage.ir --out doc11-evidence/$stage
+          done
+          runtime-rust/target/release/doc-compile runtime-doc/runtime/repair_plan.doc --emit-c doc11-evidence/repair_plan.c --emit-ir doc11-evidence/repair_plan.ir --out doc11-evidence/repair_plan
+          for stage in lexer parser scalar reactive repair_plan general managed managed_reactive module_scan gpu_plan; do
+            file doc11-evidence/$stage
+            readelf -d doc11-evidence/$stage | tee doc11-evidence/$stage-linkage.txt
+          done
+      - name: Native and reference conformance against independent lexical oracle
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 runtime-doc/tests/test_lexer.py --reference runtime-rust/target/release/doc --source runtime-doc/compiler/lexer.doc --native doc11-evidence/lexer --fixtures runtime-doc/compiler/lexer.doc engine/graphics/arena_vertex.doc | tee doc11-evidence/lexer-test.log
+          python3 runtime-doc/tests/test_parser.py --reference runtime-rust/target/release/doc --source runtime-doc/compiler/parser.doc --native doc11-evidence/parser --fixtures runtime-doc/compiler/parser.doc runtime-doc/compiler/parser_core.doc runtime-doc/compiler/lexer_core.doc engine/graphics/arena_vertex.doc | tee doc11-evidence/parser-test.log
+          python3 runtime-doc/tests/test_scalar.py --reference runtime-rust/target/release/doc --source runtime-doc/compiler/scalar.doc --native doc11-evidence/scalar | tee doc11-evidence/scalar-test.log
+          python3 runtime-doc/tests/test_repair.py --reference runtime-rust/target/release/doc --source runtime-doc/runtime/repair_plan.doc --native doc11-evidence/repair_plan | tee doc11-evidence/repair-test.log
+          python3 runtime-doc/tests/test_reactive.py --reference runtime-rust/target/release/doc --source runtime-doc/compiler/reactive.doc --native doc11-evidence/reactive | tee doc11-evidence/reactive-test.log
+          python3 runtime-doc/tests/test_general.py --reference runtime-rust/target/release/doc --source runtime-doc/compiler/general.doc --native doc11-evidence/general | tee doc11-evidence/general-test.log
+          python3 runtime-doc/tests/test_managed.py --reference runtime-rust/target/release/doc --source runtime-doc/compiler/managed.doc --native doc11-evidence/managed --evidence doc11-evidence/rebuilt | tee doc11-evidence/managed-test.log
+          python3 runtime-doc/tests/test_managed_reactive.py --reference runtime-rust/target/release/doc --source runtime-doc/compiler/managed_reactive.doc --native doc11-evidence/managed_reactive | tee doc11-evidence/managed-reactive-test.log
+          python3 runtime-doc/tests/test_module_build.py --reference runtime-rust/target/release/doc --scanner doc11-evidence/module_scan --compiler doc11-evidence/managed | tee doc11-evidence/module-build-test.log
+          python3 runtime-doc/tests/test_effects.py --reference runtime-rust/target/release/doc --managed-source runtime-doc/compiler/managed.doc --reactive-source runtime-doc/compiler/managed_reactive.doc --managed doc11-evidence/managed --reactive doc11-evidence/managed_reactive | tee doc11-evidence/effects-test.log
+          python3 runtime-doc/tests/test_recurrence.py --reference runtime-rust/target/release/doc --reactive-source runtime-doc/compiler/managed_reactive.doc --reactive doc11-evidence/managed_reactive | tee doc11-evidence/recurrence-test.log
+          python3 runtime-doc/tests/test_epoch_authority.py --managed doc11-evidence/managed --reactive doc11-evidence/managed_reactive | tee doc11-evidence/epoch-authority-test.log
+          git rev-parse HEAD > doc11-evidence/source-sha.txt
+          git rev-parse HEAD:runtime-rust > doc11-evidence/frozen-tree.txt
+          sha256sum doc11-evidence/doc > doc11-evidence/oracle-SHA256SUMS
+          sha256sum doc11-evidence/{lexer,parser,scalar,reactive,repair_plan,general,managed,managed_reactive,module_scan,gpu_plan}{,.c,.ir} > doc11-evidence/SHA256SUMS
+      - name: Preserve bootstrap evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: doc11-independent-bootstrap
+          path: doc11-evidence/
+  self-reproduction:
+    needs: bootstrap-stages
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc11-independent-bootstrap
+          path: doc11-evidence
+      - name: Reproduce bundled pure compiler without Rust evaluator
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x doc11-evidence/managed
+          test "$(cat doc11-evidence/source-sha.txt)" = "$(git rev-parse HEAD)"
+          test "$(git rev-parse HEAD:runtime-rust)" = a95a38bc6e9300aae815f83b570db5f99d32f221
+          mkdir -p doc11-self-evidence
+          python3 runtime-doc/tests/test_self_reproduction.py --native doc11-evidence/managed --evidence doc11-self-evidence | tee doc11-self-evidence/self-test.log
+          sha256sum doc11-self-evidence/stage{2,3}{,.c} > doc11-self-evidence/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: doc11-self-reproduction
+          path: doc11-self-evidence/
+  webgpu-native:
+    needs: bootstrap-stages
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc11-independent-bootstrap
+          path: doc11-evidence
+      - name: Install pinned WebGPU C ABI and software adapter
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y mesa-vulkan-drivers libvulkan1
+          mkdir -p doc11-gpu-evidence doc11-wgpu
+          curl -fL --retry 3 https://github.com/gfx-rs/wgpu-native/releases/download/v24.0.3.1/wgpu-linux-x86_64-release.zip -o doc11-wgpu.zip
+          echo '86f3eb9f74d7f1ac82ee52d9b2ab15e366ef86a932759c750b7472652836ee59  doc11-wgpu.zip' | sha256sum -c -
+          sha256sum doc11-wgpu.zip | tee doc11-gpu-evidence/wgpu-sha256.txt
+          unzip -q doc11-wgpu.zip -d doc11-wgpu
+          test -f doc11-wgpu/include/webgpu/wgpu.h
+          test -f doc11-wgpu/lib/libwgpu_native.so
+      - name: Run generated native CPU and WebGPU graphs on actual adapter
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha256sum -c doc11-evidence/oracle-SHA256SUMS
+          chmod +x doc11-evidence/{doc,managed_reactive,gpu_plan}
+          test "$(cat doc11-evidence/source-sha.txt)" = "$(git rev-parse HEAD)"
+          export XDG_RUNTIME_DIR="$(mktemp -d)"
+          python3 -u runtime-doc/tests/test_gpu.py --reference doc11-evidence/doc --reactive doc11-evidence/managed_reactive --gpu-plan doc11-evidence/gpu_plan --wgpu-root doc11-wgpu | tee doc11-gpu-evidence/test.log
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: doc11-webgpu-native
+          path: doc11-gpu-evidence/
+  stage2-games:
+    needs: [bootstrap-stages, self-reproduction]
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc11-independent-bootstrap
+          path: doc11-evidence
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc11-self-reproduction
+          path: doc11-self-evidence
+      - name: Rebuild independent tools and compile unchanged game graphs
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x doc11-evidence/{doc,module_scan} doc11-self-evidence/stage2
+          test "$(cat doc11-evidence/source-sha.txt)" = "$(git rev-parse HEAD)"
+          sha256sum -c doc11-evidence/oracle-SHA256SUMS
+          sha256sum -c doc11-self-evidence/SHA256SUMS
+          mkdir -p doc11-game-evidence
+          python3 -u runtime-doc/tests/test_stage2_games.py --stage2 doc11-self-evidence/stage2 --scanner doc11-evidence/module_scan --reference doc11-evidence/doc --evidence doc11-game-evidence | tee doc11-game-evidence/test.log
+          python3 runtime-doc/tests/test_allocation_failure.py --reactive doc11-game-evidence/reactive2 | tee doc11-game-evidence/allocation-failure-test.log
+          python3 runtime-doc/tests/test_graph_generation.py --managed doc11-self-evidence/stage2 --reactive doc11-game-evidence/reactive2 | tee doc11-game-evidence/graph-generation-test.log
+          python3 runtime-doc/tests/test_epoch_authority.py --managed doc11-self-evidence/stage2 --reactive doc11-game-evidence/reactive2 --sanitizer thread | tee doc11-game-evidence/epoch-authority-tsan.log
+          python3 runtime-doc/tests/test_allocation_failure.py --reactive doc11-game-evidence/reactive2 --sanitizer thread | tee doc11-game-evidence/allocation-failure-tsan.log
+          python3 runtime-doc/tests/test_graph_generation.py --managed doc11-self-evidence/stage2 --reactive doc11-game-evidence/reactive2 --sanitizer thread | tee doc11-game-evidence/graph-generation-tsan.log
+          mkdir -p doc11-bench-assets
+          cp -a engine/levels doc11-bench-assets/levels
+          python3 -u runtime-doc/tests/benchmark_native_games.py --engine engine --evidence doc11-game-evidence --reference doc11-evidence/doc --assets doc11-bench-assets --out doc11-game-evidence/cpu-benchmark --source-sha "$(git rev-parse HEAD)" --provenance exact-ci | tee doc11-game-evidence/cpu-benchmark.log
+          python3 -u runtime-doc/tests/test_mesh_packet.py --reference doc11-evidence/doc --engine engine | tee doc11-game-evidence/mesh-packet-test.log
+          git rev-parse HEAD > doc11-game-evidence/source-sha.txt
+          sha256sum doc11-game-evidence/{scanner2,reactive2,gpu_plan2,radar_chase,radar_chase_3d}{,.c} doc11-game-evidence/radar_chase_3d-workers-1.txt > doc11-game-evidence/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: doc11-stage2-games
+          path: doc11-game-evidence/
+  stage2-webgpu:
+    needs: [bootstrap-stages, stage2-games]
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc11-independent-bootstrap
+          path: doc11-evidence
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc11-stage2-games
+          path: doc11-game-evidence
+      - name: Verify exact self-hosted tools and install pinned WebGPU ABI
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(cat doc11-evidence/source-sha.txt)" = "$(git rev-parse HEAD)"
+          test "$(cat doc11-game-evidence/source-sha.txt)" = "$(git rev-parse HEAD)"
+          sha256sum -c doc11-evidence/oracle-SHA256SUMS
+          sha256sum -c doc11-game-evidence/SHA256SUMS
+          chmod +x doc11-evidence/doc doc11-game-evidence/{reactive2,gpu_plan2}
+          sudo apt-get update
+          sudo apt-get install -y mesa-vulkan-drivers libvulkan1
+          mkdir -p doc11-stage2-gpu-evidence doc11-wgpu
+          curl -fL --retry 3 https://github.com/gfx-rs/wgpu-native/releases/download/v24.0.3.1/wgpu-linux-x86_64-release.zip -o doc11-wgpu.zip
+          echo '86f3eb9f74d7f1ac82ee52d9b2ab15e366ef86a932759c750b7472652836ee59  doc11-wgpu.zip' | sha256sum -c -
+          unzip -q doc11-wgpu.zip -d doc11-wgpu
+          sha256sum doc11-wgpu.zip > doc11-stage2-gpu-evidence/wgpu-sha256.txt
+      - name: Execute GPU graphs compiled by self-hosted Stage-2 tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          export XDG_RUNTIME_DIR="$(mktemp -d)"
+          python3 -u runtime-doc/tests/test_gpu.py --reference doc11-evidence/doc --reactive doc11-game-evidence/reactive2 --gpu-plan doc11-game-evidence/gpu_plan2 --wgpu-root doc11-wgpu --stream | tee doc11-stage2-gpu-evidence/test.log
+          git rev-parse HEAD > doc11-stage2-gpu-evidence/source-sha.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: doc11-stage2-webgpu
+          path: doc11-stage2-gpu-evidence/
+
+  stage2-native-scalar:
+    needs: [bootstrap-stages, self-reproduction, stage2-games]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc11-independent-bootstrap
+          path: doc11-evidence
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc11-self-reproduction
+          path: doc11-self-evidence
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc11-stage2-games
+          path: doc11-game-evidence
+      - name: Rebuild native object compiler and execute original freestanding fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(cat doc11-evidence/source-sha.txt)" = "$(git rev-parse HEAD)"
+          test "$(cat doc11-game-evidence/source-sha.txt)" = "$(git rev-parse HEAD)"
+          test "$(git rev-parse HEAD:runtime-rust)" = a95a38bc6e9300aae815f83b570db5f99d32f221
+          sha256sum -c doc11-self-evidence/SHA256SUMS
+          sha256sum -c doc11-game-evidence/SHA256SUMS
+          chmod +x doc11-self-evidence/stage2 doc11-game-evidence/scanner2
+          sudo apt-get update
+          sudo apt-get install -y qemu-system-x86
+          mkdir -p doc11-native-evidence
+          python3 -u runtime-doc/tests/test_native_scalar.py --stage2 doc11-self-evidence/stage2 --scanner doc11-game-evidence/scanner2 --evidence doc11-native-evidence --boot | tee doc11-native-evidence/test.log
+          git rev-parse HEAD > doc11-native-evidence/source-sha.txt
+          sha256sum doc11-native-evidence/{native_scalar2,native_scalar2.c,boot.c,boot.h,kernel64.elf,kernel.elf} > doc11-native-evidence/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: doc11-stage2-native-scalar
+          path: doc11-native-evidence/
+
+  stage2-mesh-plan:
+    needs: [bootstrap-stages, self-reproduction, stage2-games]
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc11-independent-bootstrap
+          path: doc11-evidence
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc11-self-reproduction
+          path: doc11-self-evidence
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc11-stage2-games
+          path: doc11-game-evidence
+      - name: Build self-hosted mesh compiler and verify original shader domains
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(cat doc11-evidence/source-sha.txt)" = "$(git rev-parse HEAD)"
+          test "$(cat doc11-game-evidence/source-sha.txt)" = "$(git rev-parse HEAD)"
+          test "$(git rev-parse HEAD:runtime-rust)" = a95a38bc6e9300aae815f83b570db5f99d32f221
+          sha256sum -c doc11-self-evidence/SHA256SUMS
+          sha256sum -c doc11-game-evidence/SHA256SUMS
+          chmod +x doc11-self-evidence/stage2 doc11-game-evidence/scanner2
+          mkdir -p doc11-mesh-evidence
+          python3 runtime-doc/compiler/doc_build.py runtime-doc/compiler/mesh_stage.doc --scanner doc11-game-evidence/scanner2 --compiler doc11-self-evidence/stage2 --stream -o doc11-mesh-evidence/mesh_stage2 --emit-c doc11-mesh-evidence/mesh_stage2.c
+          python3 -u runtime-doc/tests/test_mesh_stage.py --compiler doc11-mesh-evidence/mesh_stage2 --evidence doc11-mesh-evidence | tee doc11-mesh-evidence/test.log
+          git rev-parse HEAD > doc11-mesh-evidence/source-sha.txt
+          sha256sum doc11-mesh-evidence/{mesh_stage2,mesh_stage2.c,mesh.wgsl,mesh-changed.wgsl} > doc11-mesh-evidence/SHA256SUMS
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install pinned WebGPU and build unchanged pixel oracle
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y mesa-vulkan-drivers libvulkan1
+          mkdir -p doc11-wgpu
+          curl -fL --retry 3 https://github.com/gfx-rs/wgpu-native/releases/download/v24.0.3.1/wgpu-linux-x86_64-release.zip -o doc11-wgpu.zip
+          echo '86f3eb9f74d7f1ac82ee52d9b2ab15e366ef86a932759c750b7472652836ee59  doc11-wgpu.zip' | sha256sum -c -
+          unzip -q doc11-wgpu.zip -d doc11-wgpu
+          sha256sum doc11-wgpu.zip > doc11-mesh-evidence/wgpu-sha256.txt
+          cargo build --release --locked --manifest-path runtime-rust/Cargo.toml --features webgpu --bin doc-scene3d
+      - name: Compare native DOC rendering to frozen reference
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(cat doc11-mesh-evidence/source-sha.txt)" = "$(git rev-parse HEAD)"
+          export XDG_RUNTIME_DIR="$(mktemp -d)"
+          python3 -u runtime-doc/tests/test_mesh_render.py --compiler doc11-mesh-evidence/mesh_stage2 --game-output doc11-game-evidence/radar_chase_3d-workers-1.txt --scene-reference runtime-rust/target/release/doc-scene3d --wgpu-root doc11-wgpu --evidence doc11-mesh-evidence/render | tee doc11-mesh-evidence/render-test.log
+          sha256sum doc11-mesh-evidence/render/{mesh-render,render-summary.json,mesh.wgsl,mesh-mutated.wgsl,initial.ppm,jump.ppm,final.ppm,mutated.ppm,reference-final.ppm} > doc11-mesh-evidence/render-SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: doc11-stage2-mesh-plan
+          path: doc11-mesh-evidence/

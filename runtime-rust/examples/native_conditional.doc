@@ -1,0 +1,10 @@
+# Conditional external resource lifecycle, driven by typed dependencies.
+# The ABI fixture supplies the external acquire/release implementations.
+native import acquire(i32) -> i32
+native import release(i32) -> i32
+source argument: int = 7
+source enabled: bool = true
+derive absent: int () = -1
+native call acquired: int (argument,enabled,absent) = acquire(argument) when enabled else absent
+derive acquired_ok: bool (acquired) = le(0,acquired)
+native call released: int (acquired,acquired_ok,absent) = release(acquired) when acquired_ok else absent

@@ -1,5 +1,7 @@
 # DOC model/implementation/evidence trace — secondary development
 
+**Historical dual-runtime ledger.** The active Rust-only reference and current #15 audit are documented in [PRE-SELF-HOSTING-AUDIT.md](../docs/PRE-SELF-HOSTING-AUDIT.md) and [BACKEND-EXECUTION-CONTRACT.md](../BACKEND-EXECUTION-CONTRACT.md). Goose is archived; the game, generated WGSL, automatic placement and #24 foundation acceptance supersede the older status rows below. Do not treat these historical statuses as current requirements or as final production proof. Independent #11 remains gated by the four-pass audit.
+
 This is a qualification ledger, not a substitute for the main paper.
 Canonical model and calculus are unchanged.
 
@@ -30,6 +32,6 @@ Canonical model and calculus are unchanged.
 application tests, complete finite theorem-facing conformance, complete
 safe physical realization and generation races in BOTH hosts, Goose
 general typed worker transport and independent WebGPU device dispatch,
-actual physical/browser GPU plus loss/recovery, fuzz/soak/portability,
-and production releases. See primary issue #7 acceptance and #9
+actual Linux physical Vulkan GPU plus loss/recovery, fuzz/soak,
+and native Linux production releases. See primary issue #7 acceptance and #9
 evidence ledger. Do not convert code presence into a PASS status.

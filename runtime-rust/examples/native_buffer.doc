@@ -1,0 +1,15 @@
+# Linux x86_64 POSIX read/write: DOC chooses the subrange and guards dispatch.
+# The trusted caller supplies already-open descriptors and exclusive live storage.
+native region buffer: u8 plain
+native import read(i32,bytes) -> i64
+native import write(i32,const_bytes) -> i64
+source input_fd: int = 0
+source output_fd: int = 1
+source offset: int = 0
+source requested: int = 4
+source enabled: bool = true
+source skipped: int = -1
+native call received: int (input_fd,offset,requested,enabled,skipped) = read(input_fd,buffer,offset,requested) when enabled else skipped
+derive send: bool (received,requested) = if(le(0,received),le(received,requested),false)
+native call sent: int (output_fd,offset,received,send,skipped) = write(output_fd,buffer,offset,received) when send else skipped
+derive complete: bool (received,sent,send) = if(send,eq(received,sent),false)

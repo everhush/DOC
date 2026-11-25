@@ -1,0 +1,22 @@
+# Ordinary DOC graph evaluated independently for each vertex.
+# Units: fixed-point homogeneous clip coordinates, 1024 = 1.
+source x: int = 0
+source y: int = 0
+source z: int = 512
+source normal_z: int = 1
+source red: int = 220
+source green: int = 120
+source blue: int = 60
+source shift_x: int = 0
+source shift_y: int = 0
+source depth_shift: int = 0
+source camera_w: int = 1024
+derive clip_x: int (x,shift_x) = add(x,shift_x)
+derive clip_y: int (y,shift_y) = add(y,shift_y)
+derive clip_z: int (z,depth_shift) = add(z,depth_shift)
+derive clip_w: int (camera_w) = camera_w
+# Basic directional lighting: front faces lit, rear faces shaded.
+fn shade(c,n) = if(lt(n,0),0,c)
+derive lit_r: int (red,normal_z) = shade(red,normal_z)
+derive lit_g: int (green,normal_z) = shade(green,normal_z)
+derive lit_b: int (blue,normal_z) = shade(blue,normal_z)

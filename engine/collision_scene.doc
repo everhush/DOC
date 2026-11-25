@@ -1,0 +1,13 @@
+# DOC-authored AABB composition, with a reusable imported axis test.
+import collision_2d.doc
+source ax0: int = 0
+source ax1: int = 2
+source ay0: int = 0
+source ay1: int = 2
+source bx0: int = 1
+source bx1: int = 3
+source by0: int = 1
+source by1: int = 3
+derive x_hit: bool (ax0,ax1,bx0,bx1) = axis_overlap(ax0,ax1,bx0,bx1)
+derive y_hit: bool (ay0,ay1,by0,by1) = axis_overlap(ay0,ay1,by0,by1)
+derive collides: bool (x_hit,y_hit) = if(x_hit,y_hit,false)
