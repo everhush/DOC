@@ -7,3 +7,5 @@ Physical GPU acceptance is separate. Do not treat software execution as physical
 2026-11-25: consolidated Stage-2 games, mixed WebGPU and rollback, compiler self-reproduction, native scalar boot, render, memory and race validation.
 
 Batch: replay, lifetime and placement policy, checkpoint/PCM, GPU branch diagnostics and multi-workgroup separation, same-run physical GPU, mesh lockfile correction. Frozen Rust unchanged.
+
+Batch 2026-11-25: follow completed e71157c run 45628703910. Retain all four passes and two failed GPU gates. Exact candidate Stage-2 GPU planner emitted all 16 chunks from committed DOC blobs, native local rebuild passed 1/63/64/65/96/128-lane source/bounds parity; no GPU device available locally. Single matched-lane publication, exact case identity guard and full readback diagnostics; mesh phase diagnostics and failed frame packet preservation; upstream native ABI extensions and manifest hardening. Run every independent gate including genuine physical GPU. No acceptance downgrade.
