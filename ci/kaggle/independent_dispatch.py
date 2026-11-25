@@ -19,7 +19,7 @@ def main():
     for name in ('radar_chase','radar_chase_3d'):
         for f in (name,name+'.c',name+'-reference.txt'):add('games/'+f,'doc11-game-evidence/'+f)
         for f in (name+'-gpu',name+'.c',name+'.wgsl'):add('gpu/games/'+f,'doc11-stage2-gpu-evidence/games/'+f)
-    for f in ('scalar','arithmetic','mixed','device_loss','scalar.expected','arithmetic.expected','mixed.expected'):
+    for f in ('scalar','arithmetic','wide','mixed','device_loss','scalar.expected','arithmetic.expected','wide.expected','mixed.expected'):
         add('gpu/micro/'+f,'doc11-stage2-gpu-evidence/micro/'+f)
     for f in ('mesh-render','mesh.wgsl','mesh-mutated.wgsl','plan-meta.json'):
         add('mesh/render/'+f,'doc11-mesh-evidence/render/'+f)
@@ -32,7 +32,7 @@ def main():
     add('ci/kaggle/doc_kaggle_gpu.py','ci/kaggle/doc_kaggle_gpu.py')
     for p in subprocess.check_output(['git','ls-files','engine'],text=True).splitlines():
         if p.endswith('.doc') or p.startswith('engine/levels/'):add(p,p)
-    executables=['games/radar_chase','games/radar_chase_3d','gpu/games/radar_chase-gpu','gpu/games/radar_chase_3d-gpu','mesh/render/mesh-render','mesh/doc-scene3d','gpu/micro/scalar','gpu/micro/arithmetic','gpu/micro/mixed','gpu/micro/device_loss']
+    executables=['games/radar_chase','games/radar_chase_3d','gpu/games/radar_chase-gpu','gpu/games/radar_chase_3d-gpu','mesh/render/mesh-render','mesh/doc-scene3d','gpu/micro/scalar','gpu/micro/arithmetic','gpu/micro/wide','gpu/micro/mixed','gpu/micro/device_loss']
     spec={'sha':sha,'run_id':run_id,'attempt':attempt,'accelerator':'NvidiaTeslaT4','executables':executables}
     with tempfile.TemporaryDirectory(prefix='doc11-private-') as td:
         root=Path(td)
