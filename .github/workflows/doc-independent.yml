@@ -168,9 +168,11 @@ jobs:
         run: |
           set -euo pipefail
           export XDG_RUNTIME_DIR="$(mktemp -d)"
-          python3 -u runtime-doc/tests/test_gpu.py --reference doc11-evidence/doc --reactive doc11-game-evidence/reactive2 --gpu-plan doc11-game-evidence/gpu_plan2 --wgpu-root doc11-wgpu --stream | tee doc11-stage2-gpu-evidence/test.log
+          python3 -u runtime-doc/tests/test_gpu.py --reference doc11-evidence/doc --reactive doc11-game-evidence/reactive2 --gpu-plan doc11-game-evidence/gpu_plan2 --wgpu-root doc11-wgpu --stream --artifacts doc11-stage2-gpu-evidence/micro | tee doc11-stage2-gpu-evidence/test.log
           chmod +x doc11-game-evidence/{scanner2,radar_chase,radar_chase_3d}
           python3 -u runtime-doc/tests/test_stage2_game_gpu.py --games doc11-game-evidence --wgpu-root doc11-wgpu --evidence doc11-stage2-gpu-evidence/games | tee doc11-stage2-gpu-evidence/game-gpu-test.log
+          cp doc11-wgpu/lib/libwgpu_native.so doc11-stage2-gpu-evidence/
+          sha256sum doc11-stage2-gpu-evidence/libwgpu_native.so doc11-stage2-gpu-evidence/micro/* doc11-stage2-gpu-evidence/games/{radar_chase,radar_chase_3d}{-gpu,.c,.wgsl} > doc11-stage2-gpu-evidence/physical-SHA256SUMS
           git rev-parse HEAD > doc11-stage2-gpu-evidence/source-sha.txt
       - uses: actions/upload-artifact@v4
         if: always()
@@ -271,9 +273,46 @@ jobs:
           test "$(cat doc11-mesh-evidence/source-sha.txt)" = "$(git rev-parse HEAD)"
           export XDG_RUNTIME_DIR="$(mktemp -d)"
           python3 -u runtime-doc/tests/test_mesh_render.py --compiler doc11-mesh-evidence/mesh_stage2 --game-output doc11-game-evidence/radar_chase_3d-workers-1.txt --scene-reference runtime-rust/target/release/doc-scene3d --wgpu-root doc11-wgpu --evidence doc11-mesh-evidence/render | tee doc11-mesh-evidence/render-test.log
+          cp runtime-rust/target/release/doc-scene3d doc11-mesh-evidence/
+          sha256sum doc11-mesh-evidence/doc-scene3d doc11-mesh-evidence/render/{mesh-render,mesh.wgsl,mesh-mutated.wgsl,plan-meta.json} > doc11-mesh-evidence/physical-SHA256SUMS
           sha256sum doc11-mesh-evidence/render/{mesh-render,render-summary.json,mesh.wgsl,mesh-mutated.wgsl,initial.ppm,jump.ppm,final.ppm,mutated.ppm,reference-final.ppm} > doc11-mesh-evidence/render-SHA256SUMS
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: doc11-stage2-mesh-plan
           path: doc11-mesh-evidence/
+
+  stage2-physical:
+    needs: [stage2-games, stage2-webgpu, stage2-native-scalar, stage2-mesh-plan]
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc11-stage2-games
+          path: doc11-game-evidence
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc11-stage2-webgpu
+          path: doc11-stage2-gpu-evidence
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc11-stage2-mesh-plan
+          path: doc11-mesh-evidence
+      - name: Install Kaggle dispatcher
+        run: python3 -m pip install 'kaggle>=2.2.1,<3' 'six>=1.16'
+      - name: Execute exact prebuilt independent binaries on one private physical GPU
+        env:
+          KAGGLE_DOC_1: ${{ secrets.KAGGLE_DOC_1 }}
+          DOC_KAGGLE_USERNAME: ${{ vars.DOC_KAGGLE_USERNAME }}
+        run: |
+          set -euo pipefail
+          python3 -u ci/kaggle/independent_dispatch.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: doc11-stage2-physical
+          path: doc11-physical-evidence/
