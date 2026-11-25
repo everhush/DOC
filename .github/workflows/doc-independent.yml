@@ -70,7 +70,7 @@ jobs:
   self-reproduction:
     needs: bootstrap-stages
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -86,9 +86,11 @@ jobs:
           chmod +x doc11-evidence/managed
           test "$(git rev-parse HEAD:runtime-rust)" = a95a38bc6e9300aae815f83b570db5f99d32f221
           mkdir -p doc11-self-evidence
-          python3 runtime-doc/tests/test_self_reproduction.py --native doc11-evidence/managed --evidence doc11-self-evidence | tee doc11-self-evidence/self-test.log
           git rev-parse HEAD > doc11-self-evidence/source-sha.txt
-          sha256sum doc11-self-evidence/stage{2,3}{,.c} doc11-self-evidence/{source-sha.txt,self-test.log} > doc11-self-evidence/SHA256SUMS
+          cc --version > doc11-self-evidence/cc-version.txt
+          python3 runtime-doc/tests/test_self_compile_evidence.py | tee doc11-self-evidence/compile-evidence-test.log
+          python3 runtime-doc/tests/test_self_reproduction.py --native doc11-evidence/managed --evidence doc11-self-evidence | tee doc11-self-evidence/self-test.log
+          sha256sum doc11-self-evidence/stage{2,3}{,.c} doc11-self-evidence/{source-sha.txt,self-test.log,bundle.doc,stage2-linkage.txt,cc-version.txt,compile-evidence-test.log,compile-stage2.json,compile-stage3.json,compile-sample.json} > doc11-self-evidence/SHA256SUMS
       - uses: actions/upload-artifact@v4
         if: always()
         with:
