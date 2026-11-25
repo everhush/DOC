@@ -52,4 +52,4 @@ derive gpu_state: ints (gpu_seed,syntax,directory,links,gnumbers,gowners,event_c
 derive bounds: ints (gpu_state) = slice(gpu_state,4,sub(len(gpu_state),4))
 derive shader_seed: ints (bounds,decl_count) = if(eq(len(bounds),decl_count),append(append(utf8_bytes(concat(gpu_header(),nl())),0),0),preject(bounds))
 derive shader_state: ints (shader_seed,syntax,end_tokens,validated,directory,links,gnumbers,bounds,gowners,event_count) = recur(shader_seed,s,eq(e_cursor(s),event_count),gpu_emit(s,syntax,end_tokens,validated,directory,links,gnumbers,bounds,gowners))
-derive shader: text (shader_state) = concat(utf8_text(slice(shader_state,0,sub(len(shader_state),2))),text("}"))
+derive shader: text (shader_state) = concat(utf8_text(slice(shader_state,0,sub(len(shader_state),2))),text("if(matched){out[idx*2u]=value;out[idx*2u+1u]=0xd0c11a5eu;}}"))
