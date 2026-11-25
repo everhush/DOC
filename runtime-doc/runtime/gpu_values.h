@@ -7,6 +7,7 @@
 #include <time.h>
 #include <stdatomic.h>
 #include "gpu_generated.h"
+#include "gpu_pool_metrics.h"
 static WGPUInstance gpu_instance;
 static WGPUAdapter gpu_adapter;
 static WGPUDevice gpu_device;
@@ -17,6 +18,13 @@ static WGPULimits gpu_limits;
 /* Device-owned pool: prior map completion and unmap precede reuse. */
 static WGPUBuffer gpu_cached_input,gpu_cached_selection,gpu_cached_output,gpu_cached_staging;
 static size_t gpu_cached_states,gpu_capacity;
+static GPUBufferMetrics gpu_pool_metrics;
+static void gpu_pool_admit(uint64_t n){if(!gpu_metric_admit(&gpu_pool_metrics,n))_Exit(1);}
+static void gpu_pool_release(uint64_t n){if(!gpu_metric_release(&gpu_pool_metrics,n))_Exit(1);}
+static void gpu_pool_log(const char *event){
+    GPUBufferMetrics *m=&gpu_pool_metrics;
+    fprintf(stderr,"DOC11_GPU_POOL_METRICS: event=%s admitted=%llu released=%llu live=%llu peak=%llu\n",event,(unsigned long long)m->admitted,(unsigned long long)m->released,(unsigned long long)m->live,(unsigned long long)m->peak);
+}
 static _Atomic int gpu_fault, gpu_device_lost;
 static int gpu_healthy(void){return !atomic_load(&gpu_fault);}
 static size_t gpu_dispatches;
@@ -33,8 +41,10 @@ static void gpu_buffers_close(void){
     if(gpu_cached_output)wgpuBufferRelease(gpu_cached_output);
     if(gpu_cached_selection)wgpuBufferRelease(gpu_cached_selection);
     if(gpu_cached_input)wgpuBufferRelease(gpu_cached_input);
+    gpu_pool_release((uint64_t)gpu_cached_states*4+(uint64_t)gpu_capacity*20);
     gpu_cached_input=gpu_cached_selection=gpu_cached_output=gpu_cached_staging=NULL;
     gpu_cached_states=gpu_capacity=0;
+    if(gpu_pool_metrics.admitted)gpu_pool_log("closed");
 }
 static void gpu_close(void){gpu_buffers_close();if(gpu_layout)wgpuBindGroupLayoutRelease(gpu_layout);if(gpu_pipeline)wgpuComputePipelineRelease(gpu_pipeline);if(gpu_queue)wgpuQueueRelease(gpu_queue);if(gpu_device)wgpuDeviceRelease(gpu_device);if(gpu_adapter)wgpuAdapterRelease(gpu_adapter);if(gpu_instance)wgpuInstanceRelease(gpu_instance);gpu_layout=NULL;gpu_pipeline=NULL;gpu_queue=NULL;gpu_device=NULL;gpu_adapter=NULL;gpu_instance=NULL;}
 static int gpu_open(size_t n){uint64_t begin=gpu_wall_ns();if(n!=sizeof(doc_gpu_bound)/sizeof(doc_gpu_bound[0]))return 0;gpu_instance=wgpuCreateInstance(NULL);if(!gpu_instance)return 0;GPURequest req={0};WGPURequestAdapterOptions opts={.featureLevel=WGPUFeatureLevel_Core,.powerPreference=WGPUPowerPreference_HighPerformance};wgpuInstanceRequestAdapter(gpu_instance,&opts,(WGPURequestAdapterCallbackInfo){.mode=WGPUCallbackMode_AllowSpontaneous,.callback=got_adapter,.userdata1=&req});gpu_wait(&req.done,0);gpu_adapter=req.adapter;if(!gpu_adapter)return 0;WGPUAdapterInfo info={0};if(wgpuAdapterGetInfo(gpu_adapter,&info)!=WGPUStatus_Success)return 0;int physical=info.adapterType==WGPUAdapterType_DiscreteGPU||info.adapterType==WGPUAdapterType_IntegratedGPU;fprintf(stderr,"DOC11_GPU_ADAPTER: type=%u backend=%u physical=%d description=%.*s\n",(unsigned)info.adapterType,(unsigned)info.backendType,physical,(int)info.description.length,info.description.data);wgpuAdapterInfoFreeMembers(info);if(!physical&&(getenv("DOC_REQUIRE_PHYSICAL_GPU")||!getenv("DOC_GPU_ALLOW_SOFTWARE")||strcmp(getenv("DOC_GPU_ALLOW_SOFTWARE"),"1")))return 0;
@@ -65,14 +75,14 @@ static int (*gpu_test_after_submit)(Epoch *);
 static WGPUBuffer gpu_buffer(uint64_t size,WGPUBufferUsage usage){return wgpuDeviceCreateBuffer(gpu_device,&(WGPUBufferDescriptor){.size=size,.usage=usage});}
 static int gpu_reserve(size_t states,size_t count){
     if(!gpu_cached_input){
-        gpu_cached_input=gpu_buffer((uint64_t)states*4,WGPUBufferUsage_Storage|WGPUBufferUsage_CopyDst);
-        if(!gpu_cached_input||!gpu_healthy())return 0;
-        gpu_cached_states=states;
+        WGPUBuffer candidate=gpu_buffer((uint64_t)states*4,WGPUBufferUsage_Storage|WGPUBufferUsage_CopyDst);
+        if(!candidate||!gpu_healthy()){if(candidate)wgpuBufferRelease(candidate);return 0;}
+        gpu_pool_admit((uint64_t)states*4);gpu_cached_input=candidate;gpu_cached_states=states;
     }
     if(gpu_cached_states!=states)return 0;
     if(gpu_capacity>=count){
         fprintf(stderr,"DOC11_GPU_BUFFER_POOL: action=reused capacity=%zu lanes=%zu\n",gpu_capacity,count);
-        return 1;
+        gpu_pool_log("reused");return 1;
     }
     WGPUBuffer selection=gpu_buffer((uint64_t)count*4,WGPUBufferUsage_Storage|WGPUBufferUsage_CopyDst);
     WGPUBuffer output=gpu_buffer((uint64_t)count*8,WGPUBufferUsage_Storage|WGPUBufferUsage_CopySrc|WGPUBufferUsage_CopyDst);
@@ -83,15 +93,17 @@ static int gpu_reserve(size_t states,size_t count){
         if(selection)wgpuBufferRelease(selection);
         return 0;
     }
-    /* Successful prior map completion and unmap precede reuse or growth.
-     * Any unsuccessful epoch stops the GPU lane before another dispatch. */
+    /* Count the overlap of admitted old and new handles before retiring
+     * the previous capacity. A prior successful map or failed-submit
+     * retirement acknowledgement precedes any reuse or growth. */
+    gpu_pool_admit((uint64_t)count*20);
     if(gpu_cached_staging)wgpuBufferRelease(gpu_cached_staging);
     if(gpu_cached_output)wgpuBufferRelease(gpu_cached_output);
     if(gpu_cached_selection)wgpuBufferRelease(gpu_cached_selection);
-    const char *action=gpu_capacity?"grown":"created";
+    const char *action=gpu_capacity?"grown":"created";gpu_pool_release((uint64_t)gpu_capacity*20);
     gpu_cached_selection=selection;gpu_cached_output=output;gpu_cached_staging=staging;gpu_capacity=count;
     fprintf(stderr,"DOC11_GPU_BUFFER_POOL: action=%s capacity=%zu lanes=%zu\n",action,gpu_capacity,count);
-    return 1;
+    gpu_pool_log(action);return 1;
 }
 static int gpu_execute(Epoch *e,const size_t *ids,size_t count){uint64_t begin=gpu_wall_ns();const char *phase="preflight";int ok=0,mapped=0,submitted=0;uint32_t *in=NULL,*queue=NULL;WGPUBuffer input=NULL,selection=NULL,output=NULL,staging=NULL;WGPUBindGroup group=NULL;WGPUCommandEncoder encoder=NULL;WGPUComputePassEncoder pass=NULL;WGPUCommandBuffer command=NULL;if(!count)return 1;if(!gpu_device||atomic_load(&gpu_fault)||e->n>UINT32_MAX||count>e->n||count>UINT32_MAX)return 0;uint64_t in_bytes=(uint64_t)e->n*4,selection_bytes=(uint64_t)count*4,out_bytes=(uint64_t)count*8;if(in_bytes>gpu_limits.maxStorageBufferBindingSize||out_bytes>gpu_limits.maxStorageBufferBindingSize||in_bytes>gpu_limits.maxBufferSize||out_bytes>gpu_limits.maxBufferSize||(count+63)/64>gpu_limits.maxComputeWorkgroupsPerDimension)return 0;phase="host staging";in=calloc(e->n,sizeof(*in));queue=calloc(count,sizeof(*queue));if(!in||!queue)goto done;for(size_t i=0;i<count;i++){size_t id=ids[i];if(id>=e->n||!gpu_eligible(e,id)){fprintf(stderr,"DOC11_GPU_REJECT: invalid selection index=%zu id=%zu\n",i,id);goto done;}queue[i]=(uint32_t)id;const State *s=e->states+id;for(size_t j=0;j<s->ndeps;j++){size_t p=s->deps[j];in[p]=(uint32_t)(int32_t)e->states[p].slot->x;}}
     phase="buffer reserve";if(!gpu_reserve(e->n,count))goto done;input=gpu_cached_input;selection=gpu_cached_selection;output=gpu_cached_output;staging=gpu_cached_staging;
