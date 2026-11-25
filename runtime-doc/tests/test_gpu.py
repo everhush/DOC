@@ -75,7 +75,7 @@ def main():
     if a.artifacts:
      (a.artifacts/'gpu_epoch_authority.stdout').write_bytes(retired.stdout)
      (a.artifacts/'gpu_epoch_authority.stderr').write_bytes(retired.stderr)
-    assert retired.returncode==0 and b'DOC11_GPU_EPOCH_AUTHORITY_PASS:' in retired.stdout and b'DOC11_GPU_RETIRED: outcome=device-lost' in retired.stderr,(retired.stdout,retired.stderr)
+    assert retired.returncode==0 and b'DOC11_GPU_EPOCH_AUTHORITY_PASS:' in retired.stdout and b'DOC11_GPU_RETIRED: outcome=device-lost' in retired.stderr and b'DOC11_GPU_RETIRED: outcome=queue-complete' in retired.stderr,(retired.stdout,retired.stderr)
     assert b'DOC11_GPU_DISPATCH: lanes=96 workgroups=2' in retired.stderr and b'DOC11_GPU_BUFFER_POOL: action=reused' in retired.stderr,retired.stderr
     if a.physical:assert b'physical=1' in retired.stderr
     print(retired.stdout.decode().strip(),retired.stderr.decode(),flush=True)
