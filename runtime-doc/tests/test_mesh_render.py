@@ -58,7 +58,13 @@ def main():
     assert plan.wgsl!=mutated.wgsl
     records={}
     def render(plan,frames,label):
-        packet=pack(plan,frames);t=time.perf_counter_ns();r=checked([exe],env,input=packet);elapsed=time.perf_counter_ns()-t
+        packet=pack(plan,frames);t=time.perf_counter_ns();r=run([exe],env,input=packet);elapsed=time.perf_counter_ns()-t
+        (out/(label+'.log')).write_bytes(r.stderr)
+        if r.returncode:
+            (out/(label+'.failed-packet')).write_bytes(packet);(out/(label+'.failed.wgsl')).write_bytes(plan.wgsl)
+            (out/(label+'.failure.json')).write_text(json.dumps({'returncode':r.returncode,'stdout_bytes':len(r.stdout),'packet_sha256':hashlib.sha256(packet).hexdigest(),'shader_sha256':hashlib.sha256(plan.wgsl).hexdigest()},indent=2)+'\n')
+            assert not r.stdout, 'failed render published partial pixels'
+            raise AssertionError((str(exe),r.returncode,r.stderr[-6000:]))
         assert b'DOC11_MESH_RENDER:' in r.stderr and b'DOC11_MESH_ADAPTER:' in r.stderr,r.stderr
         if a.physical:assert b'physical=1' in r.stderr,r.stderr
         images=unpack_pixels(r.stdout,frames);records[label]={'frames':len(images),'wall_ns':elapsed,'packet_sha256':hashlib.sha256(packet).hexdigest(),'shader_sha256':hashlib.sha256(plan.wgsl).hexdigest(),'image_sha256':[hashlib.sha256(x).hexdigest() for x in images]};(out/(label+'.log')).write_bytes(r.stderr);return images
