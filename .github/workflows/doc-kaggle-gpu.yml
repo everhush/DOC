@@ -19,7 +19,7 @@ permissions:
 jobs:
   physical-doc-parity:
     name: Kaggle Rust wgpu physical GPU and DOC source conformance
-    if: ${{ github.repository_id == '1317169134' && github.ref_name == 'master' }}
+    if: ${{ github.repository_id == '1471748051' && github.ref_name == 'master' }}
     runs-on: ubuntu-latest
     steps:
       - name: Check out the exact trusted DOC revision
