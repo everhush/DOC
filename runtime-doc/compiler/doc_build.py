@@ -115,7 +115,7 @@ def gpu_artifacts(planner, data, stream=False):
     shader=invoke(planner,data,'shader',stream=stream)
     if not shader or any(c not in (9,10,13) and not 32<=c<=126 for c in shader):
         raise ValueError('invalid generated WGSL bytes')
-    if shader.count(b'case ')!=sum(x>=0 for x in bounds):
+    if shader.count(b'if(state==')!=sum(x>=0 for x in bounds):
         raise ValueError('GPU plan/kernel case count mismatch')
     header=('static const int64_t doc_gpu_bound[]={'+','.join(map(str,bounds))+'};\n'
             'static const char doc_wgsl[]='+json.dumps(shader.decode('ascii'))+';\n').encode('ascii')
