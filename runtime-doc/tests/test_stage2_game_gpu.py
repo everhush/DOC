@@ -37,7 +37,7 @@ def record(out,name,r):
 def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--games',required=True,type=Path);p.add_argument('--wgpu-root',required=True,type=Path);p.add_argument('--evidence',required=True,type=Path)
-    p.add_argument('--engine',type=Path,default=ROOT.parent/'engine');p.add_argument('--physical',action='store_true')
+    p.add_argument('--prebuilt',type=Path);p.add_argument('--engine',type=Path,default=ROOT.parent/'engine');p.add_argument('--physical',action='store_true')
     a=p.parse_args();games=a.games.resolve();out=a.evidence.resolve();out.mkdir(parents=True,exist_ok=True)
     scanner=games/'scanner2';compiler=games/'reactive2';planner=games/'gpu_plan2';engine=a.engine.resolve()
     self_test();summary={}
@@ -49,11 +49,16 @@ def main():
             expected=(games/(name+'-reference.txt')).read_bytes()
             starts=[m.start() for m in re.finditer(rb'(?m)^epoch: \d+\n',expected)]
             assert len(starts)==len(replay)+1 and starts[0]==0
-            source=engine/(name+'.doc');snapshot=bundle([scanner],source,stream=True)
+            source=engine/(name+'.doc')
             exe=out/(name+'-gpu');c=out/(name+'.c');wgsl=out/(name+'.wgsl')
-            start=time.perf_counter_ns()
-            code=build_bundled([compiler],snapshot,exe,ROOT/'runtime',True,c,stream=True,gpu_plan=[planner],wgpu_root=a.wgpu_root,emit_wgsl=wgsl,emit_gpu_header=out/(name+'-gpu.h'))
-            build_ns=time.perf_counter_ns()-start
+            if a.prebuilt:
+                exe=a.prebuilt.resolve()/(name+'-gpu');c=a.prebuilt.resolve()/(name+'.c');wgsl=a.prebuilt.resolve()/(name+'.wgsl')
+                code=c.read_bytes();build_ns=None
+            else:
+                snapshot=bundle([scanner],source,stream=True)
+                start=time.perf_counter_ns()
+                code=build_bundled([compiler],snapshot,exe,ROOT/'runtime',True,c,stream=True,gpu_plan=[planner],wgpu_root=a.wgpu_root,emit_wgsl=wgsl,emit_gpu_header=out/(name+'-gpu.h'))
+                build_ns=time.perf_counter_ns()-start
             assert code==(games/(name+'.c')).read_bytes(),'CPU/GPU generated C differs'
             # CPU-only ELF is a deterministic absent-WebGPU case, regardless of
             # installed driver. Auto may fall back before starting an epoch.

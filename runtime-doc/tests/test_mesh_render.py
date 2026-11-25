@@ -6,7 +6,7 @@ import argparse, dataclasses, hashlib, json, os, re, subprocess, sys, tempfile, 
 from pathlib import Path
 ROOT=Path(__file__).resolve().parent.parent
 sys.path.insert(0,str(ROOT/'compiler'))
-from mesh_build import compile_mesh
+from mesh_build import compile_mesh,MeshPlan
 from mesh_frame import snapshots,pack,unpack_pixels
 from test_mesh_stage import VERTEX,FRAGMENT,CLIP,VARY,COLOR
 
@@ -35,14 +35,27 @@ def covered(raw,clear):return sum(raw[i:i+4]!=bytes(clear) for i in range(0,len(
 
 
 def main():
-    p=argparse.ArgumentParser();p.add_argument('--compiler',type=Path,required=True);p.add_argument('--game-output',type=Path,required=True);p.add_argument('--scene-reference',type=Path,required=True);p.add_argument('--engine',type=Path,default=ROOT.parent/'engine');p.add_argument('--wgpu-root',type=Path,required=True);p.add_argument('--evidence',type=Path,required=True);p.add_argument('--physical',action='store_true');a=p.parse_args()
-    out=a.evidence.resolve();out.mkdir(parents=True,exist_ok=True);wgpu=a.wgpu_root.resolve();tool=a.compiler.resolve();env=dict(os.environ)
-    if a.physical:env['DOC_REQUIRE_PHYSICAL_GPU']='1';env.pop('DOC_GPU_ALLOW_SOFTWARE',None)
+    p=argparse.ArgumentParser();p.add_argument('--compiler',type=Path);p.add_argument('--prebuilt',type=Path);p.add_argument('--game-output',type=Path,required=True);p.add_argument('--scene-reference',type=Path,required=True);p.add_argument('--engine',type=Path,default=ROOT.parent/'engine');p.add_argument('--wgpu-root',type=Path,required=True);p.add_argument('--evidence',type=Path,required=True);p.add_argument('--physical',action='store_true');a=p.parse_args()
+    out=a.evidence.resolve();out.mkdir(parents=True,exist_ok=True);wgpu=a.wgpu_root.resolve();tool=a.compiler.resolve() if a.compiler else None;env=dict(os.environ)
+    if a.physical:env['DOC_REQUIRE_PHYSICAL_GPU']='1';env['DOC_GPU_REQUIRE_HARDWARE']='1';env.pop('DOC_GPU_ALLOW_SOFTWARE',None)
     else:env.pop('DOC_REQUIRE_PHYSICAL_GPU',None);env['DOC_GPU_ALLOW_SOFTWARE']='1'
     frames=snapshots(a.game_output.read_bytes());assert len(frames)==len(REPLAY)+1 and frames[0].draws!=frames[1].draws
-    vertex=(a.engine/'graphics/arena_vertex.doc').read_bytes();fragment=(a.engine/'graphics/mesh_fragment.doc').read_bytes()
-    plan=compile_mesh(tool,vertex,fragment,VERTEX,FRAGMENT,CLIP,VARY,COLOR);mutated=compile_mesh(tool,vertex,fragment.replace(b'= light_r',b'= if(eq(light_r,0),0,0)'),VERTEX,FRAGMENT,CLIP,VARY,COLOR);assert plan.wgsl!=mutated.wgsl
-    exe=out/'mesh-render';checked(['cc','-std=c11','-O2','-Wall','-Wextra','-I',wgpu/'include',ROOT/'runtime/mesh_render.c','-L',wgpu/'lib','-Wl,-rpath,'+str(wgpu/'lib'),'-lwgpu_native','-o',exe],env)
+    if a.prebuilt:
+        base=a.prebuilt.resolve()
+        metadata=json.loads((base/'plan-meta.json').read_text())
+        def restore(key,shader):
+            row=metadata[key]
+            assert set(row)=={'vertex','draw','varying','colors'}
+            return MeshPlan((base/shader).read_bytes(),*(tuple(tuple(d) if d is not None else None for d in row[k]) for k in ('vertex','draw','varying','colors')))
+        plan=restore('original','mesh.wgsl');mutated=restore('mutated','mesh-mutated.wgsl')
+        exe=base/'mesh-render'
+    else:
+        assert tool is not None
+        vertex=(a.engine/'graphics/arena_vertex.doc').read_bytes();fragment=(a.engine/'graphics/mesh_fragment.doc').read_bytes()
+        plan=compile_mesh(tool,vertex,fragment,VERTEX,FRAGMENT,CLIP,VARY,COLOR);mutated=compile_mesh(tool,vertex,fragment.replace(b'= light_r',b'= if(eq(light_r,0),0,0)'),VERTEX,FRAGMENT,CLIP,VARY,COLOR)
+        exe=out/'mesh-render';checked(['cc','-std=c11','-O2','-Wall','-Wextra','-I',wgpu/'include',ROOT/'runtime/mesh_render.c','-L',wgpu/'lib','-Wl,-rpath,'+str(wgpu/'lib'),'-lwgpu_native','-o',exe],env)
+        (out/'plan-meta.json').write_text(json.dumps({key:{k:getattr(obj,k) for k in ('vertex','draw','varying','colors')} for key,obj in [('original',plan),('mutated',mutated)]},indent=2)+'\n')
+    assert plan.wgsl!=mutated.wgsl
     records={}
     def render(plan,frames,label):
         packet=pack(plan,frames);t=time.perf_counter_ns();r=checked([exe],env,input=packet);elapsed=time.perf_counter_ns()-t
