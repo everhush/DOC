@@ -126,8 +126,9 @@ jobs:
           cp -a engine/levels doc11-bench-assets/levels
           python3 -u runtime-doc/tests/benchmark_native_games.py --engine engine --evidence doc11-game-evidence --reference doc11-evidence/doc --assets doc11-bench-assets --out doc11-game-evidence/cpu-benchmark --source-sha "$(git rev-parse HEAD)" --provenance exact-ci | tee doc11-game-evidence/cpu-benchmark.log
           python3 -u runtime-doc/tests/test_mesh_packet.py --reference doc11-evidence/doc --engine engine | tee doc11-game-evidence/mesh-packet-test.log
+          python3 -u runtime-doc/tests/test_game_effects.py --games doc11-game-evidence --reference doc11-evidence/doc --managed doc11-self-evidence/stage2 --evidence doc11-game-evidence/game-effects | tee doc11-game-evidence/game-effects-test.log
           git rev-parse HEAD > doc11-game-evidence/source-sha.txt
-          sha256sum doc11-game-evidence/{scanner2,reactive2,gpu_plan2,radar_chase,radar_chase_3d}{,.c} doc11-game-evidence/radar_chase_3d-workers-1.txt > doc11-game-evidence/SHA256SUMS
+          sha256sum doc11-game-evidence/{scanner2,reactive2,gpu_plan2,radar_chase,radar_chase_3d}{,.c} doc11-game-evidence/radar_chase_3d-workers-1.txt doc11-game-evidence/{radar_chase,radar_chase_3d}-reference.txt > doc11-game-evidence/SHA256SUMS
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -285,7 +286,7 @@ jobs:
   stage2-physical:
     needs: [stage2-games, stage2-webgpu, stage2-native-scalar, stage2-mesh-plan]
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 360
     steps:
       - uses: actions/checkout@v4
         with:
