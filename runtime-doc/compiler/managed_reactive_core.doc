@@ -1,0 +1,12 @@
+# Emit dependency policy directly from admitted declaration identities.
+fn mrheader() = cat4(chr(35),text("include "),mquoted(text("reactive_values.h")),nl())
+fn mrnum(d) = concat(text("0x"),utf8_text(append(append(append(append(empty(),hn(d,12)),hn(d,8)),hn(d,4)),hn(d,0))))
+fn mrindex(w,d) = cat4(w,text("["),mrnum(d),text("]"))
+fn mrassign(w,d) = concat(mrindex(w,d),concat(text("=1;"),nl()))
+fn mrmark(p,d) = concat(cat4(text("if(id=="),mrnum(p),text(")"),text("")),mrassign(text("dirty"),d))
+fn mrdemand(p,d) = concat(cat3(text("if("),mrindex(text("need"),d),text(")")),mrassign(text("need"),p))
+fn mrblock(p,d) = concat(cat4(text("if("),mrindex(text("dirty"),p),text("||"),concat(mrindex(text("blocked"),p),text(")"))),mrassign(text("blocked"),d))
+fn mrselect(d) = concat(cat4(text("if("),mrindex(text("dirty"),d),text("&&"),mrindex(text("need"),d)),cat4(text("&&!"),mrindex(text("blocked"),d),text(")queue[count++]="),cat3(mrnum(d),text(";"),nl())))
+fn mrpiece(es,ds,ls,owners,i,k) = if(eq(grole(ds,get(owners,i)),2),if(eq(k,3),if(eq(ev(es,i),2),mrselect(get(owners,i)),text("")),if(eq(ev(es,i),6),if(eq(k,0),mrmark(get(ls,i),get(owners,i)),if(eq(k,1),mrdemand(get(ls,i),get(owners,i)),mrblock(get(ls,i),get(owners,i)))),text(""))),text(""))
+fn mrphase(k) = if(eq(k,0),text("};static void doc_mark(size_t id,unsigned char *dirty){"),if(eq(k,1),text("}static void doc_demand(unsigned char *need){"),if(eq(k,2),text("}static void doc_block(const unsigned char *dirty,unsigned char *blocked){"),if(eq(k,3),text("}static size_t doc_select(const unsigned char *dirty,const unsigned char *need,const unsigned char *blocked,size_t *queue){size_t count=0;"),text("return count;}int main(int argc,char **argv){return run_reactive(states,sizeof(states)/sizeof(states[0]),argc,argv);}")))))
+fn mrstep(s,es,ds,ls,owners,n) = if(eq(e_cursor(s),n),e_save(s,concat(mrphase(add(e_body(s),1)),nl()),0,add(e_body(s),1)),e_save(s,mrpiece(es,ds,ls,owners,if(eq(e_body(s),1),sub(sub(n,1),e_cursor(s)),e_cursor(s)),e_body(s)),add(e_cursor(s),1),e_body(s)))

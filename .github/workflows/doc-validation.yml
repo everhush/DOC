@@ -1,18 +1,13 @@
-name: DOC dual-runtime validation
+name: DOC Rust Linux validation
+# Keep this workflow name registered on main as well: GitHub's
+# workflow_run trigger for exact-SHA Kaggle hardware checks reads the
+# default-branch workflow registry, even for trusted feature pushes.
+
+# Initial release and CI acceptance target: Linux x86_64 only.
+# Only native Rust DOC CPU, explicit wgpu GPU, packaging and semantics
+# are current release gates; Goose is preserved in a deprecated archive.
 
 on:
-  push:
-    branches: [feat/webgpu-dual-runtime-ci]
-    paths:
-      - '.github/workflows/doc-validation.yml'
-      - '.github/workflows/doc-kaggle-gpu.yml'
-      - '.github/workflows/doc-kaggle-permissions.yml'
-      - 'BACKEND-EXECUTION-CONTRACT.md'
-      - 'ci/**'
-      - 'local-evidence/**'
-      - 'runtime-rust/**'
-      - 'runtime-goose/**'
-  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -24,37 +19,64 @@ concurrency:
 
 jobs:
   rust:
-    name: Rust finite DOC + WGSL checks
+    name: Rust DOC language, CPU safety and WGSL checks
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+      - name: Record trusted public doc2 source provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'x0796666-ui/doc2'
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          mkdir -p validation-logs
+          printf 'repo=%s\nref=%s\ncommit=%s\nevent=%s\n' \
+            "$GITHUB_REPOSITORY" "$GITHUB_REF" "$GITHUB_SHA" "$GITHUB_EVENT_NAME" \
+            > validation-logs/github-provenance.txt
+          echo DOC_CI_EXACT_SHA_PASS
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: runtime-rust
-      - name: Enforce native Rust and Goose runtime source policy
-        run: bash runtime-goose/check-native-sources.sh
-      - name: Shell syntax-check all DOC validation harnesses before compiling Goose
+      - name: Enforce Rust-only bundle, source and hardware proof contract
+        run: python3 ci/check-rust-only-scope.py
+      - name: Enforce Rust-only current-release source policy
         run: |
           set -euo pipefail
-          for script in runtime-goose/*.sh runtime-rust/*.sh ci/*.sh; do
+          test -f runtime-goose/DEPRECATED.md
+          test -f runtime-rust/src/lib.rs
+          test -f runtime-rust/src/gpu.rs
+          echo DOC_RUST_ONLY_RELEASE_POLICY_PASS
+      - name: Shell syntax-check retained Rust DOC validation harnesses
+        run: |
+          set -euo pipefail
+          for script in runtime-rust/*.sh ci/*.sh; do
             bash -n "$script"
           done
-      - name: Validate Kaggle dispatch and evidence policies without credentials or GPUs
-        run: python3 -m unittest discover -s ci/kaggle -p 'test_*.py' -v
-      - name: Adversarial physical-GPU log parser tests (synthetic, no GPU)
-        run: python3 -m unittest discover -s ci -p 'test_*gpu*.py' -v
-      - name: Audit submitted local physical-GPU result logs without hardware claims
-        run: python3 ci/verify-local-gpu-evidence.py local-evidence
+      - name: Validate Rust-only Kaggle provenance and hardware-policy tests without credentials
+        run: |
+          test -f docs/RUST-ONLY-ACCEPTANCE.md
+          python3 -m unittest discover -s ci/kaggle -p 'test_*.py' -v
+      # Deprecated cross-runtime physical-inventory parsers live in
+      # historical local-evidence only, not in active Rust/WebGPU release gates.
       - name: Native compile, tests and WGSL parse/validation
         run: |
           set -o pipefail
           mkdir -p validation-logs
           cargo test --manifest-path runtime-rust/Cargo.toml --all-targets 2>&1 | tee validation-logs/rust-tests.log
           cargo build --manifest-path runtime-rust/Cargo.toml --release 2>&1 | tee validation-logs/rust-release.log
+          cargo build --manifest-path runtime-rust/Cargo.toml --release --bin doc-game 2>&1 | tee validation-logs/doc-game-release.log
+      - name: Stage-0 native C compiler and independent ELF execution
+        run: bash ci/validate-aot-stage0.sh
+      - name: Actual freestanding DOC x86_64 boot, memory and device output
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq qemu-system-x86
+          bash ci/validate-freestanding.sh | tee validation-logs/freestanding-proof.log
       - name: Run actual DOC source, check reported values
         run: |
           set -o pipefail
@@ -66,6 +88,91 @@ jobs:
           grep -Fx 'sum: 5' validation-logs/doc-worker1.txt
           grep -Fx 'doubled: 10' validation-logs/doc-worker1.txt
           grep -Fx 'chosen: 10' validation-logs/doc-worker1.txt
+      - name: DOC-authored game deterministic headless input replay
+        run: |
+          set -euo pipefail
+          game=runtime-rust/target/release/doc-game
+          test -x "$game"
+          "$game" engine/coin_chase.doc --headless --workers=1 --replay=ddsddddsspr \
+            > validation-logs/game-worker1.txt
+          "$game" engine/coin_chase.doc --headless --workers=4 --replay=ddsddddsspr \
+            > validation-logs/game-worker4.txt
+          diff -u validation-logs/game-worker1.txt validation-logs/game-worker4.txt
+          grep -Fx 'DOC_GAME_FRAME: tick=9 player=(6,4) score=2 paused=false won=true coin=(6,4)' \
+            validation-logs/game-worker1.txt
+          grep -Fx 'DOC_GAME_FRAME: tick=11 player=(1,1) score=0 paused=false won=false coin=(4,2)' \
+            validation-logs/game-worker1.txt
+          if "$game" engine/coin_chase.doc --headless --replay=z \
+              > validation-logs/game-invalid.stdout 2> validation-logs/game-invalid.stderr; then
+            echo 'Invalid input was erroneously accepted' >&2
+            exit 1
+          fi
+          grep -F 'DOC_GAME_ERROR: Unknown input' validation-logs/game-invalid.stderr
+          echo DOC_GAME_HEADLESS_REPLAY_PASS
+      - name: Measure finite DOC CPU allocation and headless engine step latency
+        run: |
+          set -euo pipefail
+          bench=runtime-rust/target/release/doc-bench
+          game=runtime-rust/target/release/doc-game
+          test -x "$bench"
+          for workers in 1 2 4 8; do
+            DOC_BENCH_WIDTH=512 DOC_WORKERS="$workers" "$bench" \
+              > "validation-logs/bench-cpu-worker-$workers.txt"
+            grep -F 'DOC_BENCH_CPU_MEASURED:' \
+              "validation-logs/bench-cpu-worker-$workers.txt"
+            grep -F 'profile=release' \
+              "validation-logs/bench-cpu-worker-$workers.txt"
+            "$game" engine/coin_chase.doc --headless --workers="$workers" \
+              --measure --replay=ddsddddsspr \
+              > "validation-logs/bench-game-worker-$workers.txt"
+            grep -F 'DOC_GAME_CPU_MEASURED: steps=11 ' \
+              "validation-logs/bench-game-worker-$workers.txt"
+          done
+          echo DOC_CPU_LATENCY_ALLOCATION_AND_PROCESS_RSS_MEASURED_PASS
+      - name: Unified DOC Radar Chase actual CPU game and automatic scheduling parity
+        run: |
+          set -euo pipefail
+          game=runtime-rust/target/release/doc-game
+          test -x "$game"
+          for workers in 1 2 4 8; do
+            DOC_AUTO_DISABLE_GPU=1 "$game" engine/radar_chase.doc --headless \
+              --workers="$workers" --replay=edsssxwddddsspr \
+              > "validation-logs/radar-cpu-$workers.stdout" \
+              2> "validation-logs/radar-cpu-$workers.stderr"
+            grep -F 'DOC_GAME_ENTITIES: count=1 ids=[1]' \
+              "validation-logs/radar-cpu-$workers.stdout"
+            grep -F 'DOC_AUTO_SUMMARY: gpu_kind=none' \
+              "validation-logs/radar-cpu-$workers.stderr"
+          done
+          for workers in 2 4 8; do
+            diff -u validation-logs/radar-cpu-1.stdout \
+              "validation-logs/radar-cpu-$workers.stdout"
+          done
+          # Validate normal automatic worker selection, not just forced worker counts.
+          DOC_AUTO_DISABLE_GPU=1 "$game" engine/radar_chase.doc --headless \
+            --replay=edsssxwddddsspr > validation-logs/radar-cpu-default.stdout \
+            2> validation-logs/radar-cpu-default.stderr
+          diff -u validation-logs/radar-cpu-1.stdout validation-logs/radar-cpu-default.stdout
+          grep -F 'won=true' validation-logs/radar-cpu-default.stdout
+          grep -F 'DOC_GAME_RADAR: pre_action_player_cell=9 pre_action_coin_cell=20' \
+            validation-logs/radar-cpu-default.stdout
+          # A one-worker run may never claim parallel CPU execution.
+          if grep -q '^DOC_RUST_PARALLEL_FRONTIER:' validation-logs/radar-cpu-1.stderr; then
+            echo 'One-worker scheduling incorrectly reported parallel work' >&2
+            exit 1
+          fi
+          # On a runner with multiple CPUs, insist on actual CPU-thread execution.
+          if [ "$(nproc)" -gt 1 ]; then
+            grep -F 'DOC_RUST_PARALLEL_FRONTIER:' validation-logs/radar-cpu-default.stderr
+            grep -E 'cpu_parallel_frontiers=[1-9][0-9]*' validation-logs/radar-cpu-default.stderr
+          else
+            grep -E 'cpu_parallel_frontiers=0 ' validation-logs/radar-cpu-default.stderr
+          fi
+          DOC_AUTO_DISABLE_GPU=1 "$game" engine/radar_chase.doc --headless \
+            --measure --replay=edsss > validation-logs/radar-cpu-measured.stdout \
+            2> validation-logs/radar-cpu-measured.stderr
+          grep -F 'DOC_GAME_CPU_MEASURED:' validation-logs/radar-cpu-measured.stdout
+          echo DOC_UNIFIED_RADAR_CPU_AUTO_PARITY_PASS
       - name: Verify strict explicit backend admission in Rust CLI
         run: bash ci/check-explicit-backend.sh runtime-rust/target/release/doc runtime-rust/examples/repair.doc
       - name: Black-box DOC finite branch and failure conformance (1, 2, 4 workers)
@@ -80,16 +187,25 @@ jobs:
           set -euo pipefail
           mkdir -p validation-logs/release/bin
           install -m 755 runtime-rust/target/release/doc validation-logs/release/bin/doc-rust
+          install -m 755 runtime-rust/target/release/doc-game validation-logs/release/bin/doc-game
           ldd validation-logs/release/bin/doc-rust > validation-logs/rust-dynamic-dependencies.txt 2>&1 || true
           tar -czf validation-logs/doc-rust-linux-x86_64.tar.gz \
-            -C validation-logs/release bin/doc-rust \
-            -C "$GITHUB_WORKSPACE" LICENSE runtime-rust/examples/repair.doc
+            -C validation-logs/release bin/doc-rust bin/doc-game \
+            -C "$GITHUB_WORKSPACE" LICENSE runtime-rust/examples/repair.doc \
+              engine/coin_chase.doc engine/engine_math.doc engine/README.md \
+              engine/levels/coin_chase.txt
           scratch=$(mktemp -d)
           trap 'rm -rf -- "$scratch"' EXIT
           tar -xzf validation-logs/doc-rust-linux-x86_64.tar.gz -C "$scratch"
           "$scratch/bin/doc-rust" "$scratch/runtime-rust/examples/repair.doc" a=4 b=1 \
             > validation-logs/rust-installed-smoke.log 2>&1
           grep -Fx 'chosen: 10' validation-logs/rust-installed-smoke.log
+          "$scratch/bin/doc-game" "$scratch/engine/coin_chase.doc" \
+            --headless --replay=ddsddddsspr \
+            > validation-logs/game-installed-smoke.log
+          grep -Fx 'DOC_GAME_FRAME: tick=9 player=(6,4) score=2 paused=false won=true coin=(6,4)' \
+            validation-logs/game-installed-smoke.log
+          echo DOC_GAME_PACKAGED_INSTALL_PASS
           echo DOC_RUST_PACKAGED_INSTALL_PASS
       - name: Preserve raw outputs, including failures
         if: always()
@@ -101,7 +217,7 @@ jobs:
           if-no-files-found: warn
 
   webgpu-compute:
-    name: Native Rust wgpu DOC compute (Mesa Vulkan, no Goose bridge)
+    name: Rust wgpu DOC compute (WebGPU software adapter; not hardware)
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     needs: rust
@@ -112,13 +228,87 @@ jobs:
         with:
           workspaces: runtime-rust
           shared-key: ubuntu2404-glibc239-gpu
-      - name: Install Mesa Vulkan for actual Rust WebGPU dispatch
+      - name: Provision headless CI's software WebGPU device driver
         run: |
           set -euo pipefail
+          # The hosted runner has no preinstalled compute-capable GPU driver.
+          # Operating-system driver provisioning is not an app/API selection:
+          # Rust DOC continues to use only wgpu::Instance::default() and WGSL.
           sudo apt-get update -qq
-          sudo apt-get install -y -qq libvulkan1 mesa-vulkan-drivers vulkan-tools
+          sudo apt-get install -y -qq libvulkan1 mesa-vulkan-drivers xvfb xauth xdotool libxkbcommon-x11-0
           mkdir -p validation-logs
-          vulkaninfo --summary > validation-logs/rust-adapter.log 2>&1
+          echo "DOC_WEBGPU_TEST_ADAPTER: host software GPU driver provisioned; no native API selected by DOC" \
+            > validation-logs/webgpu-test-environment.log
+      - name: Mixed automatic DOC game CPU/WebGPU software-only placement and failure boundary
+        run: |
+          set -euo pipefail
+          mkdir -p validation-logs
+          cargo build --release --manifest-path runtime-rust/Cargo.toml \
+            --features webgpu --bin doc-game
+          game=runtime-rust/target/release/doc-game
+          DOC_GPU_ALLOW_SOFTWARE=1 "$game" engine/radar_chase.doc \
+            --headless --replay=edsssxwddddsspr > validation-logs/radar-auto-gpu.stdout \
+            2> validation-logs/radar-auto-gpu.stderr
+          DOC_GPU_ALLOW_SOFTWARE=1 DOC_AUTO_DISABLE_GPU=1 "$game" \
+            engine/radar_chase.doc --headless --replay=edsssxwddddsspr \
+            > validation-logs/radar-auto-cpu.stdout \
+            2> validation-logs/radar-auto-cpu.stderr
+          diff -u validation-logs/radar-auto-cpu.stdout \
+            validation-logs/radar-auto-gpu.stdout
+          grep -Fx 'DOC_GAME_FRAME: tick=13 player=(6,4) score=2 paused=false won=true coin=(6,4)' \
+            validation-logs/radar-auto-gpu.stdout
+          # On the CI software-only host, the ordinary GPU-capable build must
+          # choose CPU on its own (no software opt-in, no force-disable flag).
+          env -u DOC_GPU_ALLOW_SOFTWARE -u DOC_AUTO_DISABLE_GPU \
+            "$game" engine/radar_chase.doc --headless --replay=edsssxwddddsspr \
+            > validation-logs/radar-auto-no-device.stdout \
+            2> validation-logs/radar-auto-no-device.stderr
+          diff -u validation-logs/radar-auto-cpu.stdout validation-logs/radar-auto-no-device.stdout
+          grep -E '^DOC_AUTO_SUMMARY: gpu_kind=none cpu_nodes=[1-9][0-9]* gpu_nodes=0 ' \
+            validation-logs/radar-auto-no-device.stderr
+          echo DOC_AUTO_UNADMITTED_SOFTWARE_CPU_FALLBACK_PASS
+          # The scheduler may pick MORE than the 128 required radar tiles.
+          # Inspect real CPU/GPU counts rather than forcing a magic partition.
+          awk '/^DOC_AUTO_FRONTIER: / {
+            cpu=0; gpu=0; kind=""
+            for (i=1;i<=NF;i++) {
+              split($i,p,"=")
+              if (p[1]=="cpu") cpu=p[2]+0
+              if (p[1]=="gpu") gpu=p[2]+0
+              if (p[1]=="gpu_kind") kind=p[2]
+            }
+            if (cpu>0 && gpu>=128 && kind=="software-test-only") {print; ok=1}
+          } END {exit !ok}' validation-logs/radar-auto-gpu.stderr
+          grep -E '^DOC_AUTO_SUMMARY: gpu_kind=software-test-only cpu_nodes=[1-9][0-9]* gpu_nodes=[1-9][0-9]*' \
+            validation-logs/radar-auto-gpu.stderr
+          grep -F 'DOC_GPU_SOFTWARE_TEST_ONLY:' \
+            validation-logs/radar-auto-gpu.stderr
+          grep -F 'DOC_RUST_GPU_FRONTIER_DISPATCH:' \
+            validation-logs/radar-auto-gpu.stderr
+          test "$(grep -c '^DOC_AUTO_GPU_SESSION_CREATED:' validation-logs/radar-auto-gpu.stderr)" -eq 1
+          grep -F 'DOC_AUTO_GPU_SESSION_REUSED:' validation-logs/radar-auto-gpu.stderr
+          DOC_GPU_ALLOW_SOFTWARE=1 "$game" engine/radar_chase.doc \
+            --headless --measure --replay=edsss \
+            > validation-logs/radar-auto-gpu-measured.stdout \
+            2> validation-logs/radar-auto-gpu-measured.stderr
+          grep -F 'DOC_GAME_AUTO_MIXED_MEASURED:' \
+            validation-logs/radar-auto-gpu-measured.stdout
+          grep -F 'DOC_AUTO_SUMMARY: gpu_kind=none' \
+            validation-logs/radar-auto-cpu.stderr
+          # A failing selected GPU candidate must not publish ANY successor game frame.
+          if DOC_GPU_ALLOW_SOFTWARE=1 DOC_GPU_INJECT_FAILURE_STAGE=0 \
+              "$game" engine/radar_chase.doc --headless --replay=e \
+              > validation-logs/radar-auto-fault.stdout \
+              2> validation-logs/radar-auto-fault.stderr; then
+            echo 'Mixed frontier GPU failure was unexpectedly committed' >&2
+            exit 1
+          fi
+          test "$(grep -c '^DOC_GAME_FRAME:' validation-logs/radar-auto-fault.stdout)" -eq 1
+          grep -F 'DOC_GPU_INJECTED_STAGE_FAILURE:' \
+            validation-logs/radar-auto-fault.stderr
+          DOC_GPU_ALLOW_SOFTWARE=1 cargo test --release --manifest-path runtime-rust/Cargo.toml \
+            --features webgpu --test engine_radar_showcase --test engine_radar_cli
+          echo DOC_AUTO_MIXED_WEBGPU_SOFTWARE_ONLY_AND_FAILURE_PASS
       - name: Rust wgpu map, staged reduction, source repair and CPU differential
         run: |
           set -euo pipefail
@@ -126,6 +316,280 @@ jobs:
             --features webgpu --example webgpu_integer_eq
           cargo build --release --manifest-path runtime-rust/Cargo.toml \
             --features webgpu --examples
+          # Compile the real selected-backend DOC CLI; the GPU eligibility
+          # and typed-DAG tests require no GPU hardware to execute.
+          cargo test --release --manifest-path runtime-rust/Cargo.toml \
+            --features webgpu --lib
+          cargo build --release --manifest-path runtime-rust/Cargo.toml \
+            --features webgpu --bin doc
+          # Destroy a real admitted WebGPU device after a successful mixed
+          # frontier, then verify no successor publication or silent fallback.
+          DOC_GPU_ALLOW_SOFTWARE=1 DOC_GPU_DEVICE_LOSS_TEST=1 \
+            cargo test --release --manifest-path runtime-rust/Cargo.toml \
+            --features webgpu --lib automatic::device_loss_tests::real_webgpu_device_invalidation_rejects_mixed_frontier \
+            -- --exact --nocapture 2>&1 | tee validation-logs/webgpu-device-invalidation.log
+          grep -F 'DOC_WEBGPU_DEVICE_INVALIDATION_PASS:' validation-logs/webgpu-device-invalidation.log
+          # Optional graphical effect boundary must compile and validate WGSL.
+          # No display server is present here: this is NOT a window-playthrough test.
+          cargo test --release --manifest-path runtime-rust/Cargo.toml \
+            --features window --test engine_window_wgsl
+          cargo build --release --manifest-path runtime-rust/Cargo.toml \
+            --features window --bin doc-game-window
+          cargo test --release --manifest-path runtime-rust/Cargo.toml \
+            --features window --bin doc-game-window
+          echo DOC_GAME_WINDOW_WGPU_COMPILE_PASS
+          # True wgpu X11 surface presentation under explicit *software-only* CI
+          # admission. This never counts as a physical graphics proof.
+          DOC_GPU_ALLOW_SOFTWARE=1 timeout 35s \
+            xvfb-run -a -s '-screen 0 1280x800x24' \
+            runtime-rust/target/release/doc-game-window \
+            engine/coin_chase.doc --replay=ddsddddsspr \
+            > validation-logs/game-window-visual.stdout \
+            2> validation-logs/game-window-visual.stderr
+          # xvfb-run may merge nested executable stderr into captured stdout.
+          # Preserve both raw files; assert software-only provenance across them.
+          cat validation-logs/game-window-visual.stdout \
+              validation-logs/game-window-visual.stderr \
+            > validation-logs/game-window-visual.combined
+          grep -F 'DOC_GPU_SOFTWARE_TEST_ONLY:' \
+            validation-logs/game-window-visual.combined
+          grep -F 'DOC_WINDOW_PRESENTED:' \
+            validation-logs/game-window-visual.stdout
+          grep -F 'DOC_WINDOW_SCENE: tick=9 score=2' \
+            validation-logs/game-window-visual.stdout
+          grep -F 'DOC_GAME_WINDOW_REPLAY_PASS: ticks=11 presented=' \
+            validation-logs/game-window-visual.stdout
+          echo DOC_GAME_WINDOW_SOFTWARE_WEBGPU_PRESENTATION_PASS
+          # Generated vertex/fragment DOC mesh shaders, real depth/lighting pixel readback.
+          DOC_GPU_ALLOW_SOFTWARE=1 cargo test --release --manifest-path runtime-rust/Cargo.toml \
+            --features webgpu --test graphics_mesh -- --nocapture | tee validation-logs/doc-generated-mesh.log
+          grep -F 'DOC_GENERATED_MESH_GPU_PASS:' validation-logs/doc-generated-mesh.log
+          # Full existing Radar Chase, actual X11 surface and WebGPU pixel readback.
+          cargo build --release --manifest-path runtime-rust/Cargo.toml \
+            --features webgpu --bin doc-game
+          DOC_AUTO_DISABLE_GPU=1 runtime-rust/target/release/doc-game \
+            engine/radar_chase.doc --headless --replay=edsssxwddddsspr \
+            > validation-logs/radar-window-oracle.stdout 2> validation-logs/radar-window-oracle.stderr
+          DOC_GPU_ALLOW_SOFTWARE=1 timeout 90s xvfb-run -a -s '-screen 0 1280x800x24' \
+            runtime-rust/target/release/doc-game-window engine/radar_chase.doc \
+            --replay=edsssxwddddsspr --verify-pixels \
+            > validation-logs/radar-window.stdout 2> validation-logs/radar-window.stderr
+          grep -E '^DOC_GAME_(FRAME|ENTITIES|RADAR):' validation-logs/radar-window.stdout > validation-logs/radar-window-frames.txt
+          grep -E '^DOC_GAME_(FRAME|ENTITIES|RADAR):' validation-logs/radar-window-oracle.stdout > validation-logs/radar-window-oracle-frames.txt
+          diff -u validation-logs/radar-window-oracle-frames.txt validation-logs/radar-window-frames.txt
+          test "$(grep -c '^DOC_WINDOW_PIXEL_PASS:' validation-logs/radar-window.stdout)" = 16
+          grep -E '^DOC_WINDOW_PIXEL_PASS:.*hazards=1 .*live_entities=1$' validation-logs/radar-window.stdout
+          grep -F 'DOC_GAME_WINDOW_REPLAY_PASS: ticks=15 presented=16' validation-logs/radar-window.stdout
+          cat validation-logs/radar-window.stdout validation-logs/radar-window.stderr > validation-logs/radar-window.combined
+          grep -E 'DOC_AUTO_FRONTIER: cpu=[1-9][0-9]* gpu=[1-9][0-9]* gpu_kind=software-test-only' validation-logs/radar-window.combined
+          grep -E 'DOC_AUTO_SUMMARY: gpu_kind=software-test-only .*mixed_frontiers=15$' validation-logs/radar-window.combined
+          echo DOC_RADAR_GRAPHICAL_SOFTWARE_WEBGPU_PARITY_PASS
+          # Same authored 3D graph: CPU oracle, actual X11 presentation and GPU pixel proof.
+          cargo build --release --manifest-path runtime-rust/Cargo.toml --features window --bin doc-scene3d
+          scene=runtime-rust/target/release/doc-scene3d
+          "$scene" engine/radar_chase_3d.doc --headless --replay=jedsssxwddddsspr > validation-logs/scene3d-cpu.log
+          DOC_GPU_ALLOW_SOFTWARE=1 timeout 120s xvfb-run -a -s '-screen 0 1280x800x24' \
+            "$scene" engine/radar_chase_3d.doc --window --replay=jedsssxwddddsspr --verify-pixels --snapshot=validation-logs/scene3d-window.ppm \
+            > validation-logs/scene3d-window.log 2>&1
+          grep '^DOC_SCENE_FRAME:' validation-logs/scene3d-cpu.log > validation-logs/scene3d-reference.txt
+          grep '^DOC_SCENE_FRAME:' validation-logs/scene3d-window.log > validation-logs/scene3d-window-frames.txt
+          diff -u validation-logs/scene3d-reference.txt validation-logs/scene3d-window-frames.txt
+          test "$(grep -c '^DOC_SCENE_PRESENTED:' validation-logs/scene3d-window.log)" -eq 17
+          grep -F 'DOC_SCENE_REPLAY_PASS: mode=window actions=16 frames=17' validation-logs/scene3d-window.log
+          grep -F 'DOC_SCENE_RENDER_SOFTWARE_TEST_ONLY' validation-logs/scene3d-window.log
+          grep -E '^DOC_SCENE_PIXELS:.*distinct=([3-9]|[1-9][0-9]+) ' validation-logs/scene3d-window.log
+          grep -F 'DOC_GPU_GENERATED_PIPELINE_REUSED:' validation-logs/scene3d-window.log
+          timeout 50s xvfb-run -a -s '-screen 0 1280x800x24' bash ci/validate-scene3d-input.sh \
+            "$scene" engine/radar_chase_3d.doc validation-logs/scene3d-input.log
+          # Exact headless artifact binary is also executed before packaging for Kaggle.
+          cargo build --release --manifest-path runtime-rust/Cargo.toml --features webgpu --bin doc-scene3d
+          DOC_GPU_ALLOW_SOFTWARE=1 timeout 120s "$scene" engine/radar_chase_3d.doc --offscreen --replay=jedsssxwddddsspr --snapshot=validation-logs/scene3d-offscreen.ppm \
+            > validation-logs/scene3d-offscreen.log 2>&1
+          grep '^DOC_SCENE_FRAME:' validation-logs/scene3d-offscreen.log > validation-logs/scene3d-offscreen-frames.txt
+          diff -u validation-logs/scene3d-reference.txt validation-logs/scene3d-offscreen-frames.txt
+          test "$(grep -c '^DOC_SCENE_PIXELS:' validation-logs/scene3d-offscreen.log)" -eq 17
+          grep -F 'DOC_SCENE_REPLAY_PASS: mode=offscreen actions=16 frames=17' validation-logs/scene3d-offscreen.log
+          grep -E '^DOC_AUTO_FRONTIER: cpu=[1-9][0-9]* gpu=[1-9][0-9]* gpu_kind=software-test-only' validation-logs/scene3d-offscreen.log
+          cargo build --release --manifest-path runtime-rust/Cargo.toml --features webgpu --example scene3d_gpu_proof
+          DOC_GPU_ALLOW_SOFTWARE=1 timeout 120s runtime-rust/target/release/examples/scene3d_gpu_proof engine/radar_chase_3d.doc \
+            > validation-logs/scene3d-pixel-proof.log 2>&1
+          grep -E '^DOC_SCENE_GPU_PROOF_PASS: covered=[1-9][0-9]+ mutated=[1-9][0-9]+ lighting=3 depth_orders=2 jump=24 landed=0 repeats=16 rejected=2$' \
+            validation-logs/scene3d-pixel-proof.log
+          if DOC_GPU_ALLOW_SOFTWARE=1 DOC_GPU_INJECT_FAILURE_STAGE=0 "$scene" engine/radar_chase_3d.doc --offscreen --replay=j \
+            > validation-logs/scene3d-fault.log 2>&1; then
+            echo "Invalid GPU successor was accepted" >&2; exit 1
+          fi
+          grep -F 'DOC_GPU_INJECTED_STAGE_FAILURE: stage=0' validation-logs/scene3d-fault.log
+          test "$(grep -c '^DOC_SCENE_FRAME:' validation-logs/scene3d-fault.log)" -eq 1
+          echo DOC_SCENE3D_SOFTWARE_REPLAY_PASS
+          cargo build --release --manifest-path runtime-rust/Cargo.toml --features webgpu --example dependency_family_proof
+          family=runtime-rust/target/release/examples/dependency_family_proof
+          DOC_AUTO_DISABLE_GPU=1 "$family" runtime-rust/examples/dependency_family.doc none \
+            > validation-logs/family-cpu.log 2>&1
+          DOC_GPU_ALLOW_SOFTWARE=1 "$family" runtime-rust/examples/dependency_family.doc software-test-only \
+            > validation-logs/family-software.log 2>&1
+          grep -Fx 'DOC_FAMILY_PROOF_PASS: device=none gpu_lanes=0 episodes=5 rollback=true' validation-logs/family-cpu.log
+          grep -Fx 'DOC_FAMILY_PROOF_PASS: device=software-test-only gpu_lanes=512 episodes=5 rollback=true' validation-logs/family-software.log
+          grep -F 'DOC_GPU_GENERATED_PIPELINE_REUSED:' validation-logs/family-software.log
+          doc=runtime-rust/target/release/doc
+          # Production physical GPU selection must reject a software adapter,
+          # even when a WebGPU backend is available to the test runner.
+          if "$doc" runtime-rust/examples/boolean_staged.doc --backend=gpu \
+              > validation-logs/rust-gpu-no-hardware.stdout \
+              2> validation-logs/rust-gpu-no-hardware.stderr; then
+            echo "Software WebGPU was incorrectly admitted as physical GPU" >&2
+            exit 1
+          fi
+          grep -F 'DOC_GPU_HARDWARE_UNAVAILABLE:' \
+            validation-logs/rust-gpu-no-hardware.stderr
+          test ! -s validation-logs/rust-gpu-no-hardware.stdout
+          # Explicit opt-in is for WebGPU software-adapter correctness ONLY; these
+          # programs still dispatch compute through wgpu, NOT the DOC CPU
+          # evaluator. Compare every fully published state against CPU.
+          for fixture in boolean_staged gpu_arithmetic_chain gpu_nested_arithmetic parallel_frontier; do
+            source="runtime-rust/examples/$fixture.doc"
+            DOC_GPU_ALLOW_SOFTWARE=1 "$doc" "$source" --backend=gpu \
+              > "validation-logs/$fixture-selected-software.stdout" \
+              2> "validation-logs/$fixture-selected-software.stderr"
+            "$doc" "$source" --backend=cpu \
+              > "validation-logs/$fixture-cpu.stdout" \
+              2> "validation-logs/$fixture-cpu.stderr"
+            diff -u "validation-logs/$fixture-cpu.stdout" \
+              "validation-logs/$fixture-selected-software.stdout"
+            grep -F 'DOC_GPU_SOFTWARE_TEST_ONLY:' \
+              "validation-logs/$fixture-selected-software.stderr"
+            grep -F 'DOC_GPU_SELECTED_DEVICE:' \
+              "validation-logs/$fixture-selected-software.stderr"
+          done
+          grep -Fx 'sum: 8' \
+            validation-logs/gpu_nested_arithmetic-selected-software.stdout
+          grep -Fx 'branched: 4' \
+            validation-logs/gpu_nested_arithmetic-selected-software.stdout
+          grep -F 'DOC_RUST_GPU_FRONTIER_DISPATCH: states=128 workgroups=2 workgroup_size=64' \
+            validation-logs/parallel_frontier-selected-software.stderr
+          # Actual specialized shader generation, not a reusable opcode interpreter.
+          for fixture in boolean_staged gpu_arithmetic_chain gpu_nested_arithmetic parallel_frontier; do
+            grep -Fx 'DOC_GPU_GENERATED_SESSION_CREATED: cache_capacity=32' \
+              "validation-logs/$fixture-selected-software.stderr"
+            grep -F 'DOC_GPU_GENERATED_PIPELINE_CREATED:' \
+              "validation-logs/$fixture-selected-software.stderr"
+          done
+          # 128 independent derives, then the dependent folded result.
+          test "$(grep -c '^DOC_GPU_GENERATED_PIPELINE_CREATED:' validation-logs/parallel_frontier-selected-software.stderr)" -eq 2
+          test "$(grep -c '^DOC_GPU_GENERATED_PIPELINE_CREATED: lanes=128 ' validation-logs/parallel_frontier-selected-software.stderr)" -eq 1
+          test "$(grep -c '^DOC_GPU_GENERATED_PIPELINE_CREATED: lanes=1 ' validation-logs/parallel_frontier-selected-software.stderr)" -eq 1
+          grep -Fx 'DOC_RUST_GPU_FRONTIER_DISPATCH: states=1 workgroups=1 workgroup_size=64' \
+            validation-logs/parallel_frontier-selected-software.stderr
+          grep -F 'DOC_GPU_GENERATED_PIPELINE_REUSED:' validation-logs/radar-window.combined
+          echo DOC_RUST_GENERATED_WGSL_CACHE_PASS
+          # Invalid source data is rejected before even selecting a software
+          # GPU. There must be no partial DOC graph publication.
+          if DOC_GPU_ALLOW_SOFTWARE=1 "$doc" \
+              runtime-rust/examples/gpu_nested_arithmetic.doc \
+              --backend=gpu a=5 \
+              > validation-logs/nested-software-invalid.stdout \
+              2> validation-logs/nested-software-invalid.stderr; then
+            echo "Out-of-range GPU scalar input was accepted" >&2
+            exit 1
+          fi
+          grep -F 'DOC_GPU_UNSUPPORTED:' \
+            validation-logs/nested-software-invalid.stderr
+          test ! -s validation-logs/nested-software-invalid.stdout
+          # Reject effectful input BEFORE graph parsing can open imported
+          # modules or execute read effects. No GPU device should open.
+          printf 'effect a: int = read("missing-gpu-effect.txt")\nderive chosen: bool (a) = eq(a,0)\n' \
+            > validation-logs/blocked-gpu-effect.doc
+          if DOC_GPU_ALLOW_SOFTWARE=1 "$doc" \
+              validation-logs/blocked-gpu-effect.doc --backend=gpu \
+              > validation-logs/blocked-gpu-effect.stdout \
+              2> validation-logs/blocked-gpu-effect.stderr; then
+            echo "An unsupported GPU read effect executed unexpectedly" >&2
+            exit 1
+          fi
+          grep -F 'DOC_GPU_UNSUPPORTED: source imports and effects' \
+            validation-logs/blocked-gpu-effect.stderr
+          test ! -s validation-logs/blocked-gpu-effect.stdout
+          if grep -Fq 'DOC_GPU_SELECTED_DEVICE:' \
+              validation-logs/blocked-gpu-effect.stderr; then
+            echo "Unsupported DOC effect reached GPU admission" >&2
+            exit 1
+          fi
+          # Fail at stage 0 or AFTER stage 0 completed. Neither may publish
+          # even a single prefix of candidate DOC states.
+          for stage in 0 1; do
+            if DOC_GPU_ALLOW_SOFTWARE=1 DOC_GPU_INJECT_FAILURE_STAGE="$stage" \
+                "$doc" runtime-rust/examples/boolean_staged.doc --backend=gpu \
+                > "validation-logs/rust-gpu-injected-$stage.stdout" \
+                2> "validation-logs/rust-gpu-injected-$stage.stderr"; then
+              echo "Injected GPU failure was incorrectly accepted" >&2
+              exit 1
+            fi
+            grep -F "DOC_GPU_INJECTED_STAGE_FAILURE: stage=$stage" \
+              "validation-logs/rust-gpu-injected-$stage.stderr"
+            test ! -s "validation-logs/rust-gpu-injected-$stage.stdout"
+          done
+          # An identical recurrent DOC source must carry previous stable
+          # GPU-derived values into new epochs. The host transfers carry
+          # facts; every successor and halt computation still dispatches wgpu.
+          recurrence=runtime-rust/examples/recurrence_halt.doc
+          for command in through until; do
+            if [ "$command" = through ]; then
+              mode=(--through=3)
+            else
+              mode=(--until=halt --max-epochs=5)
+            fi
+            DOC_GPU_ALLOW_SOFTWARE=1 "$doc" "$recurrence" --backend=gpu \
+              "${mode[@]}" index=successor \
+              > "validation-logs/rust-gpu-recurrence-$command.stdout" \
+              2> "validation-logs/rust-gpu-recurrence-$command.stderr"
+            "$doc" "$recurrence" --backend=cpu \
+              "${mode[@]}" index=successor \
+              > "validation-logs/rust-cpu-recurrence-$command.stdout" \
+              2> "validation-logs/rust-cpu-recurrence-$command.stderr"
+            diff -u "validation-logs/rust-cpu-recurrence-$command.stdout" \
+              "validation-logs/rust-gpu-recurrence-$command.stdout"
+            test "$(grep -c '^DOC_GPU_SELECTED_DEVICE:' \
+              "validation-logs/rust-gpu-recurrence-$command.stderr")" -eq 4
+            grep -Fx 'epoch: 3' "validation-logs/rust-gpu-recurrence-$command.stdout"
+          done
+          grep -Fx 'DOC_RECURRENCE_HALT: 3' \
+            validation-logs/rust-gpu-recurrence-until.stdout
+          # Epoch-specific facts retain CPU recurrence source authority.
+          DOC_GPU_ALLOW_SOFTWARE=1 "$doc" "$recurrence" --backend=gpu \
+            --through=3 index=successor --fact=1:step=2 \
+            > validation-logs/rust-gpu-epoch-fact.stdout \
+            2> validation-logs/rust-gpu-epoch-fact.stderr
+          "$doc" "$recurrence" --backend=cpu \
+            --through=3 index=successor --fact=1:step=2 \
+            > validation-logs/rust-cpu-epoch-fact.stdout
+          diff -u validation-logs/rust-cpu-epoch-fact.stdout \
+            validation-logs/rust-gpu-epoch-fact.stdout
+          # An authority collision is rejected before ANY epoch is run.
+          if DOC_GPU_ALLOW_SOFTWARE=1 "$doc" "$recurrence" --backend=gpu \
+              --through=2 index=successor --fact=1:index=7 \
+              > validation-logs/rust-gpu-carry-conflict.stdout \
+              2> validation-logs/rust-gpu-carry-conflict.stderr; then
+            echo "GPU carry/fact collision incorrectly executed" >&2
+            exit 1
+          fi
+          grep -F 'epoch fact conflicts with a carried source' \
+            validation-logs/rust-gpu-carry-conflict.stderr
+          test ! -s validation-logs/rust-gpu-carry-conflict.stdout
+          # Both explicit backends now share the same typed authority
+          # preflight. A conflict must also reject without publication on CPU.
+          if "$doc" "$recurrence" --backend=cpu \
+              --through=2 index=successor --fact=1:index=7 \
+              > validation-logs/rust-cpu-carry-conflict.stdout \
+              2> validation-logs/rust-cpu-carry-conflict.stderr; then
+            echo "CPU carry/fact conflict unexpectedly executed" >&2
+            exit 1
+          fi
+          grep -F 'epoch fact conflicts with a carried source' \
+            validation-logs/rust-cpu-carry-conflict.stderr
+          test ! -s validation-logs/rust-cpu-carry-conflict.stdout
+          echo DOC_RUST_SELECTED_GPU_RECURRENCE_PARITY_PASS
+          echo DOC_RUST_SELECTED_SOFTWARE_GPU_SOURCE_PARITY_PASS
+          echo DOC_RUST_GPU_ATOMIC_FAILURE_BOUNDARY_PASS
           bool=runtime-rust/target/release/examples/webgpu_bool
           signed=runtime-rust/target/release/examples/webgpu_integer_eq
           "$bool" > validation-logs/rust-map.log 2>&1
@@ -149,6 +613,18 @@ jobs:
                 "validation-logs/rust-$mode-$lanes.log")" = 2
             done
           done
+          # Prove the removed 4096-lane DOC cap: these are genuine
+          # parallel WebGPU dispatches, not CPU-mode substitutions.
+          for lanes in 4097 8192; do
+            DOC_GPU_LANES="$lanes" "$signed" > "validation-logs/rust-eq-$lanes.log" 2>&1
+            test "$(grep -c '^DOC_SIGNED_WEBGPU_COMPUTE_PASS:'               "validation-logs/rust-eq-$lanes.log")" = 2
+          done
+          DOC_GPU_LANES=4097 "$bool" > validation-logs/rust-bool-4097.log 2>&1
+          grep -F 'DOC_WEBGPU_COMPUTE_PASS:' validation-logs/rust-bool-4097.log
+          if DOC_GPU_LANES=4294967295 "$signed"             > validation-logs/rust-signed-over-device-limit.log 2>&1; then
+            echo "Rust signed GPU incorrectly accepted oversized device request" >&2
+            exit 1
+          fi
           if DOC_GPU_INJECT_INT_OUT_OF_RANGE=1 "$signed" \
             > validation-logs/rust-range-reject.log 2>&1; then
             echo "Rust wgpu i64 range rejection failed" >&2; exit 1
@@ -170,7 +646,7 @@ jobs:
             test "$(grep -c '^DOC_WEBGPU_COMPUTE_PASS:' \
               "validation-logs/rust-repair-$lanes.log")" = 2
           done
-          for invalid in 0 4097 abc; do
+          for invalid in 0 4294967295 abc; do
             if DOC_GPU_LANES="$invalid" "$bool" \
               > "validation-logs/rust-invalid-lanes-$invalid.log" 2>&1; then
               echo "Rust wgpu accepted invalid batch width: $invalid" >&2
@@ -225,13 +701,36 @@ jobs:
             validation-logs/gpu-binaries/webgpu_bool
           install -m 755 runtime-rust/target/release/examples/webgpu_integer_eq \
             validation-logs/gpu-binaries/webgpu_integer_eq
+          # Actual general-source selected-GPU Rust DOC binary, compiled with
+          # the same SHA/profile and sent to Kaggle for physical verification.
+          install -m 755 runtime-rust/target/release/doc \
+            validation-logs/gpu-binaries/doc-rust-gpu
+          install -m 755 runtime-rust/target/release/doc-game \
+            validation-logs/gpu-binaries/doc-game
+          install -m 755 runtime-rust/target/release/doc-scene3d \
+            validation-logs/gpu-binaries/doc-scene3d
+          install -m 755 runtime-rust/target/release/examples/scene3d_gpu_proof \
+            validation-logs/gpu-binaries/scene3d_gpu_proof
+          install -m 755 runtime-rust/target/release/examples/dependency_family_proof \
+            validation-logs/gpu-binaries/dependency_family_proof
           sha256sum validation-logs/gpu-binaries/* \
             > validation-logs/gpu-binaries/SHA256SUMS
-          cp "$(command -v vulkaninfo)" \
-            validation-logs/gpu-binaries/vulkaninfo
-          cp -L /usr/lib/x86_64-linux-gnu/libvulkan.so.1 \
-            validation-logs/gpu-binaries/libvulkan.so.1
           echo DOC_NATIVE_WGPU_KAGGLE_BUNDLE_PASS
+      - name: Package Linux selected-GPU Rust DOC CLI and verify installed CPU execution
+        run: |
+          set -euo pipefail
+          mkdir -p validation-logs/linux-release/bin
+          install -m 755 runtime-rust/target/release/doc validation-logs/linux-release/bin/doc-rust-gpu
+          tar -czf validation-logs/doc-rust-gpu-linux-x86_64.tar.gz \
+            -C validation-logs/linux-release bin/doc-rust-gpu \
+            -C "$GITHUB_WORKSPACE" LICENSE runtime-rust/examples/boolean_staged.doc
+          scratch=$(mktemp -d)
+          trap 'rm -rf -- "$scratch"' EXIT
+          tar -xzf validation-logs/doc-rust-gpu-linux-x86_64.tar.gz -C "$scratch"
+          "$scratch/bin/doc-rust-gpu" "$scratch/runtime-rust/examples/boolean_staged.doc" --backend=cpu \
+            > validation-logs/rust-gpu-installed-cpu.log
+          grep -Fx 'chosen: false' validation-logs/rust-gpu-installed-cpu.log
+          echo DOC_RUST_GPU_LINUX_PACKAGE_SMOKE_PASS
       - name: Preserve Rust-only wgpu evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -241,295 +740,5 @@ jobs:
           retention-days: 14
           if-no-files-found: warn
 
-  goose-toolchain:
-    name: Goose compiler smoke and DOC Boolean slice
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
-    steps:
-      - uses: actions/checkout@v4
-      - name: Restore pinned upstream Goose compiler build cache
-        id: goose-cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            /tmp/goose
-            /tmp/goose-build
-          key: doc-goose-compiler-${{ runner.os }}-9412b80f52d833c4697cffdbbf1f4eeb5195cd41-release-v1
-      - name: Configure upstream Goose compiler, no optional graphics packages
-        if: steps.goose-cache.outputs.cache-hit != 'true'
-        run: |
-          git init /tmp/goose
-          git -C /tmp/goose fetch --depth 1 https://github.com/aardappel/goose.git 9412b80f52d833c4697cffdbbf1f4eeb5195cd41
-          git -C /tmp/goose checkout --detach FETCH_HEAD
-          cmake -S /tmp/goose -B /tmp/goose-build -DCMAKE_BUILD_TYPE=Release
-          cmake --build /tmp/goose-build --parallel 2
-      - name: Verify cached or newly compiled Goose executable
-        run: |
-          test -x /tmp/goose-build/goose
-          /tmp/goose-build/goose version
-      - name: Type-check and execute preliminary Goose smoke
-        run: |
-          set -o pipefail
-          mkdir -p validation-logs
-          /tmp/goose-build/goose version | tee validation-logs/goose-version.log
-          /tmp/goose-build/goose check runtime-goose/finite_bool.goose 2>&1 | tee validation-logs/goose-check.log
-          /tmp/goose-build/goose run runtime-goose/finite_bool.goose 2>&1 | tee validation-logs/goose-run.log
-          grep -q 'DOC_GOOSE_SMOKE=ok' validation-logs/goose-run.log
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Build Rust DOC reference for cross-runtime source differential
-        run: cargo build --release --manifest-path runtime-rust/Cargo.toml --bin doc
-      - name: Build Rust arbitrary-precision two-counter recurrence witness
-        run: cargo build --release --manifest-path runtime-rust/Cargo.toml --bin doc_counter
-      - name: Validate Goose DOC and identical-source Rust/Goose differential
-        run: bash runtime-goose/check-doc-bool.sh /tmp/goose-build/goose validation-logs runtime-rust/target/release/doc
-      - name: Goose finite DAG incremental repair and native Rust differential
-        run: bash runtime-goose/check-doc-graph.sh /tmp/goose-build/goose validation-logs runtime-rust/target/release/doc
-      - name: Independent native Goose typed DOC and Rust differential
-        run: bash runtime-goose/check-doc-typed.sh /tmp/goose-build/goose runtime-rust/target/release/doc validation-logs
-      - name: Same-source balanced reduction with independent oracle (1, 2, 4 workers)
-        run: bash runtime-goose/check-doc-reduction.sh /tmp/goose-build/goose runtime-rust/target/release/doc validation-logs
-      - name: Independent Rust-Goose arbitrary-natural counter oracle
-        run: bash runtime-goose/check-doc-counter.sh /tmp/goose-build/goose runtime-rust/target/release/doc_counter validation-logs
-      - name: Package and re-execute native Goose DOC Linux binary
-        run: |
-          set -euo pipefail
-          mkdir -p validation-logs/release/bin
-          /tmp/goose-build/goose build runtime-goose/doc_typed.goose --offline \
-            -o validation-logs/release/bin/doc-goose \
-            > validation-logs/goose-packaging-build.log 2>&1
-          chmod 755 validation-logs/release/bin/doc-goose
-          ldd validation-logs/release/bin/doc-goose > validation-logs/goose-dynamic-dependencies.txt 2>&1 || true
-          tar -czf validation-logs/doc-goose-linux-x86_64.tar.gz \
-            -C validation-logs/release bin/doc-goose \
-            -C "$GITHUB_WORKSPACE" LICENSE runtime-rust/examples/repair.doc
-          scratch=$(mktemp -d)
-          trap 'rm -rf -- "$scratch"' EXIT
-          tar -xzf validation-logs/doc-goose-linux-x86_64.tar.gz -C "$scratch"
-          "$scratch/bin/doc-goose" "$scratch/runtime-rust/examples/repair.doc" a=4 b=1 \
-            > validation-logs/goose-installed-smoke.log 2>&1
-          grep -Fx 'chosen: 10' validation-logs/goose-installed-smoke.log
-          echo DOC_GOOSE_PACKAGED_INSTALL_PASS
-      - name: Verify strict explicit backend admission in Goose CLI
-        run: bash ci/check-explicit-backend.sh validation-logs/release/bin/doc-goose runtime-rust/examples/repair.doc
-      - name: Preserve Goose compilation evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: doc-goose-toolchain-smoke
-          path: validation-logs/
-          retention-days: 7
-          if-no-files-found: warn
-
-
-  goose-sdl3-compute:
-    name: Native Goose SDL3 GPU compute, direct device and DOC oracle
-    runs-on: ubuntu-24.04
-    timeout-minutes: 55
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install SDL3 graphics dependencies and Mesa Vulkan
-        run: |
-          set -euo pipefail
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq cmake ninja-build pkg-config git \
-            libx11-dev libxext-dev libxrandr-dev libxinerama-dev \
-            libxcursor-dev libxi-dev libxkbcommon-dev libxss-dev \
-            libxfixes-dev libx11-xcb-dev libxtst-dev libxdamage-dev \
-            libxshmfence-dev libxrender-dev libasound2-dev xvfb xauth libvulkan-dev \
-            libvulkan1 mesa-vulkan-drivers vulkan-tools
-          mkdir -p validation-logs
-          vulkaninfo --summary > validation-logs/goose-sdl3-adapter.log 2>&1
-      - name: Restore pinned SDL3-enabled upstream Goose compiler and gfx package
-        id: goose-sdl3-cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            /tmp/doc-sdl3-goose
-            /tmp/doc-sdl3-build
-          key: goose-sdl3-gfx-v1-9412b80f52d833c4697cffdbbf1f4eeb5195cd41-v2-glibc239
-      - name: Build pinned native Goose with third-party SDL3 gfx
-        if: steps.goose-sdl3-cache.outputs.cache-hit != 'true'
-        run: |
-          set -euo pipefail
-          git init /tmp/doc-sdl3-goose
-          git -C /tmp/doc-sdl3-goose fetch --depth 1 \
-            https://github.com/aardappel/goose.git \
-            9412b80f52d833c4697cffdbbf1f4eeb5195cd41
-          git -C /tmp/doc-sdl3-goose checkout --detach FETCH_HEAD
-          cmake -S /tmp/doc-sdl3-goose -B /tmp/doc-sdl3-build \
-            -DCMAKE_BUILD_TYPE=Release -DGOOSE_BUILTIN_LIBS=gfx
-          cmake --build /tmp/doc-sdl3-build --parallel 2
-      - name: Save pinned upstream SDL3 toolchain before DOC GPU checks
-        if: steps.goose-sdl3-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: |
-            /tmp/doc-sdl3-goose
-            /tmp/doc-sdl3-build
-          key: goose-sdl3-gfx-v1-9412b80f52d833c4697cffdbbf1f4eeb5195cd41-v2-glibc239
-      - name: Native Goose SDL3 compiler, module and executable validation
-        run: |
-          set -euo pipefail
-          test -x /tmp/doc-sdl3-build/goose
-          /tmp/doc-sdl3-build/goose version \
-            > validation-logs/goose-sdl3-compiler-version.log
-          /tmp/doc-sdl3-build/goose check runtime-goose/doc_sdl3_gpu.goose \
-            2>&1 | tee validation-logs/goose-sdl3-check.log
-          /tmp/doc-sdl3-build/goose build runtime-goose/doc_sdl3_gpu.goose \
-            --offline -o validation-logs/doc-goose-sdl3 \
-            2>&1 | tee validation-logs/goose-sdl3-build.log
-          chmod +x validation-logs/doc-goose-sdl3
-          ldd validation-logs/doc-goose-sdl3 \
-            > validation-logs/goose-sdl3-native-dependencies.log 2>&1 || true
-          if grep -REn 'fn emit_shader|fn emit_signed_equality|--emit-wgsl' \
-            runtime-goose --include='*.goose'; then
-            echo "Removed custom Goose WGSL source has reappeared" >&2
-            exit 1
-          fi
-      - name: Real SDL3 GPU compute, dependent stages and independent CPU oracle
-        env:
-          GOOSE_GFX_HEADLESS: "1"
-          GOOSE_GFX_DEBUG: "0"
-          SDL_VIDEODRIVER: "x11"
-          SDL_GPU_DRIVER: "vulkan"
-          SDL_LOGGING: "*=debug"
-          VK_LOADER_DEBUG: "warn"
-        run: |
-          set -euo pipefail
-          # SDL GPU Vulkan requires a video driver with Vulkan_CreateSurface;
-          # offscreen SDL video cannot expose that interface here. A virtual
-          # X11 display is used ONLY to enable real SDL3 -> Vulkan llvmpipe.
-          xvfb-run -a vulkaninfo --summary \
-            > validation-logs/goose-sdl3-xvfb-vulkan-adapter.log 2>&1
-          xvfb-run -a python3 runtime-goose/check-doc-sdl3-gpu.py \
-            validation-logs/doc-goose-sdl3 validation-logs/goose-sdl3
-          grep -Fx 'DOC_GOOSE_SDL3_NATIVE_PARITY_PASS: 77 checks' \
-            validation-logs/goose-sdl3/doc-goose-sdl3-summary.log
-          echo DOC_GOOSE_SDL3_NATIVE_ONLY_PASS
-      - name: Package portable SDL3 Xvfb utilities for Kaggle GPU-only runner
-        run: |
-          set -euo pipefail
-          mkdir -p validation-logs/gpu-platform-bin
-          test "$(getconf GNU_LIBC_VERSION)" = 'glibc 2.39' || {
-            echo 'Goose SDL3 Kaggle native GPU bundle ABI must be glibc 2.39' >&2
-            exit 1
-          }
-          for cmd in Xvfb xvfb-run xauth; do
-            install -m 755 "$(command -v "$cmd")" \
-              "validation-logs/gpu-platform-bin/$cmd"
-          done
-          sha256sum validation-logs/gpu-platform-bin/* \
-            > validation-logs/gpu-platform-bin/SHA256SUMS
-          echo DOC_GOOSE_SDL3_KAGGLE_PLATFORM_BUNDLE_PASS
-      - name: Preserve native Goose SDL3 GPU binary, oracle and adapter evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: doc-goose-sdl3-native-gpu
-          path: validation-logs/
-          retention-days: 14
-          if-no-files-found: warn
-
-  dual-native-gpu-parity:
-    name: Independent native Rust wgpu vs Goose SDL3 GPU-result parity
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    needs: [webgpu-compute, goose-sdl3-compute]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
-        with:
-          name: doc-rust-wgpu-validation
-          path: parity-logs/rust
-      - uses: actions/download-artifact@v4
-        with:
-          name: doc-goose-sdl3-native-gpu
-          path: parity-logs/goose
-      - name: Compare two real independent GPU implementations, not shaders
-        run: |
-          set -euo pipefail
-          python3 runtime-goose/check-dual-gpu-parity.py \
-            parity-logs/rust parity-logs/goose parity-logs/report
-          grep -Fx 'DOC_RUST_WGPU_GOOSE_SDL3_PARITY_PASS: 42 observed GPU episodes' \
-            parity-logs/report/native-gpu-equivalence.log
-      - name: Preserve actual GPU-vs-GPU parity evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: doc-rust-wgpu-goose-sdl3-equivalence
-          path: parity-logs/report/
-          retention-days: 14
-          if-no-files-found: warn
-
-  # Physical GPU verification now runs only in doc-kaggle-gpu.yml.
-  # The Rust wgpu and Goose SDL3 jobs above remain CPU-hosted, Mesa Vulkan
-  # correctness/fallback oracles and do not consume the Kaggle quota.
-
-  portable-native:
-    name: Native Rust and Goose DOC portability (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 40
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [macos-latest, windows-latest]
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: runtime-rust
-      - name: Native Rust build and all-target tests
-        shell: bash
-        run: |
-          set -euo pipefail
-          cargo test --release --manifest-path runtime-rust/Cargo.toml --all-targets
-          cargo build --release --manifest-path runtime-rust/Cargo.toml --bin doc
-          binary=runtime-rust/target/release/doc
-          if [ "$RUNNER_OS" = Windows ]; then binary="$binary.exe"; fi
-          "$binary" runtime-rust/examples/repair.doc a=4 b=1 > rust-portable.log
-          grep -Fx 'chosen: 10' rust-portable.log
-          echo DOC_PORTABLE_NATIVE_RUST_PASS
-      - name: Restore pinned native Goose compiler toolchain
-        id: goose-cache
-        uses: actions/cache@v4
-        with:
-          path: |
-            ${{ github.workspace }}/upstream-goose
-            ${{ github.workspace }}/upstream-build
-          key: native-goose-${{ matrix.os }}-9412b80f52d833c4697cffdbbf1f4eeb5195cd41-v2
-      - name: Build pinned native Goose toolchain
-        if: steps.goose-cache.outputs.cache-hit != 'true'
-        shell: bash
-        run: |
-          set -euo pipefail
-          git init upstream-goose
-          git -C upstream-goose fetch --depth 1 https://github.com/aardappel/goose.git 9412b80f52d833c4697cffdbbf1f4eeb5195cd41
-          git -C upstream-goose checkout --detach FETCH_HEAD
-          cmake -S upstream-goose -B upstream-build -DCMAKE_BUILD_TYPE=Release
-          cmake --build upstream-build --config Release --parallel 2
-      - name: Native Goose typed interpreter smoke
-        shell: bash
-        run: |
-          set -euo pipefail
-          goose=upstream-build/goose
-          if [ "$RUNNER_OS" = Windows ]; then goose=upstream-build/Release/goose.exe; fi
-          test -x "$goose"
-          "$goose" check runtime-goose/doc_typed.goose
-          mkdir -p portable
-          artifact=portable/doc-goose
-          if [ "$RUNNER_OS" = Windows ]; then artifact="$artifact.exe"; fi
-          "$goose" build runtime-goose/doc_typed.goose --offline -o "$artifact"
-          "$artifact" runtime-rust/examples/repair.doc a=4 b=1 > portable/goose-smoke.log
-          grep -Fx 'chosen: 10' portable/goose-smoke.log
-          echo DOC_PORTABLE_NATIVE_DUAL_RUNTIME_PASS
-      - name: Preserve native portability evidence and binaries
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: doc-portable-${{ matrix.os }}
-          path: |
-            portable/
-            rust-portable.log
-          if-no-files-found: warn
-          retention-days: 14
+  # Goose native DOC work is archived in runtime-goose/DEPRECATED.md.
+  # The separate exact-SHA Kaggle physical-GPU job remains a hard release gate.
