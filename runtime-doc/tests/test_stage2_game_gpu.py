@@ -6,7 +6,7 @@ the GPU build adds the independently generated WGSL and narrow WebGPU ABI.
 The reference output is the same exact-checkout frozen-oracle replay already
 verified in stage2-games, not an alternative Python game implementation.
 """
-import argparse,hashlib,json,os,re,shutil,subprocess,sys,tempfile,time
+import argparse,hashlib,json,os,re,shutil,statistics,subprocess,sys,tempfile,time
 from pathlib import Path
 ROOT=Path(__file__).resolve().parent.parent
 sys.path.insert(0,str(ROOT/'compiler'))
@@ -33,6 +33,23 @@ def execute(exe,assets,args,backend,physical=False,fail_at=None):
 def record(out,name,r):
     (out/(name+'.stdout')).write_bytes(r.stdout)
     (out/(name+'.stderr')).write_bytes(r.stderr)
+
+def measurements(raw,epochs=None):
+    rss=re.findall(rb'(?m)^DOC11_PROCESS_METRICS: max_rss_kib=(\d+)$',raw)
+    region=re.findall(rb'(?m)^DOC11_REGIONS: live=0 peak=(\d+) allocations=(\d+)$',raw)
+    assert len(rss)==1 and int(rss[0])>0 and len(region)==1
+    opens=re.findall(rb'(?m)^DOC11_GPU_OPEN_TIMING: wall_ns=(\d+)$',raw)
+    rows=[tuple(map(int,row)) for row in re.findall(rb'(?m)^DOC11_GPU_DISPATCH_TIMING: dispatch=(\d+) wall_ns=(\d+) upload_bytes=(\d+) readback_bytes=(\d+) capacity=(\d+)$',raw)]
+    result={'max_rss_kib':int(rss[0]),'region_peak_bytes':int(region[0][0]),'region_allocations':int(region[0][1])}
+    if epochs is None:
+        assert not opens and not rows
+        return result
+    ordinals=[n for e in epochs for n in e['dispatches']]
+    assert len(opens)==1 and int(opens[0])>0 and ordinals==list(range(1,len(rows)+1)) and len(rows)>=2
+    assert [row[0] for row in rows]==ordinals and all(row[1]>0 and row[2]>0 and row[3]>0 and row[4]*8>=row[3] for row in rows)
+    warm=sorted(row[1] for row in rows[1:])
+    result.update(device_open_wall_ns=int(opens[0]),first_dispatch_wall_ns=rows[0][1],warm_dispatch_median_wall_ns=statistics.median(warm),warm_dispatch_p95_wall_ns=warm[(len(warm)*95+99)//100-1],dispatches=[{'ordinal':n,'wall_ns':ns,'upload_bytes':up,'readback_bytes':down,'capacity_lanes':cap} for n,ns,up,down,cap in rows])
+    return result
 
 def main():
     p=argparse.ArgumentParser(description=__doc__)
@@ -75,6 +92,20 @@ def main():
             assert b'DOC11_GPU_BUFFER_POOL: action=created' in actual.stderr and b'DOC11_GPU_BUFFER_POOL: action=reused' in actual.stderr,actual.stderr
             epochs=trace(actual.stderr)
             assert len(epochs)==len(starts) and sum(e['mixed_frontiers'] for e in epochs[1:])>0 and sum(e['concurrent_frontiers'] for e in epochs[1:])>0,'no actual concurrent mixed successor frontier'
+            mixed_samples=[{'wall_ns':elapsed,**measurements(actual.stderr,epochs)}]
+            cpu_samples=[]
+            for repeat in range(3):
+                cpu,cpu_ns=execute(exe,assets,args,'cpu',a.physical)
+                record(out,name+f'-cpu-{repeat}',cpu)
+                assert cpu.returncode==0 and cpu.stdout==expected
+                cpu_samples.append({'wall_ns':cpu_ns,**measurements(cpu.stderr)})
+                if repeat:
+                    again,again_ns=execute(exe,assets,args,'auto',a.physical)
+                    record(out,name+f'-auto-{repeat}',again)
+                    assert again.returncode==0 and again.stdout==expected
+                    again_epochs=trace(again.stderr)
+                    assert len(again_epochs)==len(epochs) and sum(e['gpu_lanes'] for e in again_epochs)==sum(e['gpu_lanes'] for e in epochs)
+                    mixed_samples.append({'wall_ns':again_ns,**measurements(again.stderr,again_epochs)})
             epoch,ordinal=first_successor_dispatch(epochs)
             # Select a real successor dispatch from the successful trace, not a
             # hardcoded dispatch count. No byte of that failed successor may
@@ -86,7 +117,7 @@ def main():
             assert strict.returncode and not strict.stdout and b'DOC_GPU_UNSUPPORTED' in strict.stderr
             linkage=subprocess.check_output(['readelf','-d',exe]);(out/(name+'-linkage.txt')).write_bytes(linkage)
             assert b'libwgpu_native' in linkage and b'librust' not in linkage and b'libdoc' not in linkage
-            summary[name]={'source_sha256':sha(source),'c_sha256':sha(c),'wgsl_sha256':sha(wgsl),'binary_sha256':sha(exe),'binary_bytes':exe.stat().st_size,'reference_sha256':hashlib.sha256(expected).hexdigest(),'build_ns':build_ns,'replay_ns':elapsed,'epochs':epochs,'fault_epoch':epoch,'fault_dispatch':ordinal}
+            summary[name]={'source_sha256':sha(source),'c_sha256':sha(c),'wgsl_sha256':sha(wgsl),'binary_sha256':sha(exe),'binary_bytes':exe.stat().st_size,'reference_sha256':hashlib.sha256(expected).hexdigest(),'build_ns':build_ns,'replay_ns':elapsed,'epochs':epochs,'fault_epoch':epoch,'fault_dispatch':ordinal,'cpu_samples':cpu_samples,'mixed_samples':mixed_samples,'cpu_median_wall_ns':statistics.median(x['wall_ns'] for x in cpu_samples),'mixed_median_wall_ns':statistics.median(x['wall_ns'] for x in mixed_samples),'timing_scope':'host wall time; includes device admission, synchronization and transfers; not isolated GPU kernel time'}
             print(f'DOC11_GAME_GPU_PASS: {name} epochs={len(epochs)} gpu_lanes={sum(e["gpu_lanes"] for e in epochs)} mixed_frontiers={sum(e["mixed_frontiers"] for e in epochs)} rejected_epoch={epoch} physical_required={a.physical}',flush=True)
     (out/'summary.json').write_text(json.dumps({'physical_required':a.physical,'games':summary},indent=2)+'\n')
 if __name__=='__main__':main()
