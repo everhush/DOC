@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   kaggle-auth:
-    if: ${{ github.repository == 'x0796666-ui/doc2' && github.ref_name == 'main' }}
+    if: ${{ github.repository_id == '1317169134' && github.ref_name == 'master' }}
     runs-on: ubuntu-latest
     timeout-minutes: 8
     steps:
