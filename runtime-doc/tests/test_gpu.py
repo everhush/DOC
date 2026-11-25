@@ -42,6 +42,8 @@ def main():
     expected=check([ref,src,*args],root)
     if a.artifacts:
      shutil.copy2(exe,a.artifacts/name);(a.artifacts/(name+'.expected')).write_bytes(expected)
+     (a.artifacts/(name+'.wgsl')).write_bytes((root/'generated.wgsl').read_bytes())
+     (a.artifacts/(name+'.c')).write_bytes(c.read_bytes())
    actual=run([exe,'--backend='+mode,*args],root,a.physical);assert actual.returncode==0 and actual.stdout==expected,(name,actual.stderr,actual.stdout[:300],expected[:300]);assert b'DOC11_GPU_DISPATCH:' in actual.stderr and b'DOC11_REGIONS: live=0 ' in actual.stderr,actual.stderr
    if a.physical:assert b'physical=1' in actual.stderr
    if name=='wide':assert b'DOC11_GPU_DISPATCH: lanes=96 workgroups=2' in actual.stderr,actual.stderr
