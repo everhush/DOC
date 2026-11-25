@@ -9,6 +9,11 @@ on:
 permissions:
   contents: read
 
+# A newer deliberate validation batch supersedes an older run of this workflow.
+concurrency:
+  group: doc11-independent-${{ github.repository_id }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   bootstrap-stages:
     if: ${{ github.repository_id == '1471748051' && github.ref_name == 'master' }}
@@ -87,43 +92,6 @@ jobs:
         with:
           name: doc11-self-reproduction
           path: doc11-self-evidence/
-  webgpu-native:
-    needs: bootstrap-stages
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v4
-        with:
-          name: doc11-independent-bootstrap
-          path: doc11-evidence
-      - name: Install pinned WebGPU C ABI and software adapter
-        shell: bash
-        run: |
-          set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y mesa-vulkan-drivers libvulkan1
-          mkdir -p doc11-gpu-evidence doc11-wgpu
-          curl -fL --retry 3 https://github.com/gfx-rs/wgpu-native/releases/download/v24.0.3.1/wgpu-linux-x86_64-release.zip -o doc11-wgpu.zip
-          echo '86f3eb9f74d7f1ac82ee52d9b2ab15e366ef86a932759c750b7472652836ee59  doc11-wgpu.zip' | sha256sum -c -
-          sha256sum doc11-wgpu.zip | tee doc11-gpu-evidence/wgpu-sha256.txt
-          unzip -q doc11-wgpu.zip -d doc11-wgpu
-          test -f doc11-wgpu/include/webgpu/wgpu.h
-          test -f doc11-wgpu/lib/libwgpu_native.so
-      - name: Run generated native CPU and WebGPU graphs on actual adapter
-        shell: bash
-        run: |
-          set -euo pipefail
-          sha256sum -c doc11-evidence/oracle-SHA256SUMS
-          chmod +x doc11-evidence/{doc,managed_reactive,gpu_plan}
-          test "$(cat doc11-evidence/source-sha.txt)" = "$(git rev-parse HEAD)"
-          export XDG_RUNTIME_DIR="$(mktemp -d)"
-          python3 -u runtime-doc/tests/test_gpu.py --reference doc11-evidence/doc --reactive doc11-evidence/managed_reactive --gpu-plan doc11-evidence/gpu_plan --wgpu-root doc11-wgpu | tee doc11-gpu-evidence/test.log
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: doc11-webgpu-native
-          path: doc11-gpu-evidence/
   stage2-games:
     needs: [bootstrap-stages, self-reproduction]
     runs-on: ubuntu-latest
@@ -167,7 +135,7 @@ jobs:
   stage2-webgpu:
     needs: [bootstrap-stages, stage2-games]
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
@@ -200,6 +168,8 @@ jobs:
           set -euo pipefail
           export XDG_RUNTIME_DIR="$(mktemp -d)"
           python3 -u runtime-doc/tests/test_gpu.py --reference doc11-evidence/doc --reactive doc11-game-evidence/reactive2 --gpu-plan doc11-game-evidence/gpu_plan2 --wgpu-root doc11-wgpu --stream | tee doc11-stage2-gpu-evidence/test.log
+          chmod +x doc11-game-evidence/{scanner2,radar_chase,radar_chase_3d}
+          python3 -u runtime-doc/tests/test_stage2_game_gpu.py --games doc11-game-evidence --wgpu-root doc11-wgpu --evidence doc11-stage2-gpu-evidence/games | tee doc11-stage2-gpu-evidence/game-gpu-test.log
           git rev-parse HEAD > doc11-stage2-gpu-evidence/source-sha.txt
       - uses: actions/upload-artifact@v4
         if: always()
