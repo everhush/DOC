@@ -41,7 +41,17 @@ def main():
         # Every truncation of a small valid packet rejects without leaking.
         small=dataclasses.replace(frame,vertices=frame.vertices[:3],indices=(0,1,2),draws=((0,3,*frame.draws[0][2:]),),width=1,height=1)
         packet=pack(plan,[small]);assert run([exe],input=packet).stdout==b'1 4\n'
+        # Every host allocation in a valid packet, including later frames and
+        # the maximum frame count, must fail without publication or live storage.
+        allocation_cases=0
+        for count in (1,2,32):
+            batch=pack(plan,[small]*count)
+            r=run([exe],input=batch);assert (r.returncode,r.stdout,r.stderr)==(0,f'{count} {count*4}\n'.encode(),b''),r
+            for fail_at in range(1,2+3*count+1):
+                r=run([exe,str(fail_at)],input=batch)
+                assert (r.returncode,r.stdout,r.stderr)==(1,b'',b''),(count,fail_at,r)
+                allocation_cases+=1
         for n in range(len(packet)):
             r=run([exe],input=packet[:n]);assert r.returncode==1 and not r.stdout and not r.stderr,(n,r.stderr)
-        print(f'DOC11_MESH_PACKET_PASS: real game frame, {len(invalid)+7} Python rejection cases, {len(damaged)} corrupt packets, {len(packet)} truncation points; ASan/UBSan, no partial publication')
+        print(f'DOC11_MESH_PACKET_PASS: real game frame, {len(invalid)+7} Python rejection cases, {len(damaged)} corrupt packets, {len(packet)} truncation points, {allocation_cases} allocation failures; ASan/UBSan, no partial publication')
 if __name__=='__main__':main()
