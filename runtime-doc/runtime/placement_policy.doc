@@ -1,0 +1,6 @@
+# Portable ready-frontier policy. Native adapter supplies measured hardware
+# capacity and counts of independently admitted lanes, not application hints.
+fn place_parallel(tasks) = le(32,tasks)
+fn place_workers(tasks,capacity) = if(place_parallel(tasks),if(lt(capacity,quot(tasks,16)),capacity,quot(tasks,16)),1)
+# 0 CPU, 1 admitted device/mixed frontier, -1 explicit unsupported frontier.
+fn place_device(mode,eligible,unsupported) = if(eq(mode,1),if(eq(unsupported,0),1,-1),if(eq(mode,2),if(le(64,eligible),1,0),0))
