@@ -7,6 +7,7 @@ import subprocess
 import tempfile
 
 HARNESS = r'''
+#define DOC_TEST_ALLOC_FAILURE
 #define main generated_main
 #include "generated.c"
 #undef main
@@ -16,7 +17,7 @@ static pthread_cond_t ready=PTHREAD_COND_INITIALIZER;
 static int entered,released,slow;
 static void wait_enter(void){pthread_mutex_lock(&gate);while(!entered)pthread_cond_wait(&ready,&gate);pthread_mutex_unlock(&gate);}
 static void release(void){pthread_mutex_lock(&gate);released=1;pthread_cond_broadcast(&ready);pthread_mutex_unlock(&gate);}
-static void pause_here(void){pthread_mutex_lock(&gate);entered=1;pthread_cond_broadcast(&ready);while(!released)pthread_cond_wait(&ready,&gate);pthread_mutex_unlock(&gate);}
+static void pause_here(void){pthread_mutex_lock(&gate);entered++;pthread_cond_broadcast(&ready);while(!released)pthread_cond_wait(&ready,&gate);pthread_mutex_unlock(&gate);}
 static void reset_gate(void){entered=released=0;}
 static V blocked_eval(void){if(slow)pause_here();return E_l0();}
 static void check_list(V v,int64_t a,int64_t b,size_t n){assert(v.kind==L&&v.n==n);const int64_t *p=v.p;assert(p[0]==a&&p[1]==b);}
@@ -41,8 +42,17 @@ int main(void){
     reset_gate();slow=1;assert(epoch_begin(&e));int64_t in_flight=epoch_ticket(&e);assert(!pthread_create(&thread,NULL,writer,&e));wait_enter();assert(epoch_read(&e,e.n,inspect,&current));assert(!epoch_cancel(&e,cancelled));assert(epoch_cancel(&e,in_flight));release();assert(!pthread_join(thread,NULL));slow=0;assert(epoch_read(&e,e.n,inspect,&current));assert(atomic_load(&live_bytes)==baseline);
     // Recovery, stale ticket rejection and cutoff after rollback.
     assert(epoch_begin(&e));assert(!epoch_cancel(&e,in_flight));assert(batch(&e,1,a,&target));assert(e.evaluations==0);assert(epoch_finish(&e,1));assert(e.committed==5);
+    // Direct snapshots have independent bounded slots; allocation rejection must return a slot.
+    atomic_store(&allocation_budget,0);assert(!epoch_read(&e,e.n,never,NULL));atomic_store(&allocation_budget,SIZE_MAX);assert(!e.reader_slots&&atomic_load(&live_bytes)==baseline);
+    reset_gate();Read held={&e,5,4,5,1};pthread_t readers[DOC_GRAPH_READER_SLOTS];
+    for(int i=0;i<DOC_GRAPH_READER_SLOTS;i++)assert(!pthread_create(readers+i,NULL,reader,&held));
+    pthread_mutex_lock(&gate);while(entered!=DOC_GRAPH_READER_SLOTS)pthread_cond_wait(&ready,&gate);pthread_mutex_unlock(&gate);
+    assert(!epoch_read(&e,e.n,never,NULL));
+    for(int i=0;i<32;i++){assert(epoch_begin(&e));assert(batch(&e,1,a,&target));assert(epoch_finish(&e,1));}
+    release();for(int i=0;i<DOC_GRAPH_READER_SLOTS;i++)assert(!pthread_join(readers[i],NULL));assert(!e.reader_slots&&atomic_load(&live_bytes)==baseline);
+    Read recovered={&e,37,4,5,0};assert(epoch_read(&e,e.n,inspect,&recovered));assert(!e.reader_slots);
     e.attempt=INT64_MAX;assert(!epoch_begin(&e));assert(!epoch_cancel(&e,INT64_MAX));epoch_free(&e);assert(atomic_load(&live_bytes)==0);
-    puts("DOC11_EPOCH_AUTHORITY_PASS: scoped snapshot survives replacement; private state hidden; cancellation during frontier and before commit; stale tokens rejected; cutoff and live=0");return 0;
+    puts("DOC11_EPOCH_AUTHORITY_PASS: scoped snapshot survives replacement; private state hidden; cancellation during frontier and before commit; stale tokens rejected; cutoff, bounded direct snapshot admission, 32 commits while readers stall, allocation-failure recovery and live=0");return 0;
 }
 '''
 
