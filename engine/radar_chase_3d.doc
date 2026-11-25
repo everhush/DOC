@@ -1,0 +1,303 @@
+# Radar Chase 3D: DOC gameplay, physics, scene, camera and lighting.
+# No worker count, backend, GPU or placement hints in authored source.
+# The host supplies ONLY the ordered action fact and displays stable DOC values.
+# Action: 0 idle, 1 up, 2 down, 3 left, 4 right, 5 pause, 6 restart.
+# All coordinates, rewards, wall collisions and terminal conditions are DOC.
+import engine_math.doc
+import entity_pool.doc
+# Explicit, startup-only typed scene asset read, not a hidden pure effect.
+effect level: ints = read("levels/coin_chase.txt")
+effect prefab_template_xs: ints = read("levels/showcase_xs.txt")
+effect prefab_template_ys: ints = read("levels/showcase_ys.txt")
+source frame: int = -1
+source player_x: int = 1
+source player_y: int = 1
+source coin_x: int = 4
+source coin_y: int = 2
+source score: int = 0
+source paused: bool = false
+source won: bool = false
+source action: int = 0
+source animation_phase: int = 0
+source elevation: int = 0
+source vertical_velocity: int = 0
+source gravity: int = 8
+source jump_speed: int = 24
+source render_vertex_stage: text = "graphics/arena_vertex.doc"
+source render_fragment_stage: text = "graphics/mesh_fragment.doc"
+source render_vertex_bindings: text = "x:vertex:0:-220:220,y:vertex:1:-3:32,z:vertex:2:-220:220,nx:vertex:3:-1:1,ny:vertex:4:-1:1,shift_x:draw:0:-220:220,shift_y:draw:1:-20:150,shift_z:draw:2:-220:220,red:draw:3:64:255,green:draw:4:64:255,blue:draw:5:64:255,scale:draw:6:1:3,camera_w:draw:7:1024:1024"
+source render_fragment_bindings: text = "light_r:varying:0:0:255,light_g:varying:1:0:255,light_b:varying:2:0:255"
+source render_clip: text = "clip_x,clip_y,clip_z,clip_w"
+source render_varying: text = "lit_r,lit_g,lit_b"
+source render_color: text = "color_r,color_g,color_b"
+source render_carries: text = "frame:next_frame,player_x:next_x,player_y:next_y,coin_x:next_coin_x,coin_y:next_coin_y,score:next_score,paused:next_paused,won:next_won,animation_phase:next_animation_phase,entity_ids:next_entity_ids,entity_xs:next_entity_xs,entity_ys:next_entity_ys,next_entity_id:next_next_entity_id,issued_high_water:next_issued_high_water,prefab_template_xs:template_next_xs,prefab_template_ys:template_next_ys,elevation:next_elevation,vertical_velocity:next_vertical_velocity"
+source render_actions: text = ".:0,w:1,s:2,a:3,d:4,p:5,r:6,e:7,x:8,j:9"
+source render_report: text = "next_frame,next_x,next_y,next_score,next_paused,next_won,next_coin_x,next_coin_y,next_entity_ids,next_entity_xs,next_entity_ys,radar_player_cell,radar_coin_cell,next_elevation,next_vertical_velocity"
+source render_audio: text = "audio_hz,audio_ms"
+source render_clear: ints = [12,18,30,255]
+source render_empty: ints = []
+effect render_vertices: ints = read("levels/arena_vertices.txt")
+effect render_indices: ints = read("levels/arena_indices.txt")
+# Bounded DOC-authored dynamic prefab world. e instantiates, x despawns.
+source entity_ids: ints = []
+source entity_xs: ints = []
+source entity_ys: ints = []
+source next_entity_id: int = 1
+source issued_high_water: int = 0
+source entity_capacity: int = 4
+source spawn_template: int = 0
+source remove_slot: int = 0
+# Explicit typed data reload facts; invalid mismatched arrays fail atomically.
+source reload: bool = false
+source replacement_xs: ints = []
+source replacement_ys: ints = []
+source query_slot: int = 0
+source query_id: int = 1
+# Scene dimensions, obstacle placement and target are derived from the
+# immutable typed level data fact; not hard-coded in the Rust window host.
+derive width: int (level) = get(level,0)
+derive height: int (level) = get(level,1)
+derive wall_x: int (level) = get(level,2)
+derive wall_y: int (level) = get(level,3)
+derive goal: int (level) = get(level,4)
+
+derive next_frame: int (frame) = add(frame,1)
+derive next_paused: bool (paused,action) = if(eq(action,6),false,if(eq(action,5),eq(paused,false),paused))
+derive active: bool (paused,won,action) = if(eq(action,5),false,if(eq(action,6),false,if(paused,false,if(won,false,true))))
+derive dx: int (action) = if(eq(action,4),1,if(eq(action,3),-1,0))
+derive dy: int (action) = if(eq(action,2),1,if(eq(action,1),-1,0))
+derive candidate_x: int (player_x,dx) = add(player_x,dx)
+derive candidate_y: int (player_y,dy) = add(player_y,dy)
+derive bounded_x: int (candidate_x,width) = clamp(candidate_x,0,sub(width,1))
+derive bounded_y: int (candidate_y,height) = clamp(candidate_y,0,sub(height,1))
+derive wall_hit: bool (bounded_x,bounded_y,wall_x,wall_y) = same_cell(bounded_x,bounded_y,wall_x,wall_y)
+# Dynamic prefab obstacles are collision bodies, using typed DOC components.
+# Four fixed probes implement a bounded world query without a host physics system.
+derive hit_0: bool (entity_xs,entity_ys,bounded_x,bounded_y) = if(lt(0,len(entity_xs)),if(eq(get(entity_xs,0),bounded_x),eq(get(entity_ys,0),bounded_y),false),false)
+derive hit_1: bool (entity_xs,entity_ys,bounded_x,bounded_y) = if(lt(1,len(entity_xs)),if(eq(get(entity_xs,1),bounded_x),eq(get(entity_ys,1),bounded_y),false),false)
+derive hit_2: bool (entity_xs,entity_ys,bounded_x,bounded_y) = if(lt(2,len(entity_xs)),if(eq(get(entity_xs,2),bounded_x),eq(get(entity_ys,2),bounded_y),false),false)
+derive hit_3: bool (entity_xs,entity_ys,bounded_x,bounded_y) = if(lt(3,len(entity_xs)),if(eq(get(entity_xs,3),bounded_x),eq(get(entity_ys,3),bounded_y),false),false)
+derive entity_hit: bool (hit_0,hit_1,hit_2,hit_3) = if(hit_0,true,if(hit_1,true,if(hit_2,true,hit_3)))
+derive cell_blocked: bool (wall_hit,entity_hit) = if(wall_hit,true,entity_hit)
+derive next_x: int (action,active,cell_blocked,player_x,bounded_x) = if(eq(action,6),1,if(active,if(cell_blocked,player_x,bounded_x),player_x))
+derive next_y: int (action,active,cell_blocked,player_y,bounded_y) = if(eq(action,6),1,if(active,if(cell_blocked,player_y,bounded_y),player_y))
+derive collected: bool (active,next_x,next_y,coin_x,coin_y) = if(active,same_cell(next_x,next_y,coin_x,coin_y),false)
+derive next_score: int (action,collected,score) = if(eq(action,6),0,if(collected,add(score,1),score))
+derive next_won: bool (action,won,next_score,goal) = if(eq(action,6),false,if(le(goal,next_score),true,won))
+derive next_coin_x: int (action,collected,coin_x) = if(eq(action,6),4,if(collected,6,coin_x))
+derive next_coin_y: int (action,collected,coin_y) = if(eq(action,6),2,if(collected,4,coin_y))
+# Explicit DOC-authored audio event. The host may emit an optional real WAV effect
+# ONLY after this stable epoch; no audio device or sound generation runs in pure DOC.
+derive audio_hz: int (collected) = if(collected,880,0)
+derive audio_ms: int (collected) = if(collected,120,0)
+# DOC-authored looping presentation phase. Pausing freezes it; restart resets it.
+derive next_animation_phase: int (animation_phase,next_paused,action) = if(eq(action,6),0,if(next_paused,animation_phase,if(lt(animation_phase,15),add(animation_phase,1),0)))
+
+# Stable DOC entity lifetimes, typed prefab replacement and non-reused identity.
+derive template_next_xs: ints (prefab_template_xs,reload,replacement_xs,replacement_ys) = if(reload,if(eq(len(replacement_xs),len(replacement_ys)),replacement_xs,remove_at(replacement_xs,-1)),prefab_template_xs)
+derive template_next_ys: ints (prefab_template_ys,reload,replacement_xs,replacement_ys) = if(reload,if(eq(len(replacement_xs),len(replacement_ys)),replacement_ys,remove_at(replacement_ys,-1)),prefab_template_ys)
+derive template_valid: bool (template_next_xs,template_next_ys,spawn_template) = if(lt(spawn_template,0),false,if(eq(len(template_next_xs),len(template_next_ys)),lt(spawn_template,len(template_next_xs)),false))
+derive template_x: int (template_next_xs,spawn_template,template_valid) = if(template_valid,get(template_next_xs,spawn_template),0)
+derive template_y: int (template_next_ys,spawn_template,template_valid) = if(template_valid,get(template_next_ys,spawn_template),0)
+derive bounded_capacity: int (entity_capacity) = if(lt(entity_capacity,0),0,if(lt(4,entity_capacity),4,entity_capacity))
+derive spawn_allowed: bool (action,template_valid,entity_ids,bounded_capacity,next_entity_id,issued_high_water) = if(eq(action,7),if(template_valid,if(lt(len(entity_ids),bounded_capacity),lt(issued_high_water,next_entity_id),false),false),false)
+derive despawn_allowed: bool (action,entity_ids,remove_slot) = if(eq(action,8),if(lt(remove_slot,0),false,lt(remove_slot,len(entity_ids))),false)
+derive next_entity_ids: ints (entity_ids,next_entity_id,spawn_allowed,remove_slot,despawn_allowed) = entity_remove(entity_insert(entity_ids,next_entity_id,spawn_allowed),remove_slot,despawn_allowed)
+derive next_entity_xs: ints (entity_xs,template_x,spawn_allowed,remove_slot,despawn_allowed) = entity_remove(entity_insert(entity_xs,template_x,spawn_allowed),remove_slot,despawn_allowed)
+derive next_entity_ys: ints (entity_ys,template_y,spawn_allowed,remove_slot,despawn_allowed) = entity_remove(entity_insert(entity_ys,template_y,spawn_allowed),remove_slot,despawn_allowed)
+derive next_next_entity_id: int (next_entity_id,spawn_allowed) = if(spawn_allowed,add(next_entity_id,1),next_entity_id)
+derive next_issued_high_water: int (issued_high_water,next_entity_id,spawn_allowed) = if(spawn_allowed,next_entity_id,issued_high_water)
+derive next_entity_count: int (next_entity_ids) = len(next_entity_ids)
+derive queried_alive: bool (next_entity_ids,query_slot,query_id) = entity_slot_is(next_entity_ids,query_slot,query_id)
+derive queried_x: int (next_entity_xs,query_slot,queried_alive) = entity_position(next_entity_xs,query_slot,queried_alive)
+derive queried_y: int (next_entity_ys,query_slot,queried_alive) = entity_position(next_entity_ys,query_slot,queried_alive)
+
+# Every grid tile has two independent DOC-authored radar/visibility probes.
+# These 128 actual independent game states are eligible for the native
+# automatic scheduler; the DOC source never chooses CPU, GPU or thread count.
+# They also remain ordinary pure DOC values, checked by the CPU oracle.
+derive radar_player_0_0: bool (player_x,player_y) = if(eq(player_x,0),eq(player_y,0),false)
+derive radar_player_1_0: bool (player_x,player_y) = if(eq(player_x,1),eq(player_y,0),false)
+derive radar_player_2_0: bool (player_x,player_y) = if(eq(player_x,2),eq(player_y,0),false)
+derive radar_player_3_0: bool (player_x,player_y) = if(eq(player_x,3),eq(player_y,0),false)
+derive radar_player_4_0: bool (player_x,player_y) = if(eq(player_x,4),eq(player_y,0),false)
+derive radar_player_5_0: bool (player_x,player_y) = if(eq(player_x,5),eq(player_y,0),false)
+derive radar_player_6_0: bool (player_x,player_y) = if(eq(player_x,6),eq(player_y,0),false)
+derive radar_player_7_0: bool (player_x,player_y) = if(eq(player_x,7),eq(player_y,0),false)
+derive radar_player_0_1: bool (player_x,player_y) = if(eq(player_x,0),eq(player_y,1),false)
+derive radar_player_1_1: bool (player_x,player_y) = if(eq(player_x,1),eq(player_y,1),false)
+derive radar_player_2_1: bool (player_x,player_y) = if(eq(player_x,2),eq(player_y,1),false)
+derive radar_player_3_1: bool (player_x,player_y) = if(eq(player_x,3),eq(player_y,1),false)
+derive radar_player_4_1: bool (player_x,player_y) = if(eq(player_x,4),eq(player_y,1),false)
+derive radar_player_5_1: bool (player_x,player_y) = if(eq(player_x,5),eq(player_y,1),false)
+derive radar_player_6_1: bool (player_x,player_y) = if(eq(player_x,6),eq(player_y,1),false)
+derive radar_player_7_1: bool (player_x,player_y) = if(eq(player_x,7),eq(player_y,1),false)
+derive radar_player_0_2: bool (player_x,player_y) = if(eq(player_x,0),eq(player_y,2),false)
+derive radar_player_1_2: bool (player_x,player_y) = if(eq(player_x,1),eq(player_y,2),false)
+derive radar_player_2_2: bool (player_x,player_y) = if(eq(player_x,2),eq(player_y,2),false)
+derive radar_player_3_2: bool (player_x,player_y) = if(eq(player_x,3),eq(player_y,2),false)
+derive radar_player_4_2: bool (player_x,player_y) = if(eq(player_x,4),eq(player_y,2),false)
+derive radar_player_5_2: bool (player_x,player_y) = if(eq(player_x,5),eq(player_y,2),false)
+derive radar_player_6_2: bool (player_x,player_y) = if(eq(player_x,6),eq(player_y,2),false)
+derive radar_player_7_2: bool (player_x,player_y) = if(eq(player_x,7),eq(player_y,2),false)
+derive radar_player_0_3: bool (player_x,player_y) = if(eq(player_x,0),eq(player_y,3),false)
+derive radar_player_1_3: bool (player_x,player_y) = if(eq(player_x,1),eq(player_y,3),false)
+derive radar_player_2_3: bool (player_x,player_y) = if(eq(player_x,2),eq(player_y,3),false)
+derive radar_player_3_3: bool (player_x,player_y) = if(eq(player_x,3),eq(player_y,3),false)
+derive radar_player_4_3: bool (player_x,player_y) = if(eq(player_x,4),eq(player_y,3),false)
+derive radar_player_5_3: bool (player_x,player_y) = if(eq(player_x,5),eq(player_y,3),false)
+derive radar_player_6_3: bool (player_x,player_y) = if(eq(player_x,6),eq(player_y,3),false)
+derive radar_player_7_3: bool (player_x,player_y) = if(eq(player_x,7),eq(player_y,3),false)
+derive radar_player_0_4: bool (player_x,player_y) = if(eq(player_x,0),eq(player_y,4),false)
+derive radar_player_1_4: bool (player_x,player_y) = if(eq(player_x,1),eq(player_y,4),false)
+derive radar_player_2_4: bool (player_x,player_y) = if(eq(player_x,2),eq(player_y,4),false)
+derive radar_player_3_4: bool (player_x,player_y) = if(eq(player_x,3),eq(player_y,4),false)
+derive radar_player_4_4: bool (player_x,player_y) = if(eq(player_x,4),eq(player_y,4),false)
+derive radar_player_5_4: bool (player_x,player_y) = if(eq(player_x,5),eq(player_y,4),false)
+derive radar_player_6_4: bool (player_x,player_y) = if(eq(player_x,6),eq(player_y,4),false)
+derive radar_player_7_4: bool (player_x,player_y) = if(eq(player_x,7),eq(player_y,4),false)
+derive radar_player_0_5: bool (player_x,player_y) = if(eq(player_x,0),eq(player_y,5),false)
+derive radar_player_1_5: bool (player_x,player_y) = if(eq(player_x,1),eq(player_y,5),false)
+derive radar_player_2_5: bool (player_x,player_y) = if(eq(player_x,2),eq(player_y,5),false)
+derive radar_player_3_5: bool (player_x,player_y) = if(eq(player_x,3),eq(player_y,5),false)
+derive radar_player_4_5: bool (player_x,player_y) = if(eq(player_x,4),eq(player_y,5),false)
+derive radar_player_5_5: bool (player_x,player_y) = if(eq(player_x,5),eq(player_y,5),false)
+derive radar_player_6_5: bool (player_x,player_y) = if(eq(player_x,6),eq(player_y,5),false)
+derive radar_player_7_5: bool (player_x,player_y) = if(eq(player_x,7),eq(player_y,5),false)
+derive radar_player_0_6: bool (player_x,player_y) = if(eq(player_x,0),eq(player_y,6),false)
+derive radar_player_1_6: bool (player_x,player_y) = if(eq(player_x,1),eq(player_y,6),false)
+derive radar_player_2_6: bool (player_x,player_y) = if(eq(player_x,2),eq(player_y,6),false)
+derive radar_player_3_6: bool (player_x,player_y) = if(eq(player_x,3),eq(player_y,6),false)
+derive radar_player_4_6: bool (player_x,player_y) = if(eq(player_x,4),eq(player_y,6),false)
+derive radar_player_5_6: bool (player_x,player_y) = if(eq(player_x,5),eq(player_y,6),false)
+derive radar_player_6_6: bool (player_x,player_y) = if(eq(player_x,6),eq(player_y,6),false)
+derive radar_player_7_6: bool (player_x,player_y) = if(eq(player_x,7),eq(player_y,6),false)
+derive radar_player_0_7: bool (player_x,player_y) = if(eq(player_x,0),eq(player_y,7),false)
+derive radar_player_1_7: bool (player_x,player_y) = if(eq(player_x,1),eq(player_y,7),false)
+derive radar_player_2_7: bool (player_x,player_y) = if(eq(player_x,2),eq(player_y,7),false)
+derive radar_player_3_7: bool (player_x,player_y) = if(eq(player_x,3),eq(player_y,7),false)
+derive radar_player_4_7: bool (player_x,player_y) = if(eq(player_x,4),eq(player_y,7),false)
+derive radar_player_5_7: bool (player_x,player_y) = if(eq(player_x,5),eq(player_y,7),false)
+derive radar_player_6_7: bool (player_x,player_y) = if(eq(player_x,6),eq(player_y,7),false)
+derive radar_player_7_7: bool (player_x,player_y) = if(eq(player_x,7),eq(player_y,7),false)
+derive radar_coin_0_0: bool (coin_x,coin_y) = if(eq(coin_x,0),eq(coin_y,0),false)
+derive radar_coin_1_0: bool (coin_x,coin_y) = if(eq(coin_x,1),eq(coin_y,0),false)
+derive radar_coin_2_0: bool (coin_x,coin_y) = if(eq(coin_x,2),eq(coin_y,0),false)
+derive radar_coin_3_0: bool (coin_x,coin_y) = if(eq(coin_x,3),eq(coin_y,0),false)
+derive radar_coin_4_0: bool (coin_x,coin_y) = if(eq(coin_x,4),eq(coin_y,0),false)
+derive radar_coin_5_0: bool (coin_x,coin_y) = if(eq(coin_x,5),eq(coin_y,0),false)
+derive radar_coin_6_0: bool (coin_x,coin_y) = if(eq(coin_x,6),eq(coin_y,0),false)
+derive radar_coin_7_0: bool (coin_x,coin_y) = if(eq(coin_x,7),eq(coin_y,0),false)
+derive radar_coin_0_1: bool (coin_x,coin_y) = if(eq(coin_x,0),eq(coin_y,1),false)
+derive radar_coin_1_1: bool (coin_x,coin_y) = if(eq(coin_x,1),eq(coin_y,1),false)
+derive radar_coin_2_1: bool (coin_x,coin_y) = if(eq(coin_x,2),eq(coin_y,1),false)
+derive radar_coin_3_1: bool (coin_x,coin_y) = if(eq(coin_x,3),eq(coin_y,1),false)
+derive radar_coin_4_1: bool (coin_x,coin_y) = if(eq(coin_x,4),eq(coin_y,1),false)
+derive radar_coin_5_1: bool (coin_x,coin_y) = if(eq(coin_x,5),eq(coin_y,1),false)
+derive radar_coin_6_1: bool (coin_x,coin_y) = if(eq(coin_x,6),eq(coin_y,1),false)
+derive radar_coin_7_1: bool (coin_x,coin_y) = if(eq(coin_x,7),eq(coin_y,1),false)
+derive radar_coin_0_2: bool (coin_x,coin_y) = if(eq(coin_x,0),eq(coin_y,2),false)
+derive radar_coin_1_2: bool (coin_x,coin_y) = if(eq(coin_x,1),eq(coin_y,2),false)
+derive radar_coin_2_2: bool (coin_x,coin_y) = if(eq(coin_x,2),eq(coin_y,2),false)
+derive radar_coin_3_2: bool (coin_x,coin_y) = if(eq(coin_x,3),eq(coin_y,2),false)
+derive radar_coin_4_2: bool (coin_x,coin_y) = if(eq(coin_x,4),eq(coin_y,2),false)
+derive radar_coin_5_2: bool (coin_x,coin_y) = if(eq(coin_x,5),eq(coin_y,2),false)
+derive radar_coin_6_2: bool (coin_x,coin_y) = if(eq(coin_x,6),eq(coin_y,2),false)
+derive radar_coin_7_2: bool (coin_x,coin_y) = if(eq(coin_x,7),eq(coin_y,2),false)
+derive radar_coin_0_3: bool (coin_x,coin_y) = if(eq(coin_x,0),eq(coin_y,3),false)
+derive radar_coin_1_3: bool (coin_x,coin_y) = if(eq(coin_x,1),eq(coin_y,3),false)
+derive radar_coin_2_3: bool (coin_x,coin_y) = if(eq(coin_x,2),eq(coin_y,3),false)
+derive radar_coin_3_3: bool (coin_x,coin_y) = if(eq(coin_x,3),eq(coin_y,3),false)
+derive radar_coin_4_3: bool (coin_x,coin_y) = if(eq(coin_x,4),eq(coin_y,3),false)
+derive radar_coin_5_3: bool (coin_x,coin_y) = if(eq(coin_x,5),eq(coin_y,3),false)
+derive radar_coin_6_3: bool (coin_x,coin_y) = if(eq(coin_x,6),eq(coin_y,3),false)
+derive radar_coin_7_3: bool (coin_x,coin_y) = if(eq(coin_x,7),eq(coin_y,3),false)
+derive radar_coin_0_4: bool (coin_x,coin_y) = if(eq(coin_x,0),eq(coin_y,4),false)
+derive radar_coin_1_4: bool (coin_x,coin_y) = if(eq(coin_x,1),eq(coin_y,4),false)
+derive radar_coin_2_4: bool (coin_x,coin_y) = if(eq(coin_x,2),eq(coin_y,4),false)
+derive radar_coin_3_4: bool (coin_x,coin_y) = if(eq(coin_x,3),eq(coin_y,4),false)
+derive radar_coin_4_4: bool (coin_x,coin_y) = if(eq(coin_x,4),eq(coin_y,4),false)
+derive radar_coin_5_4: bool (coin_x,coin_y) = if(eq(coin_x,5),eq(coin_y,4),false)
+derive radar_coin_6_4: bool (coin_x,coin_y) = if(eq(coin_x,6),eq(coin_y,4),false)
+derive radar_coin_7_4: bool (coin_x,coin_y) = if(eq(coin_x,7),eq(coin_y,4),false)
+derive radar_coin_0_5: bool (coin_x,coin_y) = if(eq(coin_x,0),eq(coin_y,5),false)
+derive radar_coin_1_5: bool (coin_x,coin_y) = if(eq(coin_x,1),eq(coin_y,5),false)
+derive radar_coin_2_5: bool (coin_x,coin_y) = if(eq(coin_x,2),eq(coin_y,5),false)
+derive radar_coin_3_5: bool (coin_x,coin_y) = if(eq(coin_x,3),eq(coin_y,5),false)
+derive radar_coin_4_5: bool (coin_x,coin_y) = if(eq(coin_x,4),eq(coin_y,5),false)
+derive radar_coin_5_5: bool (coin_x,coin_y) = if(eq(coin_x,5),eq(coin_y,5),false)
+derive radar_coin_6_5: bool (coin_x,coin_y) = if(eq(coin_x,6),eq(coin_y,5),false)
+derive radar_coin_7_5: bool (coin_x,coin_y) = if(eq(coin_x,7),eq(coin_y,5),false)
+derive radar_coin_0_6: bool (coin_x,coin_y) = if(eq(coin_x,0),eq(coin_y,6),false)
+derive radar_coin_1_6: bool (coin_x,coin_y) = if(eq(coin_x,1),eq(coin_y,6),false)
+derive radar_coin_2_6: bool (coin_x,coin_y) = if(eq(coin_x,2),eq(coin_y,6),false)
+derive radar_coin_3_6: bool (coin_x,coin_y) = if(eq(coin_x,3),eq(coin_y,6),false)
+derive radar_coin_4_6: bool (coin_x,coin_y) = if(eq(coin_x,4),eq(coin_y,6),false)
+derive radar_coin_5_6: bool (coin_x,coin_y) = if(eq(coin_x,5),eq(coin_y,6),false)
+derive radar_coin_6_6: bool (coin_x,coin_y) = if(eq(coin_x,6),eq(coin_y,6),false)
+derive radar_coin_7_6: bool (coin_x,coin_y) = if(eq(coin_x,7),eq(coin_y,6),false)
+derive radar_coin_0_7: bool (coin_x,coin_y) = if(eq(coin_x,0),eq(coin_y,7),false)
+derive radar_coin_1_7: bool (coin_x,coin_y) = if(eq(coin_x,1),eq(coin_y,7),false)
+derive radar_coin_2_7: bool (coin_x,coin_y) = if(eq(coin_x,2),eq(coin_y,7),false)
+derive radar_coin_3_7: bool (coin_x,coin_y) = if(eq(coin_x,3),eq(coin_y,7),false)
+derive radar_coin_4_7: bool (coin_x,coin_y) = if(eq(coin_x,4),eq(coin_y,7),false)
+derive radar_coin_5_7: bool (coin_x,coin_y) = if(eq(coin_x,5),eq(coin_y,7),false)
+derive radar_coin_6_7: bool (coin_x,coin_y) = if(eq(coin_x,6),eq(coin_y,7),false)
+derive radar_coin_7_7: bool (coin_x,coin_y) = if(eq(coin_x,7),eq(coin_y,7),false)
+derive radar_player_at_start: bool (radar_player_1_1) = radar_player_1_1
+derive radar_coin_at_start: bool (radar_coin_4_2) = radar_coin_4_2
+
+# Consume every scanned tile in the game-visible radar readout. Cells are
+# row-major indices of the pre-action valuation; -1 means off the radar.
+# This reduction is dependency-derived, not host gameplay or placement logic.
+derive radar_player_row0: int (radar_player_0_0,radar_player_1_0,radar_player_2_0,radar_player_3_0,radar_player_4_0,radar_player_5_0,radar_player_6_0,radar_player_7_0) = if(radar_player_0_0,0,if(radar_player_1_0,1,if(radar_player_2_0,2,if(radar_player_3_0,3,if(radar_player_4_0,4,if(radar_player_5_0,5,if(radar_player_6_0,6,if(radar_player_7_0,7,-1))))))))
+derive radar_player_row1: int (radar_player_0_1,radar_player_1_1,radar_player_2_1,radar_player_3_1,radar_player_4_1,radar_player_5_1,radar_player_6_1,radar_player_7_1) = if(radar_player_0_1,8,if(radar_player_1_1,9,if(radar_player_2_1,10,if(radar_player_3_1,11,if(radar_player_4_1,12,if(radar_player_5_1,13,if(radar_player_6_1,14,if(radar_player_7_1,15,-1))))))))
+derive radar_player_row2: int (radar_player_0_2,radar_player_1_2,radar_player_2_2,radar_player_3_2,radar_player_4_2,radar_player_5_2,radar_player_6_2,radar_player_7_2) = if(radar_player_0_2,16,if(radar_player_1_2,17,if(radar_player_2_2,18,if(radar_player_3_2,19,if(radar_player_4_2,20,if(radar_player_5_2,21,if(radar_player_6_2,22,if(radar_player_7_2,23,-1))))))))
+derive radar_player_row3: int (radar_player_0_3,radar_player_1_3,radar_player_2_3,radar_player_3_3,radar_player_4_3,radar_player_5_3,radar_player_6_3,radar_player_7_3) = if(radar_player_0_3,24,if(radar_player_1_3,25,if(radar_player_2_3,26,if(radar_player_3_3,27,if(radar_player_4_3,28,if(radar_player_5_3,29,if(radar_player_6_3,30,if(radar_player_7_3,31,-1))))))))
+derive radar_player_row4: int (radar_player_0_4,radar_player_1_4,radar_player_2_4,radar_player_3_4,radar_player_4_4,radar_player_5_4,radar_player_6_4,radar_player_7_4) = if(radar_player_0_4,32,if(radar_player_1_4,33,if(radar_player_2_4,34,if(radar_player_3_4,35,if(radar_player_4_4,36,if(radar_player_5_4,37,if(radar_player_6_4,38,if(radar_player_7_4,39,-1))))))))
+derive radar_player_row5: int (radar_player_0_5,radar_player_1_5,radar_player_2_5,radar_player_3_5,radar_player_4_5,radar_player_5_5,radar_player_6_5,radar_player_7_5) = if(radar_player_0_5,40,if(radar_player_1_5,41,if(radar_player_2_5,42,if(radar_player_3_5,43,if(radar_player_4_5,44,if(radar_player_5_5,45,if(radar_player_6_5,46,if(radar_player_7_5,47,-1))))))))
+derive radar_player_row6: int (radar_player_0_6,radar_player_1_6,radar_player_2_6,radar_player_3_6,radar_player_4_6,radar_player_5_6,radar_player_6_6,radar_player_7_6) = if(radar_player_0_6,48,if(radar_player_1_6,49,if(radar_player_2_6,50,if(radar_player_3_6,51,if(radar_player_4_6,52,if(radar_player_5_6,53,if(radar_player_6_6,54,if(radar_player_7_6,55,-1))))))))
+derive radar_player_row7: int (radar_player_0_7,radar_player_1_7,radar_player_2_7,radar_player_3_7,radar_player_4_7,radar_player_5_7,radar_player_6_7,radar_player_7_7) = if(radar_player_0_7,56,if(radar_player_1_7,57,if(radar_player_2_7,58,if(radar_player_3_7,59,if(radar_player_4_7,60,if(radar_player_5_7,61,if(radar_player_6_7,62,if(radar_player_7_7,63,-1))))))))
+derive radar_player_cell: int (radar_player_row0,radar_player_row1,radar_player_row2,radar_player_row3,radar_player_row4,radar_player_row5,radar_player_row6,radar_player_row7) = if(le(0,radar_player_row0),radar_player_row0,if(le(0,radar_player_row1),radar_player_row1,if(le(0,radar_player_row2),radar_player_row2,if(le(0,radar_player_row3),radar_player_row3,if(le(0,radar_player_row4),radar_player_row4,if(le(0,radar_player_row5),radar_player_row5,if(le(0,radar_player_row6),radar_player_row6,if(le(0,radar_player_row7),radar_player_row7,-1))))))))
+derive radar_coin_row0: int (radar_coin_0_0,radar_coin_1_0,radar_coin_2_0,radar_coin_3_0,radar_coin_4_0,radar_coin_5_0,radar_coin_6_0,radar_coin_7_0) = if(radar_coin_0_0,0,if(radar_coin_1_0,1,if(radar_coin_2_0,2,if(radar_coin_3_0,3,if(radar_coin_4_0,4,if(radar_coin_5_0,5,if(radar_coin_6_0,6,if(radar_coin_7_0,7,-1))))))))
+derive radar_coin_row1: int (radar_coin_0_1,radar_coin_1_1,radar_coin_2_1,radar_coin_3_1,radar_coin_4_1,radar_coin_5_1,radar_coin_6_1,radar_coin_7_1) = if(radar_coin_0_1,8,if(radar_coin_1_1,9,if(radar_coin_2_1,10,if(radar_coin_3_1,11,if(radar_coin_4_1,12,if(radar_coin_5_1,13,if(radar_coin_6_1,14,if(radar_coin_7_1,15,-1))))))))
+derive radar_coin_row2: int (radar_coin_0_2,radar_coin_1_2,radar_coin_2_2,radar_coin_3_2,radar_coin_4_2,radar_coin_5_2,radar_coin_6_2,radar_coin_7_2) = if(radar_coin_0_2,16,if(radar_coin_1_2,17,if(radar_coin_2_2,18,if(radar_coin_3_2,19,if(radar_coin_4_2,20,if(radar_coin_5_2,21,if(radar_coin_6_2,22,if(radar_coin_7_2,23,-1))))))))
+derive radar_coin_row3: int (radar_coin_0_3,radar_coin_1_3,radar_coin_2_3,radar_coin_3_3,radar_coin_4_3,radar_coin_5_3,radar_coin_6_3,radar_coin_7_3) = if(radar_coin_0_3,24,if(radar_coin_1_3,25,if(radar_coin_2_3,26,if(radar_coin_3_3,27,if(radar_coin_4_3,28,if(radar_coin_5_3,29,if(radar_coin_6_3,30,if(radar_coin_7_3,31,-1))))))))
+derive radar_coin_row4: int (radar_coin_0_4,radar_coin_1_4,radar_coin_2_4,radar_coin_3_4,radar_coin_4_4,radar_coin_5_4,radar_coin_6_4,radar_coin_7_4) = if(radar_coin_0_4,32,if(radar_coin_1_4,33,if(radar_coin_2_4,34,if(radar_coin_3_4,35,if(radar_coin_4_4,36,if(radar_coin_5_4,37,if(radar_coin_6_4,38,if(radar_coin_7_4,39,-1))))))))
+derive radar_coin_row5: int (radar_coin_0_5,radar_coin_1_5,radar_coin_2_5,radar_coin_3_5,radar_coin_4_5,radar_coin_5_5,radar_coin_6_5,radar_coin_7_5) = if(radar_coin_0_5,40,if(radar_coin_1_5,41,if(radar_coin_2_5,42,if(radar_coin_3_5,43,if(radar_coin_4_5,44,if(radar_coin_5_5,45,if(radar_coin_6_5,46,if(radar_coin_7_5,47,-1))))))))
+derive radar_coin_row6: int (radar_coin_0_6,radar_coin_1_6,radar_coin_2_6,radar_coin_3_6,radar_coin_4_6,radar_coin_5_6,radar_coin_6_6,radar_coin_7_6) = if(radar_coin_0_6,48,if(radar_coin_1_6,49,if(radar_coin_2_6,50,if(radar_coin_3_6,51,if(radar_coin_4_6,52,if(radar_coin_5_6,53,if(radar_coin_6_6,54,if(radar_coin_7_6,55,-1))))))))
+derive radar_coin_row7: int (radar_coin_0_7,radar_coin_1_7,radar_coin_2_7,radar_coin_3_7,radar_coin_4_7,radar_coin_5_7,radar_coin_6_7,radar_coin_7_7) = if(radar_coin_0_7,56,if(radar_coin_1_7,57,if(radar_coin_2_7,58,if(radar_coin_3_7,59,if(radar_coin_4_7,60,if(radar_coin_5_7,61,if(radar_coin_6_7,62,if(radar_coin_7_7,63,-1))))))))
+derive radar_coin_cell: int (radar_coin_row0,radar_coin_row1,radar_coin_row2,radar_coin_row3,radar_coin_row4,radar_coin_row5,radar_coin_row6,radar_coin_row7) = if(le(0,radar_coin_row0),radar_coin_row0,if(le(0,radar_coin_row1),radar_coin_row1,if(le(0,radar_coin_row2),radar_coin_row2,if(le(0,radar_coin_row3),radar_coin_row3,if(le(0,radar_coin_row4),radar_coin_row4,if(le(0,radar_coin_row5),radar_coin_row5,if(le(0,radar_coin_row6),radar_coin_row6,if(le(0,radar_coin_row7),radar_coin_row7,-1))))))))
+
+# Gravity, launch impulse, floor contact and fixed-step vertical dynamics.
+derive launch: bool (action,elevation,active) = if(active,if(eq(action,9),eq(elevation,0),false),false)
+derive velocity_candidate: int (launch,jump_speed,vertical_velocity,gravity,elevation) = if(launch,jump_speed,if(eq(elevation,0),0,sub(vertical_velocity,gravity)))
+derive elevation_candidate: int (elevation,velocity_candidate) = add(elevation,velocity_candidate)
+derive next_elevation: int (action,active,elevation,elevation_candidate) = if(eq(action,6),0,if(active,clamp(elevation_candidate,0,100),elevation))
+derive next_vertical_velocity: int (action,active,vertical_velocity,velocity_candidate,next_elevation) = if(eq(action,6),0,if(active,if(eq(next_elevation,0),0,velocity_candidate),vertical_velocity))
+# Each draw: index first/count, translation xyz, material RGB, scale, camera w.
+# Only DOC derives scene geometry and visual state from game state.
+fn grid_x(n) = sub(mul(n,55),193)
+fn grid_z(n) = sub(mul(n,55),138)
+derive scene_ground: ints (render_empty) = append(append(append(append(append(append(append(append(append(append(render_empty,0),6),0),0),0),80),110),120),1),1024)
+derive scene_wall: ints (scene_ground,wall_x,wall_y) = append(append(append(append(append(append(append(append(append(append(scene_ground,6),36),grid_x(wall_x)),0),grid_z(wall_y)),230),95),85),2),1024)
+derive coin_visible: bool (next_won) = eq(next_won,false)
+derive coin_hover: int (next_animation_phase) = add(8,next_animation_phase)
+derive scene_coin: ints (scene_wall,next_coin_x,coin_hover,next_coin_y,coin_visible) = if(coin_visible,append(append(append(append(append(append(append(append(append(append(scene_wall,6),36),grid_x(next_coin_x)),coin_hover),grid_z(next_coin_y)),90),250),160),1),1024),scene_wall)
+derive visible_0: bool (next_entity_count) = lt(0,next_entity_count)
+derive hazard_x_0: int (next_entity_xs,visible_0) = if(visible_0,grid_x(get(next_entity_xs,0)),0)
+derive hazard_z_0: int (next_entity_ys,visible_0) = if(visible_0,grid_z(get(next_entity_ys,0)),0)
+derive scene_hazard_0: ints (scene_coin,hazard_x_0,hazard_z_0,visible_0) = if(visible_0,append(append(append(append(append(append(append(append(append(append(scene_coin,6),36),hazard_x_0),0),hazard_z_0),210),90),230),1),1024),scene_coin)
+derive visible_1: bool (next_entity_count) = lt(1,next_entity_count)
+derive hazard_x_1: int (next_entity_xs,visible_1) = if(visible_1,grid_x(get(next_entity_xs,1)),0)
+derive hazard_z_1: int (next_entity_ys,visible_1) = if(visible_1,grid_z(get(next_entity_ys,1)),0)
+derive scene_hazard_1: ints (scene_hazard_0,hazard_x_1,hazard_z_1,visible_1) = if(visible_1,append(append(append(append(append(append(append(append(append(append(scene_hazard_0,6),36),hazard_x_1),0),hazard_z_1),210),90),230),1),1024),scene_hazard_0)
+derive visible_2: bool (next_entity_count) = lt(2,next_entity_count)
+derive hazard_x_2: int (next_entity_xs,visible_2) = if(visible_2,grid_x(get(next_entity_xs,2)),0)
+derive hazard_z_2: int (next_entity_ys,visible_2) = if(visible_2,grid_z(get(next_entity_ys,2)),0)
+derive scene_hazard_2: ints (scene_hazard_1,hazard_x_2,hazard_z_2,visible_2) = if(visible_2,append(append(append(append(append(append(append(append(append(append(scene_hazard_1,6),36),hazard_x_2),0),hazard_z_2),210),90),230),1),1024),scene_hazard_1)
+derive visible_3: bool (next_entity_count) = lt(3,next_entity_count)
+derive hazard_x_3: int (next_entity_xs,visible_3) = if(visible_3,grid_x(get(next_entity_xs,3)),0)
+derive hazard_z_3: int (next_entity_ys,visible_3) = if(visible_3,grid_z(get(next_entity_ys,3)),0)
+derive scene_hazard_3: ints (scene_hazard_2,hazard_x_3,hazard_z_3,visible_3) = if(visible_3,append(append(append(append(append(append(append(append(append(append(scene_hazard_2,6),36),hazard_x_3),0),hazard_z_3),210),90),230),1),1024),scene_hazard_2)
+derive render_draws: ints (scene_hazard_3,next_x,next_elevation,next_y) = append(append(append(append(append(append(append(append(append(append(scene_hazard_3,6),36),grid_x(next_x)),next_elevation),grid_z(next_y)),255),205),75),1),1024)

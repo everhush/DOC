@@ -875,6 +875,32 @@ struct ScalarJob {
 // A Value with kind 0 (bool) or 1 (int) is self-contained and cannot
 // reference any thread-local digit, list, or UTF-8 allocation arena.
 struct ScalarReply { position: i64, value: Value }
+// The expression parser has already validated every operator and type
+// during load() via inspect(...,false). Scan actual operation tokens (not
+// arbitrary substrings of legal state names): "national" is not "nat(...)"
+// and "template" is not a pooled collection operation.
+fn scalar_worker_total_syntax(body:u8[:]) -> bool {
+    var p=0;
+    while p<body.len {
+        if body[p]=='"' {return false;}
+        if !ident(body[p]) {p++;continue;}
+        var end=p;
+        while end<body.len && ident(body[end]) {end++;}
+        let token=body[p..end];
+        var next=end;
+        while next<body.len &&
+              (body[next]==' ' || body[next]=='\t') {next++;}
+        if next<body.len && body[next]=='(' {
+            if token!="if" && token!="eq" && token!="lt" &&
+               token!="le" && token!="add" && token!="sub" &&
+               token!="mul" {
+                return false;
+            }
+        }
+        p=end;
+    }
+    return true;
+}
 fn scalar_worker_eligible(nodes: State[:], frontier: i64[:]) -> bool {
     for id in frontier {
         if !nodes[id].derived ||
@@ -882,15 +908,9 @@ fn scalar_worker_eligible(nodes: State[:], frontier: i64[:]) -> bool {
             return false;
         }
         let body = nodes[id].expression[..];
-        // Conservative scalar-only admission. Pool-backed literals and
-        // operations may not execute on workers holding only scalar inputs.
-        if find(body,"nat")>=0 || find(body,"empty")>=0 ||
-           find(body,"append")>=0 || find(body,"get")>=0 ||
-           find(body,"len")>=0 || find(body,"tail")>=0 ||
-           find(body,"some")>=0 || find(body,"none")>=0 ||
-           find(body,"concat")>=0 || find(body,"starts_with")>=0 ||
-           find(body,"try_get")>=0 || find(body,"unwrap_or")>=0 ||
-           find(body,"text")>=0 { return false; }
+        // Reject only actual pool/partial function calls; vetted literal
+        // and variable tokens are safe, even when names contain "nat"/"len".
+        if !scalar_worker_total_syntax(body) {return false;}
         // Only immediate int/bool scalar inputs are sent to isolated
         // workers. Nat/ints handles reference parent thread-owned pools and
         // MUST NOT cross queues without an explicit owning deep copy.
@@ -925,18 +945,56 @@ fn evaluate_ready_frontier(nodes: State[:], values: Value[:],
                            frontier: i64[:]) -> Value[>..] {
     var candidates: Value[>..] = [];
     var setting: u8[>..] = [];
-    var workers = min(4,max(1,hardware_threads()));
+    // Hardware resource budget, not an arbitrary 4/16-worker cap.
+    // At least 32 independent tasks amortize each isolated worker.
+    let hardware=max(1,hardware_threads());
+    var workers=hardware;
+    var explicit_workers=false;
     if env("DOC_GOOSE_WORKERS",setting) {
+        explicit_workers=true;
         let requested,ok=parse_int(setting);
-        if !ok || requested < 1 || requested > 16 { fail(); }
-        workers = requested;
+        if !ok || requested < 1 { fail(); }
+        workers=min(requested,hardware);
     }
-    if workers <= 1 || frontier.len < 64 ||
-       !scalar_worker_eligible(nodes,frontier) {
+    if frontier.len<64 || !scalar_worker_eligible(nodes,frontier) {
         for id in frontier { candidates.push(inspect(nodes,values,id,true)); }
         return candidates;
     }
-    workers = min(workers,frontier.len);
+    if !explicit_workers {
+        // Measured on a two-logical-core Linux CI runner: 512 trivial
+        // eq(a,b) definitions were 2.35x slower with two newly spawned
+        // Goose workers than serial. Estimate pure expression work, not
+        // just graph width. Cheap automatic frontiers stay serial;
+        // substantial ones use every profitable available worker.
+        // Explicit DOC_GOOSE_WORKERS still exercises worker scaling.
+        // Sampling a few distributed expressions avoids an O(frontier)
+        // admission walk, which itself was measured to dominate the
+        // evaluation of a cheap 512-node Boolean DAG.
+        let samples=min(8,frontier.len);
+        var sample_cost=0;
+        for sample in 0..samples {
+            let index=sample*(frontier.len-1)/max(1,samples-1);
+            sample_cost+=max(1,nodes[frontier[index]].expression.len/8);
+        }
+        let mean_cost=max(1,(sample_cost+samples-1)/samples);
+        if frontier.len<2048/mean_cost {
+            let estimate=frontier.len*mean_cost;
+            var message:u8[>..]=[];
+            format(message,"DOC_GOOSE_AUTO_FRONTIER_SEQUENTIAL: estimate=",
+                   estimate," candidates=",frontier.len,
+                   " hardware=",hardware,"\n");
+            write_stderr(message);
+            for id in frontier {
+                candidates.push(inspect(nodes,values,id,true));
+            }
+            return candidates;
+        }
+    }
+    workers=min(workers,max(1,frontier.len/32));
+    if workers<=1 {
+        for id in frontier { candidates.push(inspect(nodes,values,id,true)); }
+        return candidates;
+    }
     candidates.resize(frontier.len,boolean(false));
     let blank = State {
         name: "", expression: "", premise: [0;16],
@@ -979,102 +1037,74 @@ fn evaluate_ready_frontier(nodes: State[:], values: Value[:],
     for id in ids { thread_wait(id); }
     var message: u8[>..] = [];
     format(message,"DOC_GOOSE_PARALLEL_FRONTIER: workers=",workers,
-           " candidates=",frontier.len,"\n");
+           " candidates=",frontier.len," hardware=",hardware,"\n");
     write_stderr(message);
     return candidates;
 }
 
-fn stabilize(nodes: State[:], values: Value[:], active: bool[:]) -> i64 {
-    var evaluations = 0;
+// A single ready-frontier and atomic-publication kernel handles both full
+// and ancestor-closed demanded DOC evaluation. The needed mask is readonly;
+// unneeded pending nodes stay inactive for this evaluation request.
+fn stabilize_masked(nodes: State[:],values: Value[:],active: bool[:],
+                    needed: bool[:]) -> i64 {
+    if needed.len!=nodes.len {fail();}
+    var evaluations=0;
     loop {
-        var blocked: bool[>..] = [];
-        var frontier: i64[>..] = [];
+        var blocked:bool[>..]=[];
+        var frontier:i64[>..]=[];
         for i in 0..nodes.len {
-            var blocked_here = false;
+            var blocked_here=false;
             if nodes[i].derived {
                 for k in 0..nodes[i].count {
-                    let premise = nodes[i].premise[k];
+                    let premise=nodes[i].premise[k];
                     if active[premise] || blocked[premise] {
-                        blocked_here = true;
-                    }
-                }
-            }
-            blocked.push(blocked_here);
-            if active[i] && !blocked_here {
-                if !nodes[i].derived { fail(); }
-                frontier.push(i);
-            }
-        }
-        if frontier.len == 0 {
-            for a in active { if a { fail(); } }
-            break;
-        }
-        let candidates = evaluate_ready_frontier(nodes,values,frontier);
-        // Complete frontier candidate evaluation precedes publication.
-        for k in 0..frontier.len {
-            let id = frontier[k];
-            let candidate = candidates[k];
-            active[id] = false;
-            if !equal(candidate,values[id]) {
-                values[id] = candidate;
-                for user in id + 1..nodes.len {
-                    if nodes[user].derived && uses(nodes[user],id) {
-                        active[user] = true;
-                    }
-                }
-            }
-        }
-        evaluations += frontier.len;
-    }
-    return evaluations;
-}
-// Evaluate only the ancestor-closed subgraph selected by `needed`.
-// Unrelated pending values and even unrelated overflowing definitions stay
-// unmaterialized. This is a legal subset schedule of the finite DOC kernel.
-fn stabilize_demanded(nodes: State[:], values: Value[:], active: bool[:],
-                      needed: bool[:]) -> i64 {
-    var evaluations = 0;
-    loop {
-        var blocked: bool[>..] = [];
-        var frontier: i64[>..] = [];
-        for i in 0..nodes.len {
-            var blocked_here = false;
-            if nodes[i].derived {
-                for k in 0..nodes[i].count {
-                    let premise = nodes[i].premise[k];
-                    if active[premise] || blocked[premise] {
-                        blocked_here = true;
+                        blocked_here=true;
                     }
                 }
             }
             blocked.push(blocked_here);
             if active[i] && needed[i] && !blocked_here {
-                if !nodes[i].derived { fail(); }
+                if !nodes[i].derived {fail();}
                 frontier.push(i);
             }
         }
-        if frontier.len == 0 {
-            for i in 0..nodes.len { if active[i] && needed[i] { fail(); } }
+        if frontier.len==0 {
+            for i in 0..nodes.len {
+                if active[i] && needed[i] {fail();}
+            }
             break;
         }
-        let candidates = evaluate_ready_frontier(nodes,values,frontier);
-        // Complete frontier candidate evaluation precedes publication.
+        let candidates=evaluate_ready_frontier(nodes,values,frontier);
+        // Evaluate the entire eligible frontier before any publication;
+        // exact equality cutoff and deterministic successor activation remain.
         for k in 0..frontier.len {
-            let id = frontier[k];
-            let candidate = candidates[k];
-            active[id] = false;
+            let id=frontier[k];
+            let candidate=candidates[k];
+            active[id]=false;
             if !equal(candidate,values[id]) {
-                values[id] = candidate;
-                for user in id + 1..nodes.len {
-                    if nodes[user].derived && needed[user] && uses(nodes[user],id) {
-                        active[user] = true;
+                values[id]=candidate;
+                for user in id+1..nodes.len {
+                    if nodes[user].derived && needed[user] &&
+                       uses(nodes[user],id) {
+                        active[user]=true;
                     }
                 }
             }
         }
-        evaluations += frontier.len;
+        evaluations+=frontier.len;
     }
     return evaluations;
+}
+fn stabilize(nodes: State[:],values: Value[:],active: bool[:]) -> i64 {
+    var all:bool[>..]=[];
+    all.resize(nodes.len,true);
+    return stabilize_masked(nodes,values,active,all);
+}
+// Demand only the ancestor-closed requested subgraph. Other pending
+// definitions and their failures remain out of this publication.
+fn stabilize_demanded(nodes: State[:],values: Value[:],active: bool[:],
+                      needed: bool[:]) -> i64 {
+    return stabilize_masked(nodes,values,active,needed);
 }
 
 fn show(nodes: State[:], values: Value[:]) {
@@ -1229,163 +1259,3 @@ fn run_recurrence(nodes: State[:], values: Value[:], active: bool[:],
     }
 }
 
-// Independent owned snapshot proof using Goose's native share-nothing thread
-// arguments. Each worker copies the stable valuation and both immutable
-// allocation pools before the parent mutates/reclaims its current values.
-// A ready/go handshake forces the readers to remain live over compaction.
-struct SnapshotReady { worker:i64 }
-struct SnapshotGo { proceed:bool }
-struct SnapshotReply { worker:i64, original_digest:i64 }
-fn snapshot_digest(values:Value[:],nats:u8[:],ints:i64[:],texts:u8[:]) -> i64 {
-    var digest=0;
-    for value in values {
-        if value.kind==0 {
-            digest+=if value.flag { 1 } else { 0 };
-        } else if value.kind==1 {
-            digest+=value.number;
-        } else if value.kind==2 {
-            for i in 0..value.length {
-                digest+=nats[value.start+i] as i64;
-            }
-        } else if value.kind==3 {
-            for i in 0..value.length {
-                digest+=ints[value.start+i];
-            }
-        } else if value.kind==4 {
-            if value.flag { digest+=value.number; }
-        } else if value.kind==5 {
-            for i in 0..value.length {
-                digest+=texts[value.start+i] as i64;
-            }
-        }
-    }
-    return digest;
-}
-thread_fn snapshot_reader(worker:i64,
-                          owned_values:Value[>..],
-                          owned_nat:u8[>..],
-                          owned_ints:i64[>..],
-                          owned_text:u8[>..]) {
-    qput(SnapshotReady { worker:worker });
-    let proceed=qget<SnapshotGo>();
-    if !proceed.proceed { fail(); }
-    let digest=snapshot_digest(owned_values,owned_nat,owned_ints,owned_text);
-    qput(SnapshotReply { worker:worker, original_digest:digest });
-}
-// Native Goose graph-replacement proof: four concurrent owned readers retain
-// all types of prior immutable values while a replacement is fully evaluated
-// and the parent reclaims/compacts nat, ints and UTF-8 pools. This witness is
-// intentionally a scoped, single-authority graph-version operation, not an
-// unproven distributed reclamation algorithm.
-fn replace_pinned_proof(nodes:State[:],values:Value[:],
-                        active:bool[:],path:u8[:]) {
-    let _current=stabilize(nodes,values,active);
-    let original=snapshot_digest(values,nat_pool,ints_pool,text_pool);
-    print("DOC_GRAPH_GENERATION: 0");
-    show(nodes,values);
-
-    var owned_values:Value[>..]=[];
-    owned_values.append(values);
-    var ids:i64[>..]=[];
-    for worker in 0..4 {
-        ids.push(thread_spawn(snapshot_reader,worker,
-            copy(owned_values),copy(nat_pool),copy(ints_pool),copy(text_pool)));
-    }
-    var ready:bool[>..]=[];
-    ready.resize(4,false);
-    for i in 0..4 {
-        let response=qget<SnapshotReady>();
-        if response.worker<0 || response.worker>=4 ||
-           ready[response.worker] { fail(); }
-        ready[response.worker]=true;
-    }
-
-    // Validate and evaluate the replacement in private mutable candidate
-    // storage. Current published values are never modified during this step.
-    var incoming:u8[>..]=[];
-    if !read_file(path,incoming) { fail(); }
-    var pending_nodes:State[>..]=[];
-    var pending_values:Value[>..]=[];
-    var pending_active:bool[>..]=[];
-    load(incoming,pending_nodes,pending_values,pending_active,path);
-    for i in 0..pending_nodes.len {
-        if !pending_nodes[i].derived {
-            let old=lookup(nodes,pending_nodes[i].name);
-            if old>=0 && !nodes[old].derived &&
-               nodes[old].kind==pending_nodes[i].kind {
-                pending_values[i]=values[old];
-            }
-        }
-    }
-    let _stable=stabilize(pending_nodes,pending_values,pending_active);
-    // Copy all candidate-owned roots before recycling the parent pool.
-    // Detached reader copies are held independently until their barriers.
-    var defaults:Value[>..]=[];
-    var facts:EpochFact[>..]=[];
-    compact_nat_roots(pending_values,defaults,facts);
-
-    for i in 0..4 { qput(SnapshotGo {proceed:true}); }
-    var verified:bool[>..]=[];
-    verified.resize(4,false);
-    for i in 0..4 {
-        let reply=qget<SnapshotReply>();
-        if reply.worker<0 || reply.worker>=4 ||
-           verified[reply.worker] ||
-           reply.original_digest!=original { fail(); }
-        verified[reply.worker]=true;
-    }
-    for id in ids {
-        if !thread_wait(id) { fail(); }
-    }
-    print("DOC_GOOSE_GRAPH_PINNED_REPLACE_PASS: 4 readers, full pool compaction");
-    print("DOC_GRAPH_GENERATION: 1");
-    show(pending_nodes,pending_values);
-}
-
-fn snapshot_proof(nodes:State[:],values:Value[:],active:bool[:]) {
-    let _initial=stabilize(nodes,values,active);
-    let original=snapshot_digest(values,nat_pool,ints_pool,text_pool);
-    // Goose copy() consumes an owned value, not a borrowed slice.
-    // Take an explicit owned root first and deep-copy it per worker.
-    var owned_values:Value[>..]=[];
-    owned_values.append(values);
-    var ids:i64[>..]=[];
-    for worker in 0..4 {
-        ids.push(thread_spawn(snapshot_reader,worker,
-                              copy(owned_values),copy(nat_pool),copy(ints_pool),
-                              copy(text_pool)));
-    }
-    var ready:bool[>..]=[];ready.resize(4,false);
-    for i in 0..4 {
-        let response=qget<SnapshotReady>();
-        if response.worker < 0 || response.worker >= 4 ||
-           ready[response.worker] { fail(); }
-        ready[response.worker]=true;
-    }
-    let nat_source=lookup(nodes,"n");
-    let list_source=lookup(nodes,"items");
-    if nat_source < 0 || list_source < 0 ||
-       nodes[nat_source].kind != 2 || nodes[list_source].kind != 3 ||
-       nodes[nat_source].derived || nodes[list_source].derived { fail(); }
-    update(nodes,values,active,nat_source,
-           nat_parse("12345678901234567890123456789012345678901234567890"));
-    update(nodes,values,active,list_source,ints_parse("[11,13,17,19]"));
-    let _updated=stabilize(nodes,values,active);
-    var empty_defaults:Value[>..]=[];
-    var empty_facts:EpochFact[>..]=[];
-    compact_nat_roots(values,empty_defaults,empty_facts);
-    for i in 0..4 {qput(SnapshotGo {proceed:true});}
-    var verified:bool[>..]=[];verified.resize(4,false);
-    for i in 0..4 {
-        let result=qget<SnapshotReply>();
-        if result.worker < 0 || result.worker >= 4 ||
-           verified[result.worker] ||
-           result.original_digest != original { fail(); }
-        verified[result.worker]=true;
-    }
-    for id in ids {
-        if !thread_wait(id) { fail(); }
-    }
-    print("DOC_GOOSE_PINNED_SNAPSHOT_PASS: 4 owned readers across pool compaction");
-    show(nodes,values);
-}

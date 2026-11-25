@@ -1,0 +1,11 @@
+# Freestanding proof: derive a byte, write it to an authorized memory region,
+# read it back and deliver it to an explicitly granted target I/O primitive.
+native region scratch: u8 plain
+native import x86_out8(u32,u8) -> bool8
+source index: int = 0
+source seed: int = 64
+source port: int = 233
+derive byte: int (seed) = add(seed,1)
+native store written: bool (index,byte) = scratch(index,byte)
+native load read_back: int (index,written) = scratch(index)
+native call emitted: bool (port,read_back) = x86_out8(port,read_back)

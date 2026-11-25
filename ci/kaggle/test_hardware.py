@@ -1,43 +1,54 @@
-"""Offline NVIDIA Vulkan adapter certification tests; never uses a GPU."""
+"""WebGPU-only physical device evidence tests: no platform graphics API."""
 import ast
 from pathlib import Path
 import re
 import unittest
 
-template = Path(__file__).with_name("doc_kaggle_gpu.py").read_text()
-tree = ast.parse(template.replace("__DOC_KAGGLE_RUN_SPEC__", "{}"))
-fn = next(node for node in tree.body if isinstance(node, ast.FunctionDef)
-          and node.name == "all_vulkan_adapters_are_physical_nvidia")
-namespace = {"re": re}
-exec(compile(ast.Module(body=[fn], type_ignores=[]), "<gpu-device-check>", "exec"),
-     namespace)
-valid = namespace["all_vulkan_adapters_are_physical_nvidia"]
+template=Path(__file__).with_name("doc_kaggle_gpu.py").read_text()
+tree=ast.parse(template.replace("__DOC_KAGGLE_RUN_SPEC__","{}"))
+candidate=next(node for node in tree.body
+    if isinstance(node,ast.FunctionDef)
+    and node.name=="selected_physical_webgpu_adapter")
+namespace={"re":re}
+exec(compile(ast.Module(body=[candidate],type_ignores=[]),
+             "<webgpu-device-classification>","exec"),namespace)
+check=namespace["selected_physical_webgpu_adapter"]
 
-def device(index, vendor, kind):
-    return ("GPU{}:\n".format(index) +
-            "  vendorID = {}\n".format(vendor) +
-            "  deviceType = {}\n".format(kind))
+def record(name="PhysicalAdapter",kind="DiscreteGpu",vendor=4318,device=1):
+    return (f"DOC_GPU_SELECTED_DEVICE: name={name} type={kind} "
+            f"vendor={vendor} device={device}\n")
 
-class PhysicalNvidiaVulkanTest(unittest.TestCase):
-    def test_real_nvidia_discrete(self):
-        self.assertTrue(valid("Vulkan Instance Version: 1.3\n" +
-            device(0, "0x10de", "PHYSICAL_DEVICE_TYPE_DISCRETE_GPU")))
-    def test_two_nvidia_cards(self):
-        self.assertTrue(valid(device(0, "0x10de", "PHYSICAL_DEVICE_TYPE_DISCRETE_GPU") +
-                              device(1, "0x10DE", "PHYSICAL_DEVICE_TYPE_DISCRETE_GPU")))
-    def test_missing_device_or_vendor(self):
-        self.assertFalse(valid(""))
-        self.assertFalse(valid(device(0, "0x10005", "PHYSICAL_DEVICE_TYPE_DISCRETE_GPU")))
-        self.assertFalse(valid("GPU0:\n  deviceType = PHYSICAL_DEVICE_TYPE_DISCRETE_GPU\n"))
-    def test_software_only_or_mixed_software_adapter(self):
-        nvidia = device(0, "0x10de", "PHYSICAL_DEVICE_TYPE_DISCRETE_GPU")
-        software = device(1, "0x10005", "PHYSICAL_DEVICE_TYPE_CPU")
-        self.assertFalse(valid(software))
-        self.assertFalse(valid(nvidia + software))
-    def test_disallow_spoofed_cross_device_identity(self):
-        amd = device(0, "0x1002", "PHYSICAL_DEVICE_TYPE_DISCRETE_GPU")
-        nvidia_software = device(1, "0x10de", "PHYSICAL_DEVICE_TYPE_CPU")
-        self.assertFalse(valid(amd + nvidia_software))
+class WebGpuDeviceAdmission(unittest.TestCase):
+    def test_discrete_and_integrated_adapters_are_admitted(self):
+        self.assertEqual(check(record()),("PhysicalAdapter","DiscreteGpu","4318","1"))
+        self.assertEqual(check(record("Integrated","IntegratedGpu",32902,2)),
+                         ("Integrated","IntegratedGpu","32902","2"))
+    def test_cpu_or_unknown_device_cannot_certify_hardware(self):
+        for kind in ("Cpu","Other","VirtualGpu",""):
+            with self.subTest(kind=kind),self.assertRaises(RuntimeError):
+                check(record(kind=kind))
+        with self.assertRaises(RuntimeError):
+            check("")
+    def test_reject_software_marker_even_with_physical_device_record(self):
+        with self.assertRaises(RuntimeError):
+            check(record()+"DOC_GPU_SOFTWARE_TEST_ONLY: test adapter\n")
+    def test_reject_conflicting_multiple_device_records(self):
+        with self.assertRaises(RuntimeError):
+            check(record()+record("AnotherGpu","IntegratedGpu",32902,3))
+    def test_reject_driver_vendor_or_request_only_claims(self):
+        for candidate in (
+            "vendor=4318 device=1 kind=DiscreteGpu",
+            "GPU requested: NvidiaTeslaT4",
+            "deviceName: physical GPU",
+            "DOC_GPU_SELECTED_DEVICE: name=Device type=Cpu vendor=4318 device=1",
+        ):
+            with self.subTest(candidate=candidate),self.assertRaises(RuntimeError):
+                check(candidate)
+    def test_no_native_api_probe_is_used(self):
+        source=Path(__file__).with_name("doc_kaggle_gpu.py").read_text()
+        for forbidden in ("vulkaninfo","VK_DRIVER_FILES","VK_ICD_FILENAMES",
+                          "WGPU_BACKEND","all_vulkan_adapters_are_physical_nvidia"):
+            self.assertNotIn(forbidden,source)
 
-if __name__ == "__main__":
+if __name__=="__main__":
     unittest.main()

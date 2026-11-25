@@ -1,0 +1,14 @@
+# Privileged allocator-policy proof over a caller-authorized arena.
+# Ordinary DOC values do not expose these offsets or require manual memory.
+native region arena: u8 plain
+source used: int = 0
+source requested: int = 3
+source alignment: int = 4
+source marker: int = 7
+native extent capacity: int () = arena()
+derive valid: bool (used,requested,alignment) = if(le(0,used),if(lt(0,requested),if(lt(0,alignment),eq(bit_and(alignment,sub(alignment,1)),0),false),false),false)
+derive start: int (valid,used,alignment) = if(valid,mul(quot(add(used,sub(alignment,1)),alignment),alignment),-1)
+derive fits: bool (start,capacity,requested) = if(le(0,start),if(le(start,capacity),le(requested,sub(capacity,start)),false),false)
+derive last: int (fits,start,requested) = if(fits,sub(add(start,requested),1),-1)
+native store marked: bool (last,marker,capacity) = arena(last,marker)
+derive next: int (marked,start,requested) = add(start,requested)

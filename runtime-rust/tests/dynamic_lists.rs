@@ -112,3 +112,32 @@ fn long_dynamic_list_carry_reconstructs_evicted_epochs_without_mutating_readers(
     // Replaying an evicted epoch must not overwrite the live generation.
     assert_eq!(recurrence.value(total),Some(Value::Int(items.iter().sum())));
 }
+
+#[test]
+fn checked_slice_is_immutable_and_bounds_checked() {
+    let g=Graph::parse("source xs: ints = [4,9,-1,7]\nsource start: int = 1\nsource count: int = 2\nfn part(a,b,c) = slice(a,b,c)\nderive selected: ints (xs,start,count) = part(xs,start,count)\n").unwrap();
+    let ir=doc_runtime::typed_ir::emit_typed_ir_v1(&g,&[]).unwrap();
+    assert!(ir.contains("slice(arg(0),arg(1),arg(2))"));
+    let xs=g.id("xs").unwrap();let start=g.id("start").unwrap();let count=g.id("count").unwrap();let selected=g.id("selected").unwrap();
+    for workers in [1,2,4,8] {
+        let mut r=Runtime::new(g.clone(),workers,Cutoff::Exact);
+        r.stabilize().unwrap();
+        let retained=r.snapshot();
+        assert_eq!(retained[selected],Some(Value::Ints(vec![9,-1])));
+        for (values,offset,length) in [(vec![8,3],2,0),(vec![],0,0),(vec![1,2,3,4,5],0,5),(vec![-1,7],1,1)] {
+            let expected=values[offset as usize..(offset+length) as usize].to_vec();
+            r.update(&[(xs,Value::Ints(values)),(start,Value::Int(offset)),(count,Value::Int(length))]).unwrap();
+            r.stabilize().unwrap();assert_eq!(r.value(selected),Some(Value::Ints(expected)));
+        }
+        for (offset,length) in [(-1,0),(0,-1),(3,0),(2,1),(i64::MAX,i64::MAX)] {
+            r.update(&[(start,Value::Int(offset)),(count,Value::Int(length))]).unwrap();
+            let before=r.snapshot();
+            assert!(r.stabilize().is_err());
+            assert_eq!(r.snapshot(),before);
+        }
+        assert_eq!(retained[selected],Some(Value::Ints(vec![9,-1])));
+    }
+    for expression in ["slice(xs,true,1)","slice(xs,0,true)","slice(1,0,1)"] {
+        assert!(Graph::parse(&format!("source xs: ints = [1]\nderive result: ints (xs) = {expression}\n")).is_err());
+    }
+}

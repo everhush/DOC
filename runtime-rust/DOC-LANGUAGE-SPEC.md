@@ -103,27 +103,28 @@ parallelism, or guaranteed speedup. Snapshot retention is intentional
 and can increase memory; obsolete values may be evicted only when
 authoritative reconstruction/pinning obligations remain satisfied.
 
-## WebGPU and portability
+## Linux GPU execution status
 
-The implemented eligible GPU subset comprises Boolean maps, staged
-dependencies, dependent reduction and pure signed-integer comparisons
-after explicit host i64-to-i32 admission checks. Arbitrary DOC
-functions, effects, recursive computations, natural arithmetic, lists,
-text and all device-loss paths do NOT have general WGSL lowering.
-Both native frontends emit WGSL independently; currently **Rust wgpu
-dispatches both Rust- and Goose-generated shaders**. Goose does not
-yet own a WebGPU device host.
+The initial supported host target is Linux x86_64. The Rust `wgpu`
+backend has strict selected-device evaluation for eligible finite, pure
+Boolean-derived DOC dependency graphs when built with `--features webgpu`.
+It also has bounded Boolean and signed-comparison GPU regression programs.
+Source `int` values must fit i32 on the eligible GPU path. Unsupported
+operations, effects, recurrence, nonportable values and device failures
+must fail closed, without silent CPU execution.
 
-Mesa llvmpipe is software Vulkan compute, not a physical hardware GPU.
-An opt-in self-hosted native hardware GPU job exists but has not run.
-Browser WebGPU and real device-loss recovery remain unverified.
+The independent native Goose SDL3 `gfx` Vulkan path validates bounded
+map/reduction kernels and direct Rust/Goose GPU-result parity; its
+general DOC source CLI still lacks a comparable general-source GPU
+executor. Both runtimes require broader semantic and device-failure
+coverage before general-purpose GPU production acceptance.
 
-Native Linux releases are experimental compiler-runner artifacts with
-extract-and-execute checks. Other operating systems, reproducible release
-builds, ABI stability and production deployment are open. The
-DOC-owned interpreter implementation is Rust or Goose, no DOC-owned C
-interpreter. Upstream Goose compilers/libraries have transitive native
-C/C++ components; zero-C final binary is NOT an established property.
+Linux Mesa software Vulkan is a correctness oracle, not evidence of
+physical hardware acceleration. Kaggle native Vulkan physical-GPU
+verification and exact-SHA artifact provenance remain independent gates.
+Native Linux release binaries are experimental build artifacts, not
+production-approved releases. Runtime ownership remains in Rust and
+Goose; upstream native toolchains may have C/C++ dependencies.
 
 ## Nonclaim and evidence rule
 

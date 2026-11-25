@@ -1,4 +1,11 @@
-# DOC paper-ordered requirement trace — Rust and Goose
+# DOC paper-ordered requirement trace
+
+## Active scope reconciliation — 2026-11-25
+
+The following legacy dual-runtime tables and historical explicit-only GPU descriptions are retained for provenance and must not be read as the current acceptance record. The active reference is Rust on rtu0/doc2/main, with generated WGSL, automatic CPU/GPU placement in admitted host entry points and strict explicitly selected GPU execution; see [BACKEND-EXECUTION-CONTRACT.md](BACKEND-EXECUTION-CONTRACT.md). Goose is archived, not an acceptance requirement. #24 closed on 11e22c484a35a183ed9f77a2125afa5f22746c41; #15 reviews that combined foundation before the independent #11 handoff. The normative paper and original C++20 empirical results are unchanged. See [current #15 conformance ledger](docs/PRE-SELF-HOSTING-AUDIT.md) for current source-linked decisions, gaps and explicit production obligations. No claim of universal conformance or inherited empirical speedup.
+
+---
+
 
 **Backend decision (2026-11-22):** Execution hardware is a host policy, not a new DOC model primitive. General-purpose CLI CPU default, strict `--backend=cpu|gpu`, no `auto` or implicit fallback. The general-purpose GPU target remains **NOT IMPLEMENTED** in both native CLIs; existing Rust wgpu and Goose SDL3 operation-specific GPU paths are bounded evidence only. A same-source selected-CPU versus selected-GPU general-purpose execution gate is **OPEN**. See [BACKEND-EXECUTION-CONTRACT.md](BACKEND-EXECUTION-CONTRACT.md) and the final local Issue #2.
 

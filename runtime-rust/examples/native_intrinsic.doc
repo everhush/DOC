@@ -1,0 +1,9 @@
+# Source-declared target intrinsic profile.
+# Build with doc-compile in --object mode and grant no external symbols.
+native intrinsic bit_count(i64) -> i64 = popcount
+native intrinsic leading(i64) -> i64 = leading_zeros
+native intrinsic trailing(i64) -> i64 = trailing_zeros
+source input: int = 0
+native call bits: int (input) = bit_count(input)
+native call lead: int (input,bits) = leading(input)
+native call tail: int (input,lead) = trailing(input)

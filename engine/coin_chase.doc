@@ -1,0 +1,48 @@
+# Coin Chase: one directly authored DOC game, evaluated by the Rust DOC language.
+# The host supplies ONLY the ordered action fact and displays stable DOC values.
+# Action: 0 idle, 1 up, 2 down, 3 left, 4 right, 5 pause, 6 restart.
+# All coordinates, rewards, wall collisions and terminal conditions are DOC.
+import engine_math.doc
+# Explicit, startup-only typed scene asset read, not a hidden pure effect.
+effect level: ints = read("levels/coin_chase.txt")
+source frame: int = -1
+source player_x: int = 1
+source player_y: int = 1
+source coin_x: int = 4
+source coin_y: int = 2
+source score: int = 0
+source paused: bool = false
+source won: bool = false
+source action: int = 0
+source animation_phase: int = 0
+# Scene dimensions, obstacle placement and target are derived from the
+# immutable typed level data fact; not hard-coded in the Rust window host.
+derive width: int (level) = get(level,0)
+derive height: int (level) = get(level,1)
+derive wall_x: int (level) = get(level,2)
+derive wall_y: int (level) = get(level,3)
+derive goal: int (level) = get(level,4)
+
+derive next_frame: int (frame) = add(frame,1)
+derive next_paused: bool (paused,action) = if(eq(action,6),false,if(eq(action,5),eq(paused,false),paused))
+derive active: bool (paused,won,action) = if(eq(action,5),false,if(eq(action,6),false,if(paused,false,if(won,false,true))))
+derive dx: int (action) = if(eq(action,4),1,if(eq(action,3),-1,0))
+derive dy: int (action) = if(eq(action,2),1,if(eq(action,1),-1,0))
+derive candidate_x: int (player_x,dx) = add(player_x,dx)
+derive candidate_y: int (player_y,dy) = add(player_y,dy)
+derive bounded_x: int (candidate_x,width) = clamp(candidate_x,0,sub(width,1))
+derive bounded_y: int (candidate_y,height) = clamp(candidate_y,0,sub(height,1))
+derive wall_hit: bool (bounded_x,bounded_y,wall_x,wall_y) = same_cell(bounded_x,bounded_y,wall_x,wall_y)
+derive next_x: int (action,active,wall_hit,player_x,bounded_x) = if(eq(action,6),1,if(active,if(wall_hit,player_x,bounded_x),player_x))
+derive next_y: int (action,active,wall_hit,player_y,bounded_y) = if(eq(action,6),1,if(active,if(wall_hit,player_y,bounded_y),player_y))
+derive collected: bool (active,next_x,next_y,coin_x,coin_y) = if(active,same_cell(next_x,next_y,coin_x,coin_y),false)
+derive next_score: int (action,collected,score) = if(eq(action,6),0,if(collected,add(score,1),score))
+derive next_won: bool (action,won,next_score,goal) = if(eq(action,6),false,if(le(goal,next_score),true,won))
+derive next_coin_x: int (action,collected,coin_x) = if(eq(action,6),4,if(collected,6,coin_x))
+derive next_coin_y: int (action,collected,coin_y) = if(eq(action,6),2,if(collected,4,coin_y))
+# Explicit DOC-authored audio event. The host may emit an optional real WAV effect
+# ONLY after this stable epoch; no audio device or sound generation runs in pure DOC.
+derive audio_hz: int (collected) = if(collected,880,0)
+derive audio_ms: int (collected) = if(collected,120,0)
+# DOC-authored looping presentation phase. Pausing freezes it; restart resets it.
+derive next_animation_phase: int (animation_phase,next_paused,action) = if(eq(action,6),0,if(next_paused,animation_phase,if(lt(animation_phase,15),add(animation_phase,1),0)))

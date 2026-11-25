@@ -1,0 +1,7 @@
+source a: int = 4
+source b: int = 7
+source gate: bool = true
+derive sum: int (a,b) = add(a,b)
+derive twice: int (sum) = mul(sum,2)
+derive diff: int (twice,a) = sub(twice,a)
+derive chosen: bool (gate,diff,b) = if(gate,lt(b,diff),eq(diff,b))

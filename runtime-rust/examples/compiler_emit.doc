@@ -1,0 +1,16 @@
+# A small compiler-relevant postfix language, not a VM or a DOC interpreter.
+# Single ASCII digit operands, + and *, optional spaces.
+# Input-dependent syntax/stack-effect checking and textual instruction emission.
+# State is a tagged-by-schema int collection: cursor, depth, emitted ASCII bytes.
+fn classify(c) = if(eq(c,32),0,if(if(le(48,c),le(c,57),false),1,if(eq(c,43),2,if(eq(c,42),3,-1))))
+fn bad(s) = append(s,get(empty(),0))
+fn push(s,c) = append(append(append(replace_at(s,1,add(get(s,1),1)),80),c),59)
+fn binary(s,c) = if(lt(get(s,1),2),bad(s),append(append(replace_at(s,1,sub(get(s,1),1)),c),59))
+fn step(s,c,k) = replace_at(if(eq(k,0),s,if(eq(k,1),push(s,c),if(eq(k,2),binary(s,65),if(eq(k,3),binary(s,77),bad(s))))),0,add(get(s,0),1))
+source input: text = "12+3*"
+derive bytes: ints (input) = utf8_bytes(input)
+derive classes: ints (bytes) = map_ints(bytes,c,classify(c))
+derive seed: ints () = append(append(empty(),0),0)
+derive scan: ints (seed,bytes,classes) = recur(seed,s,eq(get(s,0),len(bytes)),step(s,get(bytes,get(s,0)),get(classes,get(s,0))))
+derive encoded: ints (scan) = if(eq(get(scan,1),1),slice(scan,2,sub(len(scan),2)),bad(scan))
+derive code: text (encoded) = utf8_text(encoded)

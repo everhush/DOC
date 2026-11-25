@@ -1,0 +1,11 @@
+# Nonnegative acquisition results are owned until this invocation exits.
+native import acquire(i32) -> i32
+native cleanup first = release_handle
+native cleanup second = release_handle
+source argument: int = 7
+source enabled: bool = true
+source divisor: int = 1
+derive fallback: int () = 99
+native call first: int (argument,enabled,fallback) = acquire(argument) when enabled else fallback
+native call second: int (argument,first) = acquire(argument)
+derive quotient: int (second,divisor) = quot(second,divisor)

@@ -20,7 +20,7 @@ fn only_completed_typed_values_are_exported_to_confined_files() {
         assert_eq!(fs::read_to_string(root.join(output)).unwrap(),expected);
     }
     for invalid in ["../escape.txt","data/../escape.txt","./data/file.txt",
-                    "/etc/out","C:/windows.txt","data\\file.txt"] {
+                    "/etc/out","C:/blocked.txt","data\\file.txt"] {
         assert!(write_doc_output(path,invalid,&Value::Int(9)).is_err());
     }
     fs::remove_dir_all(&root).unwrap();

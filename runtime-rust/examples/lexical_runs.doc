@@ -1,0 +1,18 @@
+# Compiler-relevant lexical runs. This is an ASCII subset, not a full lexer.
+# Each output record is (tag, byte offset, byte length), with tags:
+# 0 space, 1 letter/underscore, 2 digit, 3 plus, 4 equals.
+# Payloads remain in the original UTF-8 byte buffer; no pointers or handles.
+# Classify independent bytes first, then derive contiguous runs causally.
+fn in_range(c,lo,hi) = if(le(lo,c),le(c,hi),false)
+fn letter(c) = if(in_range(c,65,90),true,if(in_range(c,97,122),true,eq(c,95)))
+fn classify(c) = if(eq(c,32),0,if(letter(c),1,if(in_range(c,48,57),2,if(eq(c,43),3,if(eq(c,61),4,-1)))))
+fn new_run(s,k) = append(append(append(s,k),get(s,0)),1)
+fn extend_run(s) = replace_at(s,sub(len(s),1),add(get(s,sub(len(s),1)),1))
+fn next_run(s,k) = if(eq(k,-1),append(s,get(empty(),0)),replace_at(replace_at(if(eq(k,get(s,1)),extend_run(s),new_run(s,k)),0,add(get(s,0),1)),1,k))
+source input: text = "abc = 12+z"
+derive bytes: ints (input) = utf8_bytes(input)
+derive classes: ints (bytes) = map_ints(bytes,c,classify(c))
+derive seed: ints () = append(append(empty(),0),-2)
+derive scan: ints (seed,classes) = recur(seed,s,eq(get(s,0),len(classes)),next_run(s,get(classes,get(s,0))))
+derive tokens: ints (scan) = tail(tail(scan))
+derive count: int (tokens) = quot(len(tokens),3)

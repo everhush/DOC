@@ -1,0 +1,7 @@
+# Input-dependent decimal token decoding from actual UTF-8 source bytes.
+source input: text = "123"
+source seed: ints = [0,0]
+derive bytes: ints (input) = utf8_bytes(input)
+derive token: ints (seed,bytes) = recur(seed,pair,eq(get(pair,0),len(bytes)),append(append(empty(),add(get(pair,0),1)),if(le(48,get(bytes,get(pair,0))),if(le(get(bytes,get(pair,0)),57),add(mul(get(pair,1),10),sub(get(bytes,get(pair,0)),48)),get(empty(),0)),get(empty(),0))))
+derive number: int (token) = get(token,1)
+derive output: text (bytes) = utf8_text(bytes)

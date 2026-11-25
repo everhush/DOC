@@ -1,63 +1,90 @@
-# DOC Kaggle hardware testing
+# Native Rust physical WebGPU on Kaggle — validated host-only repair
 
-DOC's Kaggle runner follows **the Kaggle account's own GPU quota, available
-accelerators, and platform session rules**. The repository adds **no arbitrary
-weekly submission cap, quota reserve, maximum GPU session duration, mandatory
-wait between tests, ban on reruns, deduplication gate, or workflow concurrency
-limit**. Exact repeats are allowed.
+The NVIDIA Tesla T4 graphics userspace package was missing in the Kaggle
+notebook image even though NVIDIA CUDA/device nodes were present.
+[An isolated exact-SHA experiment](https://github.com/rtu0/DOC/actions/runs/45116122612)
+proved that installing `libnvidia-gl-<actual NVIDIA driver major>` and
+`libvulkan1` into the **temporary Kaggle notebook host** exposes the
+physical T4 through Rust `wgpu`. 42/42 signed GPU episodes and 62/62 authored
+DOC CPU/GPU source parity cases passed at pinned native source
+`be76df5b59273fde3394cbd6bb9e0eb05325684d`. The precise driver
+branch is discovered per session; never hard-code the Colab/Kaggle 580
+version, set native graphics API overrides, or perform driver selection
+in DOC. This host provision is OS infrastructure only, not a new
+GPU backend or a DOC runtime dependency.
 
-## Architecture and usage
+All physical admissions require actual `DiscreteGpu`/`IntegratedGpu`
+from `wgpu`, genuine WGSL dispatch, typed readback and exact-commit
+source comparisons. Missing GPU quota/packages/device results are
+INFRA_BLOCKED/failed CI, never a fake green physical test. Report raw
+logs and benchmark regressions independently of Linux software-adapter
+checks. Free Kaggle quota is not guaranteed.
 
-The normal GitHub Actions workflow continues native Rust and Goose CPU tests,
-software-Vulkan (Mesa) validation, and cross-runtime parity without consuming
-Kaggle GPU hours. The separate `.github/workflows/doc-kaggle-gpu.yml` runs
-after successful trusted branch validation and can also be started manually.
-The workflow submits a private Kaggle GPU notebook, using source and native
-Rust `wgpu` and Goose SDL3 binaries built by the successful, exact-SHA CPU CI.
-It checks the real remaining GPU balance through `kaggle quota --format json`
-and defers to Kaggle's own quota enforcement; only zero/unknown balance blocks
-submission. It does not impose DOC-side run-count or time limits.
+---
 
-The private notebook must confirm a **physical Vulkan GPU** (CUDA presence
-alone is insufficient) and execute the 77 Goose GPU/CPU oracle checks and
-42 independent Rust/Goose GPU-result parity cases. Native timing evidence
-includes startup, device/pipeline initialization, dispatch and readback, and
-must never be represented as isolated kernel latency or proof of GPU speedup.
-The notebook now requires each Vulkan adapter exposed by its selected
-NVIDIA ICD to have vendor ID `0x10de` and a physical integrated/discrete GPU
-device type. A visible CUDA device or a mixed CPU-software Vulkan inventory
-alone cannot certify native Rust/Goose GPU parity. Both the notebook and
-the GitHub-side evidence verifier fail closed on incompatible adapter evidence.
+# DOC Kaggle Rust WebGPU hardware tests
 
-Failing hardware access or mismatching results are correctly reported as
-blocked/failed, not CPU-fallback GPU success. Metal, Direct3D and TPU require
-separate platforms.
+**Only Rust `wgpu` and WGSL are active.** The old Goose/SDL3 compute
+implementation is preserved as deprecated source, not a release dependency.
+No DOC code selects a native graphics API or edits a driver configuration.
 
-## Credentials
+## Exact-SHA physical validation
 
-Use secret `KAGGLE_DOC_1` on the secondary repository; do not put it in any
-notebook, log, source file or dataset. A raw Kaggle API token can use repository
-variable `DOC_KAGGLE_USERNAME` for the account owner; legacy Kaggle JSON
-credentials include username and key. Ensure the token can read, create and
-check private Kaggle datasets and notebooks. Private datasets carry the
-precompiled, cryptographically checked native build artifacts; no source
-compiler or DOC GPU-host language crossover runs in Kaggle.
+The trusted [Rust Linux CI](../../.github/workflows/doc-validation.yml)
+runs the active CPU and WebGPU software-adapter tests, then publishes native
+Rust binaries only after successful source/negative tests. The
+[Kaggle workflow](../../.github/workflows/doc-kaggle-gpu.yml) is triggered
+by a successful trusted push run or can be started explicitly. The
+dispatcher checks Kaggle's actual GPU quota and authenticated access.
 
-## Non-enforced best practices
+An exact-commit package includes the three Rust binaries
+(`webgpu_bool`, `webgpu_integer_eq`, `doc-rust-gpu`), vetted authored
+DOC source/oracle cases, SHA256 file manifest and the source CI run ID.
+No platform graphics tools or native graphics loader libraries are
+bundled. The notebook downloads a **private** archive, accepts a mounted
+input only on complete SHA256 match and validates each extracted file.
+GitHub authentication and Kaggle secrets are never uploaded.
 
-- Prefer experiments that yield new evidence, but repeat any workload when
-  reproducing results or investigating variance. No script blocks duplicates.
-- Check Kaggle's real remaining GPU hours and prioritize valuable tests; using
-  the whole available allowance is permitted.
-- Prefer reviewing a job's output before launching another when debugging
-  infrastructure errors, but there is no enforced waiting or run cap.
-- Keep verified SHA, device type, raw logs, GPU/CPU parity, sample counts and
-  conditions alongside benchmarking results.
-- Be aware that GitHub-hosted CI and Kaggle each have their **own platform
-  execution limits**. Those external limits are not DOC-created quotas.
+The WebGPU provider in the Rust runtime chooses its own native device.
+The source and CI **never** inspect native driver configuration or force
+a platform GPU API. The physical evidence is admitted only if actual Rust
+compute returns from a WebGPU `DiscreteGpu` or `IntegratedGpu`, and
+the same authored DOC program matches CPU and independent expected values.
+A software adapter, failed device, missing artifact, incomplete readback,
+invalid/partial state or mismatched SHA is a hard failure.
 
-Offline verification without Kaggle:
-`python3 -m unittest discover -s ci/kaggle -p 'test_*.py' -v`
+## Required evidence
 
-References: [Kaggle CLI kernel metadata](https://github.com/Kaggle/kaggle-cli/blob/main/docs/kernels_metadata.md),
-[Kaggle CLI authentication](https://github.com/Kaggle/kaggle-cli/blob/main/skills/references/auth.md).
+- **42** signed Rust GPU episodes across comparison operators and lane
+  widths; 1/multiworkgroup and staged operations must really run.
+- **62** selected `doc FILE.doc --backend=gpu` authored Boolean/integer
+  source cases, paired with `--backend=cpu` and independent oracles.
+- `report/rust-gpu-conformance.log` contains the actual signed case count.
+- `report/doc-selected-gpu-equivalence.log` contains case details and the
+  exact 62-case marker.
+- `report/webgpu-device-admission.log` contains 62 WebGPU physical-adapter
+  records and is revalidated by the GitHub-side verifier.
+- Whole-process shuffled benchmark distributions, cold/warm observations,
+  actual device/workgroup metadata and failure outputs are preserved.
+  Never turn a negative speedup or missing benchmark into a superiority claim.
+
+The account and Kaggle platform control GPU quota, timing and accelerator
+availability. DOC imposes **no artificial weekly run cap, quota reserve,
+session limit, automatic-stop threshold or limit on repeated valid trials**.
+Invalid credentials, absent input attachment and hardware failures must
+retain distinct diagnostics.
+
+## Private archive transport recovery
+
+Kaggle has previously preserved opaque `.bin` bytes while inconsistently
+listing `.tar.gz` files. The submitted file is named
+`doc-gpu-bundle.bin` but its bytes remain a gzip-compressed tar archive.
+The dispatcher verifies private downloaded archive bytes before submission.
+For a failed authenticated private status endpoint, the same account can
+use a verified private download as evidence; no status-only success can
+replace byte-level integrity. A missing notebook mount may trigger a
+narrow, exact-SHA/same-dataset retry. Other failures never count as passes.
+
+**Acceptance is still pending** until complete actual physical Rust WebGPU
+execution, exact-SHA CI success, benchmark and release evidence are recorded
+in [#9](https://github.com/imxade/DOC/issues/9).

@@ -1,0 +1,6 @@
+# Shared DOC source fixture: a typed conditional chooses a signed equality
+# or signed order; no GPU-specific operator or algorithm rewrite.
+source gate: bool = true
+source a: int = 0
+source b: int = 0
+derive chosen: bool (gate,a,b) = if(gate,eq(a,b),lt(a,b))

@@ -1,0 +1,23 @@
+# Independent DOC lexical frontend. Input is UTF-8 bytes; output triples are
+# (kind, byte offset, byte length). 1 identifier, 2 decimal, 3 quoted text,
+# 10 LF; punctuation uses its ASCII code. Comments and horizontal whitespace
+# have no tokens. Sign and arrow components are separate punctuation tokens.
+# Scanner state: cursor, mode, token start, followed by completed triples.
+# mode 0 idle, 1 identifier, 2 decimal, 3 string, 4 line comment.
+fn bad() = get(empty(),0)
+fn between(c,a,b) = if(le(a,c),le(c,b),false)
+fn letter(c) = if(between(c,65,90),true,if(between(c,97,122),true,eq(c,95)))
+fn digit(c) = between(c,48,57)
+fn identifier_byte(c) = if(letter(c),true,digit(c))
+fn horizontal(c) = if(eq(c,32),true,if(eq(c,9),true,eq(c,13)))
+fn punctuation(c) = if(eq(c,58),true,if(eq(c,61),true,if(between(c,40,41),true,if(eq(c,91),true,if(eq(c,93),true,if(between(c,43,47),true,eq(c,62)))))))
+fn mode(s,m) = replace_at(s,1,m)
+fn start(s,m) = replace_at(mode(s,m),2,get(s,0))
+fn token(s,k,o,n) = append(append(append(s,k),o),n)
+fn close_token(s) = mode(token(s,get(s,1),get(s,2),sub(get(s,0),get(s,2))),0)
+fn single(s,c) = token(s,c,get(s,0),1)
+fn idle(s,c) = if(horizontal(c),s,if(eq(c,35),mode(s,4),if(eq(c,34),start(s,3),if(letter(c),start(s,1),if(digit(c),start(s,2),if(if(eq(c,10),true,punctuation(c)),single(s,c),replace_at(s,0,bad())))))))
+fn quoted(s,c) = if(eq(c,34),mode(token(s,3,get(s,2),add(sub(get(s,0),get(s,2)),1)),0),if(if(eq(c,10),true,if(eq(c,13),true,if(eq(c,92),true,eq(c,35)))),replace_at(s,0,bad()),s))
+fn scan_byte(s,c) = if(eq(get(s,1),0),idle(s,c),if(eq(get(s,1),1),if(identifier_byte(c),s,idle(close_token(s),c)),if(eq(get(s,1),2),if(digit(c),s,idle(close_token(s),c)),if(eq(get(s,1),3),quoted(s,c),if(eq(c,10),single(mode(s,0),c),s)))))
+fn step(s,c) = replace_at(scan_byte(s,c),0,add(get(s,0),1))
+fn finish(s) = if(eq(get(s,1),3),replace_at(s,0,bad()),if(if(eq(get(s,1),1),true,eq(get(s,1),2)),close_token(s),s))

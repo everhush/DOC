@@ -1,8 +1,8 @@
-name: DOC Kaggle physical GPU parity
+name: DOC Kaggle Rust physical GPU validation
 
 # Kaggle owns GPU quota, accelerator availability and session duration.
 # No DOC-specific usage, repeat, concurrency or session-time restrictions.
-# The regular workflow retains CPU behavior and Mesa software Vulkan checks.
+# The normal workflow checks CPU semantics and WebGPU software-adapter execution.
 on:
   workflow_dispatch:
     inputs:
@@ -11,10 +11,6 @@ on:
         type: string
         required: true
         default: NvidiaTeslaT4
-  workflow_run:
-    workflows: ['DOC dual-runtime validation']
-    types: [completed]
-    branches: [feat/webgpu-dual-runtime-ci]
 
 permissions:
   contents: read
@@ -22,28 +18,19 @@ permissions:
 
 jobs:
   physical-doc-parity:
-    name: Kaggle Rust wgpu vs Goose SDL3 physical GPU
-    if: >-
-      ${{
-        (github.event_name == 'workflow_dispatch' &&
-         github.ref_name == 'feat/webgpu-dual-runtime-ci') ||
-        (github.event_name == 'workflow_run' &&
-         github.event.workflow_run.conclusion == 'success' &&
-         github.event.workflow_run.event == 'push' &&
-         github.event.workflow_run.head_repository.full_name == github.repository &&
-         github.event.workflow_run.head_branch == 'feat/webgpu-dual-runtime-ci')
-      }}
+    name: Kaggle Rust wgpu physical GPU and DOC source conformance
+    if: ${{ github.repository == 'x0796666-ui/doc2' && github.ref_name == 'main' }}
     runs-on: ubuntu-latest
     steps:
       - name: Check out the exact trusted DOC revision
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+          ref: ${{ github.sha }}
           persist-credentials: false
       - uses: actions/setup-python@v5
         with:
           python-version: '3.11'
-      - name: No-GPU quota, credential and evidence unit tests
+      - name: Offline Rust-only quota, credential and hardware policy tests
         run: python3 -m unittest discover -s ci/kaggle -p 'test_*.py' -v
       - name: Install official Kaggle CLI
         run: python3 -m pip install --disable-pip-version-check 'kaggle>=2.2.1,<3' 'six>=1.16'
@@ -61,7 +48,7 @@ jobs:
           python3 ci/kaggle/dispatch.py \
             --accelerator "$DOC_KAGGLE_ACCELERATOR" \
             --output kaggle-validation
-      - name: Retain non-secret quota, Vulkan, Goose, Rust and GPU parity logs
+      - name: Retain non-secret WebGPU adapter, Rust and GPU correctness logs
         if: always()
         uses: actions/upload-artifact@v4
         with:

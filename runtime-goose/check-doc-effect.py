@@ -32,7 +32,7 @@ tests={
     "absolute":"effect a: int = read(\"/tmp/no.txt\")",
     "parent":"effect a: int = read(\"../outside.txt\")",
     "dot":"effect a: int = read(\"./bad-bool.txt\")",
-    "drive":"effect a: int = read(\"C:/Windows/secret.txt\")",
+    "drive":"effect a: int = read(\"C:/private/secret.txt\")",
     "bad-bool":"effect a: bool = read(\"bad-bool.txt\")",
 }
 (root/"bad-bool.txt").write_text("yes\n")

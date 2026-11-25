@@ -1,0 +1,44 @@
+# DOC-authored bounded entity lifecycle: aligned ID/x/y component vectors.
+# action: 0 idle, 1 spawn, 2 despawn indexed entity, 3 move indexed entity.
+# Stable IDs are monotonic and never reused across a full despawn. A carried
+# high-watermark retains lifetime allocation authority. The host supplies facts, not
+# move/spawn/remove rules. This is not yet an archetype/prefab/hierarchy ECS.
+import entity_pool.doc
+source ids: ints = [1]
+source xs: ints = [1]
+source ys: ints = [1]
+source next_id: int = 2
+# The high-watermark is carried across epochs and survives empty worlds.
+# Runtime recurrence rejects external updates to carried sources.
+source issued_high_water: int = 1
+source action: int = 0
+source spawn_x: int = 0
+source spawn_y: int = 0
+source remove_slot: int = 0
+source move_slot: int = 0
+source move_x: int = 0
+source move_y: int = 0
+source max_entities: int = 3
+source query_slot: int = 0
+source query_id: int = 1
+derive count: int (ids) = len(ids)
+# Clamp the user-provided budget to the scene's hard maximum.
+derive safe_capacity: int (max_entities) = if(lt(max_entities,0),0,if(lt(3,max_entities),3,max_entities))
+# An empty live list is not evidence that an old handle may be reused.
+# Check the lifetime high-watermark as well as the current live tail.
+derive id_available: bool (ids,next_id,issued_high_water) = if(lt(issued_high_water,next_id),if(eq(len(ids),0),lt(0,next_id),lt(get(ids,sub(len(ids),1)),next_id)),false)
+derive spawn_allowed: bool (action,count,safe_capacity,id_available) = if(eq(action,1),if(id_available,lt(count,safe_capacity),false),false)
+derive remove_allowed: bool (action,count,remove_slot) = if(eq(action,2),if(lt(remove_slot,0),false,lt(remove_slot,count)),false)
+derive move_allowed: bool (action,count,move_slot) = if(eq(action,3),if(lt(move_slot,0),false,lt(move_slot,count)),false)
+derive next_ids: ints (ids,next_id,spawn_allowed,remove_allowed,remove_slot) = entity_remove(entity_insert(ids,next_id,spawn_allowed),remove_slot,remove_allowed)
+derive updated_xs: ints (xs,spawn_x,spawn_allowed,remove_allowed,remove_slot) = entity_remove(entity_insert(xs,spawn_x,spawn_allowed),remove_slot,remove_allowed)
+derive updated_ys: ints (ys,spawn_y,spawn_allowed,remove_allowed,remove_slot) = entity_remove(entity_insert(ys,spawn_y,spawn_allowed),remove_slot,remove_allowed)
+derive next_xs: ints (updated_xs,move_slot,move_x,move_allowed) = entity_move(updated_xs,move_slot,move_x,move_allowed)
+derive next_ys: ints (updated_ys,move_slot,move_y,move_allowed) = entity_move(updated_ys,move_slot,move_y,move_allowed)
+derive next_next_id: int (next_id,spawn_allowed) = if(spawn_allowed,add(next_id,1),next_id)
+# On a successful spawn, remember the issued ID even after all entities despawn.
+derive next_issued_high_water: int (issued_high_water,next_id,spawn_allowed) = if(spawn_allowed,next_id,issued_high_water)
+derive next_count: int (next_ids) = len(next_ids)
+derive queried_alive: bool (next_ids,query_slot,query_id) = entity_slot_is(next_ids,query_slot,query_id)
+derive queried_x: int (next_xs,query_slot,queried_alive) = entity_position(next_xs,query_slot,queried_alive)
+derive queried_y: int (next_ys,query_slot,queried_alive) = entity_position(next_ys,query_slot,queried_alive)

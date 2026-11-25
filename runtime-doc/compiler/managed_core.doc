@@ -1,0 +1,32 @@
+# Direct C lowering for bundled, general pure DOC. No runtime AST dispatch.
+# User functions are hygienically prefixed C macros: lazy branches and
+# discarded actuals have the same evaluation behavior as substitution.
+fn mword(es,ts,bs,ds,d) = ename(es,ts,bs,gname(ds,d))
+fn mslot(es,ts,bs,ds,d) = concat(text("S_"),mword(es,ts,bs,ds,d))
+fn meval(es,ts,bs,ds,d) = concat(text("E_"),mword(es,ts,bs,ds,d))
+fn mfunc(es,ts,bs,ds,d) = concat(text("F_"),mword(es,ts,bs,ds,d))
+fn mparam(es,ts,bs,i) = concat(text("P_"),ename(es,ts,bs,i))
+fn mquoted(w) = cat3(quote(),w,quote())
+fn wrap(w,x) = cat4(w,text("("),x,text(")"))
+fn mliteral(es,ts,bs,ds,ls,ns,d,i) = if(eq(grole(ds,d),1),if(eq(gtype(ds,d),3),number_c(get(ns,i)),if(eq(gtype(ds,d),2),wrap(text("NAT"),mquoted(ename(es,ts,bs,i))),wrap(text("vi"),number_c(get(ns,i))))),if(if(le(2,i),eq(get(ls,sub(i,2)),-122),false),mquoted(ename(es,ts,bs,i)),wrap(text("vi"),number_c(get(ns,i)))))
+fn mvar(es,ts,bs,ds,d,i,l) = if(eq(l,-2),text("doc_bound"),if(le(l,-1000),mparam(es,ts,bs,formal_event(ds,d,sub(-1000,l))),if(le(0,l),mslot(es,ts,bs,ds,l),if(eq(ename(es,ts,bs,i),text("none")),text("v_none()"),if(eq(ename(es,ts,bs,i),text("true")),text("vb(1)"),text("vb(0)"))))))
+fn matom(es,ts,bs,ds,ls,ns,d,i) = if(eq(ea(es,i),2),mliteral(es,ts,bs,ds,ls,ns,d,i),if(eq(ea(es,i),3),if(eq(grole(ds,d),1),wrap(text("TXT"),ename(es,ts,bs,i)),ename(es,ts,bs,i)),mvar(es,ts,bs,ds,d,i,get(ls,i))))
+fn mcall(es,ts,bs,ds,ls,i) = if(le(0,get(ls,i)),mfunc(es,ts,bs,ds,get(ls,i)),if(eq(get(ls,i),-122),text("NAT"),if(eq(get(ls,i),-123),text("TXT"),concat(text("v_"),ename(es,ts,bs,i)))))
+fn mbody_pure(es,ts,bs,ds,ls,ns,d,i,k) = if(eq(k,10),matom(es,ts,bs,ds,ls,ns,d,i),if(eq(k,13),mcall(es,ts,bs,ds,ls,i),if(eq(k,14),text("("),if(eq(k,15),text(")"),if(eq(k,9),text(","),if(eq(k,17),text("VL("),if(eq(k,18),text(")"),text(""))))))))
+fn mbody(es,ts,bs,ds,ls,ns,d,i,k) = if(eq(grole(ds,d),5),if(eq(k,13),text("doc_asset"),if(eq(k,14),cat3(text("("),number_c(gtype(ds,d)),text(",")),if(eq(k,15),text(")"),text("")))),mbody_pure(es,ts,bs,ds,ls,ns,d,i,k))
+fn mfnhead(es,ts,bs,ds,d,i,k) = if(eq(k,1),cat3(chr(35),text("define "),mfunc(es,ts,bs,ds,d)),if(eq(k,5),text("("),if(eq(k,6),mparam(es,ts,bs,i),if(eq(k,9),text(","),if(eq(k,8),text(")"),if(eq(k,7),text(" ("),text("")))))))
+fn mstatehead(es,ts,bs,ds,d,k) = if(eq(k,1),concat(cat4(text("static V "),mslot(es,ts,bs,ds,d),text(";"),nl()),cat3(text("static V "),meval(es,ts,bs,ds,d),text("(void){return "))),text(""))
+fn mcodepiece(es,ts,bs,ds,ls,ns,d,i,k) = if(eq(k,16),if(eq(grole(ds,d),3),concat(text(")"),nl()),concat(text(";}"),nl())),if(lt(gbody(ds,d),i),mbody(es,ts,bs,ds,ls,ns,d,i,k),if(eq(grole(ds,d),3),mfnhead(es,ts,bs,ds,d,i,k),mstatehead(es,ts,bs,ds,d,k))))
+fn mrecord(es,ts,bs,ds,d) = concat(cat4(text("{"),mquoted(mword(es,ts,bs,ds,d)),text(","),number_c(gtype(ds,d))),concat(cat4(text(","),number_c(grole(ds,d)),text(",&"),mslot(es,ts,bs,ds,d)),cat4(text(","),meval(es,ts,bs,ds,d),text(",(const size_t[]){0"),text(""))))
+fn mmeta(es,ts,bs,ds,ls,d,i,k) = if(eq(grole(ds,d),3),if(eq(k,1),concat(text("{0},"),nl()),text("")),if(eq(k,1),mrecord(es,ts,bs,ds,d),if(eq(k,6),concat(text(","),number_c(get(ls,i))),if(eq(k,16),concat(cat3(text("}+1,"),number_c(gargc(ds,d)),text("},")),nl()),text("")))))
+fn mstep_plain(s,es,ts,bs,ds,ls,ns,owners,n) = if(eq(e_cursor(s),n),e_save(s,concat(text("static const State states[]={"),nl()),add(e_cursor(s),1),0),if(lt(e_cursor(s),n),e_save(s,mcodepiece(es,ts,bs,ds,ls,ns,get(owners,e_cursor(s)),e_cursor(s),ev(es,e_cursor(s))),add(e_cursor(s),1),0),e_save(s,mmeta(es,ts,bs,ds,ls,get(owners,sub(sub(e_cursor(s),n),1)),sub(sub(e_cursor(s),n),1),ev(es,sub(sub(e_cursor(s),n),1))),add(e_cursor(s),1),0)))
+# Escape raw literal bytes into C without allowing source text to affect
+# preprocessing, C tokenization, or execution-character-set conversion.
+fn mhex(c) = cat4(chr(92),text("x"),chr(hexchar(quot(c,16))),concat(chr(hexchar(rem(c,16))),concat(quote(),quote())))
+fn mescape(c) = if(if(le(32,c),if(le(c,126),if(eq(c,63),false,true),false),false),chr(c),mhex(c))
+fn mtxt_start(es,ds,owners,i) = if(eq(grole(ds,get(owners,i)),1),concat(text("TXT("),quote()),quote())
+fn mtxt_end(es,ds,owners,i) = if(eq(grole(ds,get(owners,i)),1),concat(quote(),text(")")),quote())
+fn mtxt(s,es,ts,bs,ds,owners,i,k,t) = if(eq(k,0),e_save(s,mtxt_start(es,ds,owners,i),i,1),if(eq(k,sub(hash_at(ts,t,2),1)),e_save(s,mtxt_end(es,ds,owners,i),add(i,1),0),e_save(s,mescape(get(bs,add(hash_at(ts,t,1),k))),i,add(k,1))))
+fn mstep(s,es,ts,bs,ds,ls,ns,owners,n) = if(if(lt(e_cursor(s),n),is_atom(es,e_cursor(s),3),false),mtxt(s,es,ts,bs,ds,owners,e_cursor(s),e_body(s),et(es,e_cursor(s))),mstep_plain(s,es,ts,bs,ds,ls,ns,owners,n))
+fn mheader() = cat4(chr(35),text("include "),mquoted(text("value_primitives.h")),nl())
+fn mfooter() = concat(text("};int main(int argc,char **argv){return run_graph(states,sizeof(states)/sizeof(states[0]),argc,argv);}"),nl())

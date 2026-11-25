@@ -41,7 +41,7 @@ bad_entries={
     "absolute":"import /tmp/private.doc",
     "parent":"import ../secret.doc",
     "dot":"import ./lib/ordering.doc",
-    "drive":"import C:/Windows/secret.doc",
+    "drive":"import C:/private/secret.doc",
     "backslash":"import lib\\ordering.doc",
     "duplicate":"import lib/ordering.doc\nimport lib/ordering.doc",
 }

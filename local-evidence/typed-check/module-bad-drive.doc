@@ -1,2 +1,2 @@
-import C:/Windows/secret.doc
+import C:/private/secret.doc
 source a: int = 1

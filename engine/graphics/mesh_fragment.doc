@@ -1,0 +1,7 @@
+# A separate ordinary DOC graph for the fragment stage.
+source light_r: int = 0
+source light_g: int = 0
+source light_b: int = 0
+derive color_r: int (light_r) = light_r
+derive color_g: int (light_g) = light_g
+derive color_b: int (light_b) = light_b

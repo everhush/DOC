@@ -1,0 +1,7 @@
+import lexer_core.doc
+source input: ints = []
+derive validated: ints (input) = utf8_bytes(utf8_text(input))
+derive seed: ints () = append(append(append(empty(),0),0),0)
+derive scanned: ints (seed,validated) = recur(seed,s,eq(get(s,0),len(validated)),step(s,get(validated,get(s,0))))
+derive completed: ints (scanned) = finish(scanned)
+derive tokens: ints (completed) = slice(completed,3,sub(len(completed),3))

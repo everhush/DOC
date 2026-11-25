@@ -1,0 +1,42 @@
+# Reusable, bounded and data-driven 2D prefab instantiation in DOC.
+# Native host samples typed confined input facts. All world rules are DOC expressions.
+# action: 0 idle, 1 instantiate selected template, 2 remove selected live slot.
+import entity_pool.doc
+effect prefab_xs: ints = read("levels/prefab_xs.txt")
+effect prefab_ys: ints = read("levels/prefab_ys.txt")
+source ids: ints = [1]
+source xs: ints = [1]
+source ys: ints = [1]
+source next_id: int = 2
+source issued_high_water: int = 1
+source action: int = 0
+source template_slot: int = 0
+source remove_slot: int = 0
+source capacity: int = 8
+# Reload request is an epoch-local effect fact. Accepted asset data is carried.
+source reload: bool = false
+source replacement_xs: ints = []
+source replacement_ys: ints = []
+source query_slot: int = 0
+source query_id: int = 1
+derive count: int (ids) = len(ids)
+# Public budget is clamped to a fixed safety ceiling.
+derive safe_capacity: int (capacity) = if(lt(capacity,0),0,if(lt(1024,capacity),1024,capacity))
+derive next_prefab_xs: ints (prefab_xs,replacement_xs,replacement_ys,reload) = if(reload,if(eq(len(replacement_xs),len(replacement_ys)),replacement_xs,remove_at(replacement_xs,-1)),prefab_xs)
+derive next_prefab_ys: ints (prefab_ys,replacement_xs,replacement_ys,reload) = if(reload,if(eq(len(replacement_xs),len(replacement_ys)),replacement_ys,remove_at(replacement_ys,-1)),prefab_ys)
+derive valid_template: bool (next_prefab_xs,next_prefab_ys,template_slot) = if(lt(template_slot,0),false,if(eq(len(next_prefab_xs),len(next_prefab_ys)),lt(template_slot,len(next_prefab_xs)),false))
+derive selected_x: int (next_prefab_xs,template_slot,valid_template) = if(valid_template,get(next_prefab_xs,template_slot),0)
+derive selected_y: int (next_prefab_ys,template_slot,valid_template) = if(valid_template,get(next_prefab_ys,template_slot),0)
+derive below_capacity: bool (count,safe_capacity) = lt(count,safe_capacity)
+derive id_available: bool (next_id,issued_high_water) = lt(issued_high_water,next_id)
+derive spawn_allowed: bool (action,valid_template,below_capacity,id_available) = if(eq(action,1),if(valid_template,if(below_capacity,id_available,false),false),false)
+derive remove_allowed: bool (action,count,remove_slot) = if(eq(action,2),if(lt(remove_slot,0),false,lt(remove_slot,count)),false)
+derive next_ids: ints (ids,next_id,spawn_allowed,remove_slot,remove_allowed) = entity_remove(entity_insert(ids,next_id,spawn_allowed),remove_slot,remove_allowed)
+derive next_xs: ints (xs,selected_x,spawn_allowed,remove_slot,remove_allowed) = entity_remove(entity_insert(xs,selected_x,spawn_allowed),remove_slot,remove_allowed)
+derive next_ys: ints (ys,selected_y,spawn_allowed,remove_slot,remove_allowed) = entity_remove(entity_insert(ys,selected_y,spawn_allowed),remove_slot,remove_allowed)
+derive next_next_id: int (next_id,spawn_allowed) = if(spawn_allowed,add(next_id,1),next_id)
+derive next_issued_high_water: int (issued_high_water,next_id,spawn_allowed) = if(spawn_allowed,next_id,issued_high_water)
+derive next_count: int (next_ids) = len(next_ids)
+derive queried_alive: bool (next_ids,query_slot,query_id) = entity_slot_is(next_ids,query_slot,query_id)
+derive queried_x: int (next_xs,query_slot,queried_alive) = entity_position(next_xs,query_slot,queried_alive)
+derive queried_y: int (next_ys,query_slot,queried_alive) = entity_position(next_ys,query_slot,queried_alive)

@@ -1,0 +1,5 @@
+# Pure DOC half-open axis-aligned interval primitives for reusable 2D collision.
+# [minimum, maximum) excludes touching edges and rejects reversed/empty spans.
+# No subtraction or multiplication: comparisons remain safe at i64 extrema.
+fn valid_interval(minimum,maximum) = lt(minimum,maximum)
+fn axis_overlap(a_min,a_max,b_min,b_max) = if(valid_interval(a_min,a_max),if(valid_interval(b_min,b_max),if(lt(a_min,b_max),lt(b_min,a_max),false),false),false)
