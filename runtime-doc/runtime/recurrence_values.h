@@ -6,16 +6,33 @@ typedef struct {uint64_t epoch;size_t id;V value;} Fact;
 static int epoch_number(const char *s,size_t n,uint64_t *out){if(!n)return 0;uint64_t v=0;for(size_t i=0;i<n;i++){unsigned c=(unsigned char)s[i];if(c<'0'||c>'9'||v>(UINT64_MAX-(c-'0'))/10)return 0;v=v*10+(c-'0');}*out=v;return 1;}
 static int store_fact(Region *owner,V *out,int kind,const char *input){jmp_buf jump;failure_target=&jump;failure_message=NULL;if(setjmp(jump)){failure_target=NULL;return 0;}Region tmp;push(&tmp);*out=own(owner,input_value(kind,input));pop(&tmp);failure_target=NULL;return 1;}
 static int store_value(Region *owner,V *out,V v){jmp_buf jump;failure_target=&jump;failure_message=NULL;if(setjmp(jump)){failure_target=NULL;return 0;}*out=own(owner,v);failure_target=NULL;return 1;}
-static int run_recurrence(Epoch *e,int argc,char **argv){uint64_t cap=0;size_t halt=e->n,at=0,nf=0,target;int ok=0;Region fact_owner={0},default_owner={0};size_t *carry=zalloc(e->n,sizeof(*carry));Fact *facts=zalloc((size_t)argc,sizeof(*facts));V *defaults=zalloc(e->n,sizeof(*defaults));if(!carry||!facts||!defaults)goto done;for(size_t i=0;i<e->n;i++)carry[i]=e->n;
+ #include "checkpoint_io.h"
+static int run_recurrence(Epoch *e,int argc,char **argv){uint64_t cap=0;size_t halt=e->n,at=0,nf=0,target;int ok=0;Region fact_owner={0},default_owner={0},restore_owner={0};const char *save=NULL,*load=NULL,*audio=NULL;V *restored=NULL;uint64_t saved_epoch=0,published=0;size_t *carry=zalloc(e->n,sizeof(*carry));Fact *facts=zalloc((size_t)argc,sizeof(*facts));V *defaults=zalloc(e->n,sizeof(*defaults));if(!carry||!facts||!defaults)goto done;for(size_t i=0;i<e->n;i++)carry[i]=e->n;
     if(!strncmp(argv[at],"--through=",10)){const char *s=argv[at++]+10;if(!epoch_number(s,strlen(s),&cap))goto done;}
     else {halt=find_state(e,argv[at]+8,strlen(argv[at]+8));at++;if(halt==e->n||e->states[halt].kind!=B||at>=(size_t)argc||strncmp(argv[at],"--max-epochs=",13))goto done;const char *s=argv[at++]+13;if(!epoch_number(s,strlen(s),&cap))goto done;}
-    for(;at<(size_t)argc;at++){const char *arg=argv[at];if(!strncmp(arg,"--fact=",7)){const char *colon=strchr(arg+7,':'),*eq=colon?strchr(colon+1,'='):NULL;uint64_t ep;if(!colon||!eq||!epoch_number(arg+7,(size_t)(colon-arg-7),&ep)||!ep||ep>cap)goto done;size_t i=find_state(e,colon+1,(size_t)(eq-colon-1));if(i==e->n||!source_role(e->states[i].role))goto done;for(size_t j=0;j<nf;j++)if(facts[j].epoch==ep&&facts[j].id==i)goto done;if(!store_fact(&fact_owner,&facts[nf].value,e->states[i].kind,eq+1))goto done;facts[nf].epoch=ep;facts[nf++].id=i;}
+    for(;at<(size_t)argc;at++){const char *arg=argv[at];if(!strncmp(arg,"--save=",7)){if(save||!arg[7])goto done;save=arg+7;}else if(!strncmp(arg,"--load=",7)){if(load||!arg[7])goto done;load=arg+7;}else if(!strncmp(arg,"--audio-dir=",12)){if(audio||!arg[12])goto done;audio=arg+12;}else if(!strncmp(arg,"--fact=",7)){const char *colon=strchr(arg+7,':'),*eq=colon?strchr(colon+1,'='):NULL;uint64_t ep;if(!colon||!eq||!epoch_number(arg+7,(size_t)(colon-arg-7),&ep)||!ep||ep>cap)goto done;size_t i=find_state(e,colon+1,(size_t)(eq-colon-1));if(i==e->n||!source_role(e->states[i].role))goto done;for(size_t j=0;j<nf;j++)if(facts[j].epoch==ep&&facts[j].id==i)goto done;if(!store_fact(&fact_owner,&facts[nf].value,e->states[i].kind,eq+1))goto done;facts[nf].epoch=ep;facts[nf++].id=i;}
         else {const char *eq=strchr(arg,'=');if(!eq)goto done;size_t i=find_state(e,arg,(size_t)(eq-arg)),j=find_state(e,eq+1,strlen(eq+1));if(i==e->n||j==e->n||!source_role(e->states[i].role)||carry[i]!=e->n||e->states[i].kind!=e->states[j].kind)goto done;carry[i]=j;}}
     for(size_t j=0;j<nf;j++)if(carry[facts[j].id]!=e->n)goto done;
-    if(!epoch_begin(e))goto done;if(!epoch_finish(e,batch(e,0,NULL,&target)))goto done;
-    for(size_t i=0;i<e->n;i++)if(source_role(e->states[i].role)&&!store_value(&default_owner,&defaults[i],*e->states[i].slot))goto done;
+    if((save||load||audio)&&(!doc_output_root||!checkpoint_enabled()))goto done;
+    if(load){restored=zalloc(e->n,sizeof(*restored));if(!restored||!checkpoint_load(e,carry,load,&restore_owner,restored,&saved_epoch))goto done;}
+    if(!epoch_begin(e))goto done;
+    int initial_ok=1;
+    /* Capture original template defaults separately from restored source facts.
+     * Derived values are never restored; they must be recomputed by DOC. */
+    for(int pass=0;pass<2&&initial_ok;pass++)for(size_t i=0;i<e->n&&initial_ok;i++)if(e->states[i].role==(pass?1:5)){
+        initial_ok=evaluate(e,i,NULL);if(initial_ok)publish_private(e,i);
+        if(initial_ok)initial_ok=store_value(&default_owner,&defaults[i],*e->states[i].slot);
+    }
+    if(load)for(size_t i=0;i<e->n&&initial_ok;i++)if(source_role(e->states[i].role)){
+        Cell *c=e->cell+i;initial_ok=store_value(&c->candidate,&c->result,restored[i]);if(initial_ok)publish_private(e,i);
+    }
+    if(initial_ok)initial_ok=batch(e,0,NULL,&target);
+    if(!epoch_finish(e,initial_ok))goto done;
+    clear(&restore_owner);free(restored);restored=NULL;
+    if(load)fprintf(stderr,"DOC11_CHECKPOINT_RESTORED: saved_epoch=%llu new_epoch=0\n",(unsigned long long)saved_epoch);
     for(uint64_t ep=0;;ep++){
-        observe(e,e->n,1,(size_t)ep);fprintf(stderr,"DOC11_RECURRENCE_EPOCH: %llu evaluations=%zu frontiers=%zu parallel=%zu\n",(unsigned long long)ep,e->evaluations,e->frontiers,e->parallel_frontiers);
+        if(ep&&audio&&!checkpoint_audio(e,audio,ep))break;
+        published=ep;observe(e,e->n,1,(size_t)ep);fprintf(stderr,"DOC11_RECURRENCE_EPOCH: %llu evaluations=%zu frontiers=%zu parallel=%zu\n",(unsigned long long)ep,e->evaluations,e->frontiers,e->parallel_frontiers);
         if(halt!=e->n&&truth(*e->states[halt].slot)){printf("DOC_RECURRENCE_HALT: %llu\n",(unsigned long long)ep);ok=1;break;}
         if(ep==cap){ok=halt==e->n;break;}
         if(!epoch_begin(e))break;int success=1;
@@ -24,6 +41,7 @@ static int run_recurrence(Epoch *e,int argc,char **argv){uint64_t cap=0;size_t h
         for(size_t i=0;i<e->n&&success;i++)if(source_role(e->states[i].role)){V v=carry[i]==e->n?defaults[i]:e->cell[carry[i]].previous;for(size_t j=0;j<nf;j++)if(facts[j].epoch==ep+1&&facts[j].id==i){v=facts[j].value;break;}Cell *c=e->cell+i;success=store_value(&c->candidate,&c->result,v);if(success)publish_private(e,i);}
         if(success)success=batch(e,0,NULL,&target);if(!epoch_finish(e,success))break;
     }
-done:clear(&fact_owner);clear(&default_owner);free(carry);free(facts);free(defaults);if(!ok)fprintf(stderr,"DOC: recurrence rejected or halt cap exhausted; previous publication retained\n");return ok;
+    if(ok&&save){ok=checkpoint_save(e,carry,published,save);if(ok)fprintf(stderr,"DOC11_CHECKPOINT_SAVED: epoch=%llu\n",(unsigned long long)published);}
+done:clear(&restore_owner);free(restored);clear(&fact_owner);clear(&default_owner);free(carry);free(facts);free(defaults);if(!ok)fprintf(stderr,"DOC: recurrence rejected or halt cap exhausted; previous publication retained\n");return ok;
 }
 #endif

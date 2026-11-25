@@ -1,0 +1,5 @@
+# Portable admission policy for stable host effects. OS paths/serialization are
+# confined native ABI operations; cues are still produced by the DOC game.
+fn effect_audio_empty(hz,ms) = if(eq(hz,0),eq(ms,0),false)
+fn effect_audio_admit(hz,ms) = if(effect_audio_empty(hz,ms),true,if(le(20,hz),if(le(hz,20000),if(le(1,ms),le(ms,5000),false),false),false))
+fn effect_checkpoint_fact(role,kind,expected_kind,carry,expected_carry) = if(if(eq(role,1),true,eq(role,5)),if(eq(kind,expected_kind),eq(carry,expected_carry),false),false)

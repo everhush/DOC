@@ -6,6 +6,7 @@ compiler performs lexical/semantic analysis and emits C. This adapter transfers
 bytes, opens confined files and invokes tools. It is not linked into programs.
 """
 import argparse
+import hashlib
 import ast
 import json
 import os
@@ -144,6 +145,8 @@ def build_bundled(compiler, data, output, headers, reactive=False, emit_c=None, 
             (root/'gpu_generated.h').write_bytes(header)
             flags+=['-DDOC_ENABLE_GPU','-I',str(root),'-I',str(wgpu/'include')]
             link=['-L',str(wgpu/'lib'),'-Wl,-rpath,'+str(wgpu/'lib'),'-lwgpu_native']
+        if reactive:
+            flags+=['-DDOC_SOURCE_SHA256="'+hashlib.sha256(data).hexdigest()+'"'];link+=['-lm']
         subprocess.run([cc,*flags,str(src),*link,'-o',str(exe)],check=True,timeout=240)
         if emit_c:Path(emit_c).write_bytes(code)
         if emit_wgsl:Path(emit_wgsl).write_bytes(shader)
