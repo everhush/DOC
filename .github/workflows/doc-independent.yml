@@ -169,7 +169,7 @@ jobs:
           unzip -q doc11-wgpu.zip -d doc11-wgpu
           sha256sum doc11-wgpu.zip > doc11-stage2-gpu-evidence/wgpu-sha256.txt
           cp doc11-wgpu/lib/libwgpu_native.so doc11-stage2-gpu-evidence/
-          ldd --version | head -1 > doc11-stage2-gpu-evidence/host-abi.txt
+          ldd --version | sed -n '1p' > doc11-stage2-gpu-evidence/host-abi.txt
       - name: Execute GPU graphs compiled by self-hosted Stage-2 tools
         shell: bash
         run: |
