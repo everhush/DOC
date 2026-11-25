@@ -5,6 +5,7 @@ from pathlib import Path
 from bundle import create_private_dataset
 from dispatch import auth_environment,gpu_remaining_hours,kaggle,prepare_kernel,status_from_cli
 from independent_bundle import pack,digest
+from independent_micro_evidence import MICRO_GRAPHS,MICRO_EXECUTABLES,validate_micro_evidence
 HERE=Path(__file__).resolve().parent
 def main():
     sha=os.environ['GITHUB_SHA'];run_id=os.environ['GITHUB_RUN_ID'];attempt=os.environ['GITHUB_RUN_ATTEMPT']
@@ -19,7 +20,7 @@ def main():
     for name in ('radar_chase','radar_chase_3d'):
         for f in (name,name+'.c',name+'-reference.txt'):add('games/'+f,'doc11-game-evidence/'+f)
         for f in (name+'-gpu',name+'.c',name+'.wgsl'):add('gpu/games/'+f,'doc11-stage2-gpu-evidence/games/'+f)
-    for f in ('scalar','arithmetic','wide','mixed','device_loss','scalar.expected','arithmetic.expected','wide.expected','mixed.expected'):
+    for f in (*MICRO_EXECUTABLES,*(name+'.expected' for name in MICRO_GRAPHS)):
         add('gpu/micro/'+f,'doc11-stage2-gpu-evidence/micro/'+f)
     for f in ('mesh-render','mesh.wgsl','mesh-mutated.wgsl','plan-meta.json'):
         add('mesh/render/'+f,'doc11-mesh-evidence/render/'+f)
@@ -32,7 +33,7 @@ def main():
     add('ci/kaggle/doc_kaggle_gpu.py','ci/kaggle/doc_kaggle_gpu.py')
     for p in subprocess.check_output(['git','ls-files','engine'],text=True).splitlines():
         if p.endswith('.doc') or p.startswith('engine/levels/'):add(p,p)
-    executables=['games/radar_chase','games/radar_chase_3d','gpu/games/radar_chase-gpu','gpu/games/radar_chase_3d-gpu','mesh/render/mesh-render','mesh/doc-scene3d','gpu/micro/scalar','gpu/micro/arithmetic','gpu/micro/wide','gpu/micro/mixed','gpu/micro/device_loss']
+    executables=['games/radar_chase','games/radar_chase_3d','gpu/games/radar_chase-gpu','gpu/games/radar_chase_3d-gpu','mesh/render/mesh-render','mesh/doc-scene3d',*('gpu/micro/'+name for name in MICRO_EXECUTABLES)]
     spec={'sha':sha,'run_id':run_id,'attempt':attempt,'accelerator':'NvidiaTeslaT4','executables':executables}
     with tempfile.TemporaryDirectory(prefix='doc11-private-') as td:
         root=Path(td)
@@ -60,9 +61,10 @@ def main():
         result=json.loads(reports[0].read_text())
         if result!={'sha':sha,'run_id':run_id,'bundle_sha256':checksum,'hardware':True,'result':'pass'}:raise ValueError('invalid hardware report')
         base=reports[0].parent
-        for name,markers in {'micro.log':['DOC11_WEBGPU_PASS:','DOC11_GPU_DEVICE_LOSS_PASS:','physical_required=True'],'games.log':['DOC11_GAME_GPU_PASS: radar_chase ','DOC11_GAME_GPU_PASS: radar_chase_3d ','physical_required=True'],'mesh.log':['DOC11_MESH_RENDER_PASS:','physical_required=True']}.items():
+        for name,markers in {'micro.log':['DOC11_WEBGPU_PASS:','DOC11_GPU_DEVICE_LOSS_PASS:','DOC11_GPU_EPOCH_AUTHORITY_PASS:','physical_required=True'],'games.log':['DOC11_GAME_GPU_PASS: radar_chase ','DOC11_GAME_GPU_PASS: radar_chase_3d ','physical_required=True'],'mesh.log':['DOC11_MESH_RENDER_PASS:','physical_required=True']}.items():
             log=(base/name).read_text()
             if any(marker not in log for marker in markers):raise ValueError('missing raw device evidence '+name)
+        validate_micro_evidence(base/'micro',Path('doc11-stage2-gpu-evidence/micro'))
         for name in ('radar_chase','radar_chase_3d'):
             if not re.search(r'(?m)^DOC11_GPU_ADAPTER: .* physical=1 ',(base/'games'/(name+'-auto.stderr')).read_text()):raise ValueError('nonphysical game adapter')
             if (base/'games'/(name+'-auto.stdout')).read_bytes()!=paths['games/'+name+'-reference.txt'].read_bytes():raise ValueError('hardware game replay mismatch')

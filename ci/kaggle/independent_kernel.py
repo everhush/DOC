@@ -23,7 +23,7 @@ def main():
         (output/(label+'.log')).write_bytes(p.stdout+b'\n'+p.stderr)
         print(p.stdout.decode(errors='replace'),flush=True)
         if p.returncode:raise RuntimeError(label+' failed: '+p.stderr.decode(errors='replace')[-3000:])
-    run('micro',tests/'test_gpu.py','--prebuilt',gpu/'micro','--wgpu-root',wgpu,'--physical')
+    run('micro',tests/'test_gpu.py','--prebuilt',gpu/'micro','--wgpu-root',wgpu,'--physical','--artifacts',output/'micro')
     run('games',tests/'test_stage2_game_gpu.py','--games',games,'--prebuilt',gpu/'games','--wgpu-root',wgpu,'--evidence',output/'games','--physical')
     run('mesh',tests/'test_mesh_render.py','--prebuilt',mesh/'render','--game-output',output/'games/radar_chase_3d-auto.stdout','--scene-reference',mesh/'doc-scene3d','--wgpu-root',wgpu,'--evidence',output/'mesh','--physical')
     result={'sha':SPEC['sha'],'run_id':SPEC['run_id'],'bundle_sha256':SPEC['bundle_sha256'],'hardware':True,'result':'pass'}
