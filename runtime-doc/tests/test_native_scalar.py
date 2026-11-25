@@ -28,8 +28,8 @@ def main():
         code=emit([a.stage2.resolve()],bundle([a.scanner.resolve()],ROOT/'compiler/native_scalar.doc',stream=True),stream=True)
         c=out/'native_scalar2.c'; c.write_bytes(code); native=out/'native_scalar2'
         run(['cc','-std=gnu11','-O0','-I',ROOT/'runtime',c,'-o',native],timeout=300)
-    def compile_doc(target,source=src,region='scratch',imp='x86_out8',name='boot',reject=False,region2=''):
-        argv=[native,'--demand='+target,'--input-stdin','grant_region="'+region+'"','grant_region2="'+region2+'"','grant_import="'+imp+'"','export_name="'+name+'"']
+    def compile_doc(target,source=src,region='scratch',imp='x86_out8',name='boot',reject=False,region2='',intrinsic=''):
+        argv=[native,'--demand='+target,'--input-stdin','grant_region="'+region+'"','grant_region2="'+region2+'"','grant_import="'+imp+'"','grant_intrinsic="'+intrinsic+'"','export_name="'+name+'"']
         r=subprocess.run([str(x) for x in argv],input=source,capture_output=True,timeout=120)
         if reject:
             assert r.returncode and not r.stdout,(target,r.returncode,r.stdout[:100])
@@ -74,6 +74,32 @@ def main():
         (out/('arena.c' if target=='code' else 'arena.h')).write_bytes(data)
     run(['cc','-std=c11','-O1','-g','-fsanitize=address,undefined','-fno-sanitize-recover=all','-fno-pie','-no-pie','-I',out,out/'arena.c',Path(__file__).with_name('native_arena_host.c'),'-o',out/'arena-host'])
     print(run([out/'arena-host']).decode().strip(),flush=True)
+    # Compile original frozen intrinsic examples, with explicit external admission.
+    intr=(fixture/'runtime-rust/examples/native_intrinsic.doc').read_bytes()
+    ext=(fixture/'runtime-rust/examples/native_intrinsic_external.doc').read_bytes()
+    for name,source,grant in [('intrinsics',intr,''),('external',ext,'target_transform')]:
+        for target,suffix in [('code','c'),('header','h')]:
+            data=compile_doc(target,source,'','',name,intrinsic=grant)
+            assert data==compile_doc(target,source,'','',name,intrinsic=grant)
+            (out/(name+'.'+suffix)).write_bytes(data)
+    neg_intr=[
+        (ext,''),
+        (ext,'other'),
+        (ext.replace(b'external(target_transform)',b'external(other)'),'target_transform'),
+        (ext.replace(b'-> i32',b'-> i64'),'target_transform'),
+        (ext.replace(b'enabled: bool = true',b'enabled: int = 1'),'target_transform'),
+        (intr.replace(b'native intrinsic leading',b'native intrinsic bit_count'),''),
+        (intr.replace(b'(input,bits)',b'(input)'),''),
+        (intr.replace(b'bit_count(input)',b'unknown(input)'),''),
+        (intr.replace(b'bit_count(i64)',b'bit_count(i32)'),''),
+        (intr.replace(b'source input: int = 0',b'source bit_count: int = 0\nsource input: int = 0'),''),
+    ]
+    for source,grant in neg_intr:
+        for target in ('code','header'):
+            compile_doc(target,source,'','','intrinsic_negative',reject=True,intrinsic=grant)
+    run(['cc','-std=c11','-O1','-g','-fsanitize=address,undefined','-fno-sanitize-recover=all','-fno-pie','-no-pie','-I',out,out/'intrinsics.c',out/'external.c',Path(__file__).with_name('native_intrinsic_host.c'),'-o',out/'intrinsic-host'])
+    print(run([out/'intrinsic-host']).decode().strip(),flush=True)
+    print('DOC11_NATIVE_INTRINSICS_PASS: original built-in and external fixtures; 20 compiler rejection checks',flush=True)
     # Renamed declarations and a changed graph prove this is not a fixed boot template.
     alt=src.replace(b'scratch',b'ram').replace(b'x86_out8',b'foreign_byte').replace(b'add(seed,1)',b'sub(seed,2)')
     ac=compile_doc('code',alt,'ram','foreign_byte','alternate'); assert b'__asm__("foreign_byte")' in ac and b'doc_sub(doc_v_seed' in ac and b'doc_export_alternate' in ac
