@@ -28,8 +28,8 @@ def main():
         code=emit([a.stage2.resolve()],bundle([a.scanner.resolve()],ROOT/'compiler/native_scalar.doc',stream=True),stream=True)
         c=out/'native_scalar2.c'; c.write_bytes(code); native=out/'native_scalar2'
         run(['cc','-std=gnu11','-O0','-I',ROOT/'runtime',c,'-o',native],timeout=300)
-    def compile_doc(target,source=src,region='scratch',imp='x86_out8',name='boot',reject=False):
-        argv=[native,'--demand='+target,'--input-stdin','grant_region="'+region+'"','grant_import="'+imp+'"','export_name="'+name+'"']
+    def compile_doc(target,source=src,region='scratch',imp='x86_out8',name='boot',reject=False,region2=''):
+        argv=[native,'--demand='+target,'--input-stdin','grant_region="'+region+'"','grant_region2="'+region2+'"','grant_import="'+imp+'"','export_name="'+name+'"']
         r=subprocess.run([str(x) for x in argv],input=source,capture_output=True,timeout=120)
         if reject:
             assert r.returncode and not r.stdout,(target,r.returncode,r.stdout[:100])
@@ -38,13 +38,34 @@ def main():
         return r.stdout[len(prefix):-1]
     for target,filename in [('code','boot.c'),('header','boot.h')]:
         data=compile_doc(target); assert data==compile_doc(target); (out/filename).write_bytes(data)
-    negatives=[('wrong-region',src,'other','x86_out8'),('wrong-import',src,'scratch','other'),('missing-chain',src.replace(b'(index,written)',b'(index)'),'scratch','x86_out8'),('wrong-type',src.replace(b'byte: int (seed) = add(seed,1)',b'byte: bool (seed) = eq(seed,1)'),'scratch','x86_out8'),('undeclared-premise',src.replace(b'(index,byte)',b'(index)'),'scratch','x86_out8'),('unsupported-region',src.replace(b'u8 plain',b'u8 volatile'),'scratch','x86_out8'),('wrong-arity',src.replace(b'x86_out8(port,read_back)',b'x86_out8(port)'),'scratch','x86_out8'),('duplicate-region',src.replace(b'native region scratch: u8 plain',b'native region scratch: u8 plain\nnative region scratch: u8 plain'),'scratch','x86_out8'),('overflow-source',src.replace(b'source seed: int = 64',b'source seed: int = 9223372036854775808'),'scratch','x86_out8'),('duplicate-state',src.replace(b'source seed: int = 64',b'source seed: int = 64\nsource seed: int = 3'),'scratch','x86_out8'),('hidden-import',src.replace(b'x86_out8(port,read_back)',b'unknown(port,read_back)'),'scratch','x86_out8')]
+    negatives=[('wrong-region',src,'other','x86_out8'),('wrong-import',src,'scratch','other'),('missing-chain',src.replace(b'(index,written)',b'(index)'),'scratch','x86_out8'),('wrong-type',src.replace(b'byte: int (seed) = add(seed,1)',b'byte: bool (seed) = eq(seed,1)'),'scratch','x86_out8'),('undeclared-premise',src.replace(b'(index,byte)',b'(index)'),'scratch','x86_out8'),('unsupported-region',src.replace(b'u8 plain',b'u16 volatile'),'scratch','x86_out8'),('wrong-arity',src.replace(b'x86_out8(port,read_back)',b'x86_out8(port)'),'scratch','x86_out8'),('duplicate-region',src.replace(b'native region scratch: u8 plain',b'native region scratch: u8 plain\nnative region scratch: u8 plain'),'scratch','x86_out8'),('overflow-source',src.replace(b'source seed: int = 64',b'source seed: int = 9223372036854775808'),'scratch','x86_out8'),('duplicate-state',src.replace(b'source seed: int = 64',b'source seed: int = 64\nsource seed: int = 3'),'scratch','x86_out8'),('hidden-import',src.replace(b'x86_out8(port,read_back)',b'unknown(port,read_back)'),'scratch','x86_out8')]
     for name,source,region,imp in negatives:
         assert source!=src or region!='scratch' or imp!='x86_out8'
         for target in ('code','header'): compile_doc(target,source,region,imp,reject=True)
         print('REJECT',name,flush=True)
     run(['cc','-std=c11','-O1','-g','-fsanitize=address,undefined','-fno-omit-frame-pointer','-fno-pie','-no-pie','-I',out,out/'boot.c',Path(__file__).with_name('native_scalar_host.c'),'-o',out/'host'])
     print(run([out/'host']).decode().strip(),flush=True)
+    # Compile the unchanged frozen volatile/atomic fixture with separate grants.
+    regions=(fixture/'runtime-rust/examples/native_regions.doc').read_bytes()
+    for target in ('code','header'):
+        data=compile_doc(target,regions,'device','','regions',region2='counter')
+        assert data==compile_doc(target,regions,'device','','regions',region2='counter')
+        (out/('regions.c' if target=='code' else 'regions.h')).write_bytes(data)
+    region_negatives=[
+        (regions,'device',''),
+        (regions,'device','device'),
+        (regions.replace(b'u32 atomic',b'u8 plain'),'device','counter'),
+        (regions.replace(b'seq_cst()',b'relaxed()'),'device','counter'),
+        (regions.replace(b'(index,delta,read_back)',b'(index,delta)'),'device','counter'),
+        (regions.replace(b'counter(index,delta)',b'device(index,delta)'),'device','counter'),
+        (regions.replace(b'u8 volatile',b'u8 atomic'),'device','counter'),
+    ]
+    for source,first,second in region_negatives:
+        for target in ('code','header'):
+            compile_doc(target,source,first,'','regions',reject=True,region2=second)
+    run(['cc','-std=c11','-O1','-g','-fsanitize=address,undefined','-fno-sanitize-recover=all','-fno-pie','-no-pie','-I',out,out/'regions.c',Path(__file__).with_name('native_regions_host.c'),'-o',out/'region-host'])
+    print(run([out/'region-host']).decode().strip(),flush=True)
+    print('DOC11_NATIVE_REGIONS_PASS: unchanged volatile and atomic fixture, 14 compiler rejection checks',flush=True)
     # Renamed declarations and a changed graph prove this is not a fixed boot template.
     alt=src.replace(b'scratch',b'ram').replace(b'x86_out8',b'foreign_byte').replace(b'add(seed,1)',b'sub(seed,2)')
     ac=compile_doc('code',alt,'ram','foreign_byte','alternate'); assert b'__asm__("foreign_byte")' in ac and b'doc_sub(doc_v_seed' in ac and b'doc_export_alternate' in ac
