@@ -1,0 +1,52 @@
+{
+  "migration_date": "2026-11-25",
+  "active_repository": "imxade/DOC",
+  "active_branch": "master",
+  "source_snapshot": "7448e3d13b4ec7cf9ca65c7d540a7aa3afe3dee9",
+  "source_tree": "5cddf6c411ee9a11ab18c1eb0fd33cb5f5cf7b0c",
+  "private_import": "967503455da471aa9ab83d4b9bf839704467c739",
+  "frozen_tree": "a95a38bc6e9300aae815f83b570db5f99d32f221",
+  "archives": [
+    {
+      "file": "doc-frozen-physical-45541389519.zip",
+      "bytes": 14809538,
+      "sha256": "0695b31313b313204af63acd3bfb67684388549b8cf3b9aa2eaf717d600ecc5b",
+      "original_run": "https://github.com/rtu0/doc2/actions/runs/45541389519"
+    },
+    {
+      "file": "doc-rust-frozen-45540693642.zip",
+      "bytes": 1583348,
+      "sha256": "f68f40aadc975b1ffe10245066bcfe0fc553ed30bf85b1c818e4910ef302a8d5",
+      "original_run": "https://github.com/rtu0/doc2/actions/runs/45540693642"
+    },
+    {
+      "file": "doc11-bootstrap-45548424193.zip",
+      "bytes": 6604409,
+      "sha256": "5800f53d3b4e472600239bdee784679b7422f5c9bfc492b14ce2abed15789d42",
+      "original_run": "https://github.com/rtu0/doc2/actions/runs/45548424193"
+    },
+    {
+      "file": "doc11-stage2-45548424193.zip",
+      "bytes": 1710733,
+      "sha256": "08bc61c52d5e6c57151e6062f3a6cd5b41ccb83ae2c088948203247dff28c4bc",
+      "original_run": "https://github.com/rtu0/doc2/actions/runs/45548424193"
+    },
+    {
+      "file": "doc11-local-cpu-benchmark.zip",
+      "bytes": 3308,
+      "sha256": "a9558a30f24f85c68053e0a79fea8ae47009eda7e32eac7d8535a41763cd6a5f",
+      "original_run": null
+    }
+  ],
+  "local_backup": {
+    "file": "DOC-historical-validation-backup.zip",
+    "bytes": 24713333,
+    "sha256": "a06c8bac981a2661dca4a752aae42118f3b110517ccec13471d76435b444e68d"
+  },
+  "notes": [
+    "All five ZIPs and combined backup passed archive integrity tests in the migration session.",
+    "Archive bytes are retained in the downloadable session backup, not uploaded to this Git repository; save the backup before deleting former accounts.",
+    "Historical evidence does not constitute exact-SHA private CI acceptance.",
+    "The last x0796666-ui/doc2 consolidated independent run 45586218364 was cancelled. No new private CI has been requested."
+  ]
+}
