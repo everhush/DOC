@@ -4,7 +4,7 @@
 
 DOC is a typed dependency-graph programming model for incremental repair, exact
 cutoff, demanded evaluation and explicitly controlled effects and recurrence.
-The canonical research ledger, active development, and CI are in this private repository, [imxade/DOC](https://github.com/imxade/DOC), on `master`. The former development repositories are historical only. See [migration and batch-validation policy](docs/DEVELOPMENT-MIGRATION.md).
+The canonical research ledger and active development are in this private repository, [imxade/DOC](https://github.com/imxade/DOC), on `master`. The designated CI-only fork is `xad3play/DOC`; synchronize it from upstream after verifying private access and fork identity. No fork-only engineering commits. The former development repositories are historical only. See [migration and batch-validation policy](docs/DEVELOPMENT-MIGRATION.md).
 See [migration provenance](docs/PUBLIC-MIGRATION.md) and [Radar Chase](engine/RADAR-CHASE.md).
 Issue #22 and #21 have passed. #24 closed on 11e22c4; #15 is the active pre-self-hosting conformance gate. See [Stage-0 native C compiler](docs/DOC-AOT.md), [current #15 conformance ledger](docs/PRE-SELF-HOSTING-AUDIT.md), and [independent runtime reservation](runtime-doc/README.md). Rust freezes only after #15 acceptance; all subsequent #11 implementation belongs in runtime-doc/.
 
