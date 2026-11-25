@@ -24,6 +24,8 @@ def main():
     wide=('source x: int = 2\n'+''.join(f'derive lane_{i}: int (x) = add(x,{i})\n' for i in range(32))+'derive result: int (lane_0,lane_31) = add(lane_0,lane_31)\n').encode()
     wide_fault=('source x: int = 0\n'+''.join(f'derive lane_{i}: int (x) = add(x,{i if i<31 else 9223372036854775807})\n' for i in range(32))+'derive result: int (lane_0,lane_30) = add(lane_0,lane_30)\n').encode()
     cases.extend([(wide,[(['--next','x=3','--next','x=3'],False,[33,33,0])]),(wide_fault,[(['--next','x=1'],True,[33])])])
+    division=b'source a: int = -9\nsource b: int = 2\nderive q: int (a,b) = quot(a,b)\nderive mask: int (a,b) = bit_and(a,b)\n'
+    cases.append((division,[(['--next','a=9','b=3','--next','a=9','b=3'],False,[2,2,0]),(['--next','b=0'],True,[2]),(['--next','a=-9223372036854775808','b=-1'],True,[2])]))
     rng=random.Random(1107)
     for i in range(12):
         source=f'source x: int = {rng.randrange(-10,10)}\nsource y: int = {rng.randrange(-10,10)}\n'

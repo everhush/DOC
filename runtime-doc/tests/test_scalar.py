@@ -22,12 +22,15 @@ def main():
     commands=[[reference,str(args.source.resolve())]]
     if args.native: commands.append([str(args.native.resolve())])
     valid=[(b'source a: int = 2\nsource b: bool = true\nderive x: int (a,b) = if(b,add(a,1),mul(a,7))\nderive ok: bool (x) = eq(x,3)\n','a: 2\nb: true\nx: 3\nok: true\n'),(b'source a: int = -9223372036854775808\nderive b: int (a) = add(a,1)','a: -9223372036854775808\nb: -9223372036854775807\n'),(b'source a: int = +0007\nderive b: int (a) = sub(a,-0008)','a: 7\nb: 15\n'),(b'derive a: int () = if(true,1,add(9223372036854775807,1))','a: 1\n'),(b'derive a: int () = if(false,mul(-9223372036854775808,-1),-1)','a: -1\n'),(b'source a: bool = false\nderive b: bool (a) = if(a,eq(1,2),le(-1,0))','a: false\nb: true\n'),(b'derive a: int () = 1\nderive b: int (a) = a','a: 1\nb: 1\n'),(b'source _Bool: int = 9\nderive main: int (_Bool) = _Bool','_Bool: 9\nmain: 9\n'),(b'source x: int = 3\nderive y: int (x) = add(x,x)\nderive z: bool (y,x) = lt(x,y)','x: 3\ny: 6\nz: true\n')]
+    valid.extend([(b'source a: int = -9\nsource b: int = 2\nderive q: int (a,b) = quot(a,b)\nderive bits: int (a,b) = bit_and(a,b)','a: -9\nb: 2\nq: -4\nbits: 2\n'),(b'derive x: int () = if(true,7,quot(1,0))','x: 7\n')])
     rng=random.Random(11)
     for _ in range(16):
         a,b,c=(rng.randrange(-1000,1000) for _ in range(3)); s=f'source a: int = {a}\nsource b: int = {b}\nderive sum: int (a,b) = add(a,b)\nderive cmp: bool (a,b) = le(a,b)\nderive final: int (sum,cmp) = if(cmp,mul(sum,{c}),sub(sum,{c}))'; out=f'a: {a}\nb: {b}\nsum: {a+b}\ncmp: {str(a<=b).lower()}\nfinal: {(a+b)*c if a<=b else a+b-c}\n'; valid.append((s.encode(),out))
     invalid=[b'derive x: int (x) = x',b'source a: int = - 1',b'source a: int = 3\nderive b: int (a,a) = a',b'source a: int = 3\nsource a: int = 4',b'source a: int = 3\nderive b: int () = a',b'source a: bool = false\nderive b: int (a) = add(a,1)',b'source a: int = 9223372036854775808',b'source a: int = -9223372036854775809',b'derive a: int () = add(1,2,3)',b'derive a: int () = if(true,1,false)',b'derive a: int () = add()',b'derive a: bool () = eq(true,1)',b'derive a: int () = lt(1,2)',b'source a: bool = 0',b'source x: int = add(1,2)',b'derive a: int () = add(1,)',b'derive a: int () = missing(1,2)',b'derive b: int (a) = a\nsource a: int = 1']
     unsupported=[b'',b'source n: nat = 123',b'source xs: ints = [1,2]',b'source t: text = "hi"',b'fn f(a) = add(a,1)\nderive a: int () = f(1)',b'import absent.doc',b'native region a: u8 plain']
     faults=[b'source x: int = 9223372036854775807\nderive y: int (x) = add(x,1)',b'derive x: int () = sub(-9223372036854775808,1)',b'derive x: int () = mul(-9223372036854775808,-1)']
+    faults.extend([b'derive x: int () = quot(1,0)',b'derive x: int () = quot(-9223372036854775808,-1)'])
+    invalid.extend([b'derive x: int () = quot(true,1)',b'derive x: bool () = bit_and(1,2)'])
     with tempfile.TemporaryDirectory(prefix='doc11-scalar-') as tmp:
         cwd=Path(tmp); source=cwd/'program.doc'; out=cwd/'out.c'; exe=cwd/'program'; seen={}
         for command in commands:
