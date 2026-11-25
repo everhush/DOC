@@ -1,6 +1,7 @@
 #ifndef DOC_EPOCH_AUTHORITY_H
 #define DOC_EPOCH_AUTHORITY_H
 #include "epoch_policy_generated.h"
+#include "graph_reader_slots.h"
 /* Single-writer host boundary. All external snapshot/cancel calls must finish
  * before epoch_free. A snapshot callback borrows its private copy for the
  * duration of the call only; no runtime-owned pointers may escape. */
@@ -13,9 +14,10 @@ static int store_value(Region *owner,V *out,V v);
 typedef void (*EpochReader)(void *,int64_t,const V *,const unsigned char *,size_t);
 static int epoch_read(Epoch *e,size_t target,EpochReader visit,void *ctx){
     if(!visit||target>e->n||active||failure_target)return 0;
-    Region owner={0};V *values=zalloc(e->n,sizeof(*values));unsigned char *ready=zalloc(e->n,1);int ok=values&&ready;int64_t generation=0;
-    if(!ok)goto done;
-    epoch_lock(e);generation=e->committed;
+    epoch_lock(e);
+    int slot=graph_slot_take(&e->reader_slots);
+    if(slot<0){epoch_unlock(e);return 0;}
+    Region owner={0};V *values=zalloc(e->n,sizeof(*values));unsigned char *ready=zalloc(e->n,1);int ok=values&&ready;int64_t generation=e->committed;
     for(size_t i=0;i<e->n&&ok;i++)if(target==e->n||target==i){
         const State *s=e->states+i;
         if(!s->name){if(target==i)ok=0;continue;}
@@ -26,6 +28,7 @@ static int epoch_read(Epoch *e,size_t target,EpochReader visit,void *ctx){
     }
     epoch_unlock(e);
     if(ok)visit(ctx,generation,values,ready,e->n);
-done:clear(&owner);free(values);free(ready);return ok;
+    clear(&owner);free(values);free(ready);
+    epoch_lock(e);if(!graph_slot_drop(&e->reader_slots,slot))_Exit(1);epoch_unlock(e);return ok;
 }
 #endif

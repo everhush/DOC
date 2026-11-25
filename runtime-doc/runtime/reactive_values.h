@@ -24,14 +24,14 @@ typedef struct {
     unsigned char *dirty,*have,*saved_dirty,*saved_have,*need,*blocked;
     size_t *queue;
     size_t evaluations,frontiers,parallel_frontiers,launched;
-    pthread_mutex_t authority;int in_flight;int64_t attempt,committed;_Atomic int cancelled;
+    pthread_mutex_t authority;uint64_t reader_slots;int in_flight;int64_t attempt,committed;_Atomic int cancelled;
 } Epoch;
 #include "gpu_values.h"
 static void *zalloc(size_t n,size_t z){if(n>SIZE_MAX/z)return NULL;return calloc(n?n:1,z);}
 
 #include "epoch_authority.h"
 #include "placement_policy_generated.h"
-static void epoch_free(Epoch *e){if(e->in_flight||pthread_mutex_destroy(&e->authority))_Exit(1);if(e->cell)for(size_t i=0;i<e->n;i++){clear(&e->cell[i].stable);clear(&e->cell[i].next);clear(&e->cell[i].candidate);}free(e->cell);free(e->dirty);free(e->have);free(e->saved_dirty);free(e->saved_have);free(e->need);free(e->blocked);free(e->queue);}
+static void epoch_free(Epoch *e){if(e->in_flight||e->reader_slots||pthread_mutex_destroy(&e->authority))_Exit(1);if(e->cell)for(size_t i=0;i<e->n;i++){clear(&e->cell[i].stable);clear(&e->cell[i].next);clear(&e->cell[i].candidate);}free(e->cell);free(e->dirty);free(e->have);free(e->saved_dirty);free(e->saved_have);free(e->need);free(e->blocked);free(e->queue);}
 static int epoch_try_init(Epoch *e,const State *states,size_t n){*e=(Epoch){.states=states,.n=n};if(pthread_mutex_init(&e->authority,NULL))return 0;atomic_init(&e->cancelled,0);e->cell=zalloc(n,sizeof(Cell));e->dirty=zalloc(n,1);e->have=zalloc(n,1);e->saved_dirty=zalloc(n,1);e->saved_have=zalloc(n,1);e->need=zalloc(n,1);e->blocked=zalloc(n,1);e->queue=zalloc(n,sizeof(size_t));if(!e->cell||!e->dirty||!e->have||!e->saved_dirty||!e->saved_have||!e->need||!e->blocked||!e->queue){epoch_free(e);return 0;}for(size_t i=0;i<n;i++)e->dirty[i]=states[i].role==2;return 1;}
 static void epoch_init(Epoch *e,const State *states,size_t n){if(!epoch_try_init(e,states,n))fail("epoch allocation");}
 static int epoch_begin(Epoch *e){epoch_lock(e);if(!truth(F_life_begin(vb(e->in_flight),vi(e->attempt)))){epoch_unlock(e);return 0;}e->attempt++;e->in_flight=1;atomic_store(&e->cancelled,0);memcpy(e->saved_dirty,e->dirty,e->n);memcpy(e->saved_have,e->have,e->n);for(size_t i=0;i<e->n;i++){Cell *c=e->cell+i;if(e->states[i].name)c->previous=*e->states[i].slot;c->replaced=c->supplied=c->failed=0;c->error=NULL;}e->evaluations=e->frontiers=e->parallel_frontiers=e->launched=0;epoch_unlock(e);return 1;}
