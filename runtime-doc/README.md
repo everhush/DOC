@@ -86,4 +86,4 @@ The exact internal module organization can evolve inside this directory without 
 Independent parsing, type/authority validation, dependency IR, native C and WGSL emission, no-GC/no-RC lifetime/retirement, scheduler and cancellation, native system and freestanding proof, real graphics/compute, measured placement, conditional placed-profile obligations and Stage-1→Stage-2 reproduction remain mandatory. #14 remains the separate final release gate. This directory is the only new implementation home; shared validation workflow is separate.
 
 Canonical tracker: https://github.com/imxade/DOC/issues/11
-Public tracker: https://github.com/x0796666-ui/doc2/issues/2
+Historical mirror: https://github.com/x0796666-ui/doc2/issues/2 (archival only; active tracker is #11 in this private repository).

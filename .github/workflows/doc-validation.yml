@@ -1,7 +1,6 @@
 name: DOC Rust Linux validation
-# Keep this workflow name registered on main as well: GitHub's
-# workflow_run trigger for exact-SHA Kaggle hardware checks reads the
-# default-branch workflow registry, even for trusted feature pushes.
+# Keep this workflow name registered on the private default branch master.
+# This is a manual reference validation, not an independent DOC release gate.
 
 # Initial release and CI acceptance target: Linux x86_64 only.
 # Only native Rust DOC CPU, explicit wgpu GPU, packaging and semantics
@@ -19,16 +18,18 @@ concurrency:
 
 jobs:
   rust:
+    if: ${{ github.repository_id == '1317169134' && github.ref_name == 'master' }}
     name: Rust DOC language, CPU safety and WGSL checks
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-      - name: Record trusted public doc2 source provenance
+      - name: Record trusted private DOC source provenance
         shell: bash
         run: |
           set -euo pipefail
-          test "$GITHUB_REPOSITORY" = 'x0796666-ui/doc2'
+          test "$GITHUB_REPOSITORY_ID" = '1317169134'
+          test "$GITHUB_REF_NAME" = 'master'
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           mkdir -p validation-logs
           printf 'repo=%s\nref=%s\ncommit=%s\nevent=%s\n' \

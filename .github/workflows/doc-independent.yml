@@ -2,7 +2,7 @@ name: DOC independent bootstrap
 
 on:
   push:
-    branches: [main]
+    branches: [master]
     paths: ['ci/independent-batch-request.txt']
   workflow_dispatch:
 
@@ -11,6 +11,7 @@ permissions:
 
 jobs:
   bootstrap-stages:
+    if: ${{ github.repository_id == '1317169134' && github.ref_name == 'master' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
