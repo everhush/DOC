@@ -10,6 +10,7 @@ import hashlib
 import ast
 import json
 import os
+import re
 from pathlib import Path
 import stat
 import subprocess
@@ -115,8 +116,12 @@ def gpu_artifacts(planner, data, stream=False):
     shader=invoke(planner,data,'shader',stream=stream)
     if not shader or any(c not in (9,10,13) and not 32<=c<=126 for c in shader):
         raise ValueError('invalid generated WGSL bytes')
-    if shader.count(b'if(state==')!=sum(x>=0 for x in bounds):
-        raise ValueError('GPU plan/kernel case count mismatch')
+    admitted=[i for i,bound in enumerate(bounds) if bound>=0]
+    cases=[int(case,16) for case in re.findall(rb'if\(state==0x([0-9a-f]{8})u\)',shader)]
+    if shader.count(b'if(state==')!=len(admitted) or cases!=admitted:
+        raise ValueError('GPU plan/kernel case identity mismatch')
+    if shader.count(b'0xd0c11a5eu')!=1 or not shader.endswith(b'if(matched){out[idx*2u]=value;out[idx*2u+1u]=0xd0c11a5eu;}}'):
+        raise ValueError('GPU plan/kernel publication contract mismatch')
     header=('static const int64_t doc_gpu_bound[]={'+','.join(map(str,bounds))+'};\n'
             'static const char doc_wgsl[]='+json.dumps(shader.decode('ascii'))+';\n').encode('ascii')
     return shader,header
