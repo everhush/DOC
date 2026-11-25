@@ -55,7 +55,7 @@ class PhysicalMicroEvidenceTests(unittest.TestCase):
         tmp=tempfile.TemporaryDirectory();self.addCleanup(tmp.cleanup);root=Path(tmp.name)
         self.actual=root/'actual';self.actual.mkdir();self.expected=root/'expected';self.expected.mkdir()
         for name in MICRO_EXECUTABLES:
-            (self.actual/(name+'.stderr')).write_bytes(b'DOC11_GPU_ADAPTER: type=2 backend=6 physical=1 description=test\nDOC11_GPU_DISPATCH: lanes=96 workgroups=2\nDOC11_REGIONS: live=0 peak=8\nDOC11_GPU_BUFFER_POOL: action=reused\nDOC11_GPU_RETIRED: outcome=queue-complete\nDOC11_GPU_RETIRED: outcome=device-lost\n')
+            (self.actual/(name+'.stderr')).write_bytes(b'DOC11_GPU_ADAPTER: type=2 backend=6 physical=1 description=test\nDOC11_GPU_DISPATCH: lanes=96 workgroups=2\nDOC11_REGIONS: live=0 peak=8\nDOC11_GPU_BUFFER_POOL: action=reused\nDOC11_GPU_RETIRED: outcome=queue-complete\nDOC11_GPU_RETIRED: outcome=device-lost\nDOC11_GPU_POOL_METRICS: event=created admitted=420 released=0 live=420 peak=420\nDOC11_GPU_POOL_METRICS: event=grown admitted=2320 released=20 live=2300 peak=2320\nDOC11_GPU_POOL_METRICS: event=reused admitted=2320 released=20 live=2300 peak=2320\nDOC11_GPU_POOL_METRICS: event=closed admitted=2320 released=2320 live=0 peak=2320\n')
             if name in MICRO_GRAPHS:
                 (self.expected/(name+'.expected')).write_bytes(name.encode())
                 (self.actual/(name+'.actual')).write_bytes(name.encode())
@@ -77,6 +77,11 @@ class PhysicalMicroEvidenceTests(unittest.TestCase):
         for marker in (b'DOC11_GPU_RETIRED: outcome=queue-complete',b'DOC11_GPU_RETIRED: outcome=device-lost',b'DOC11_GPU_BUFFER_POOL: action=reused',b'DOC11_GPU_DISPATCH: lanes=96 workgroups=2'):
             p.write_bytes(original.replace(marker,b'absent'))
             with self.subTest(marker=marker),self.assertRaises(ValueError):self.validate()
+    def test_pool_accounting(self):
+        p=self.actual/'gpu_epoch_authority.stderr';original=p.read_bytes()
+        for old,new in ((b'live=2300',b'live=2301'),(b'peak=2320',b'peak=2300'),(b'event=grown',b'event=absent'),(b'event=reused',b'event=absent'),(b'event=closed',b'event=absent'),(b'released=2320 live=0',b'released=2319 live=1')):
+            p.write_bytes(original.replace(old,new))
+            with self.subTest(old=old),self.assertRaises(ValueError):self.validate()
     def test_missing_result(self):
         (self.actual/'device_loss.stdout').write_bytes(b'')
         with self.assertRaises(ValueError):self.validate()
