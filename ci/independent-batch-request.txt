@@ -5,3 +5,5 @@ Run independent bootstrap, native conformance, Stage-2 self-reproduction, game r
 Physical GPU acceptance is separate. Do not treat software execution as physical proof.
 2026-11-25: verified private CI fork; consolidated Stage-2 regression including mesh allocation fault sweep.
 2026-11-25: consolidated Stage-2 games, mixed WebGPU and rollback, compiler self-reproduction, native scalar boot, render, memory and race validation.
+
+Batch: replay, lifetime and placement policy, checkpoint/PCM, GPU branch diagnostics and multi-workgroup separation, same-run physical GPU, mesh lockfile correction. Frozen Rust unchanged.

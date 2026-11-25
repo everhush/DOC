@@ -22,10 +22,11 @@ def main():
  assert a.prebuilt or (ref and comp and plan)
  scalar='source a:int=-2147483648\nsource b:int=2147483647\nderive lo:bool(a,b)=lt(a,b)\nderive hi:bool(a,b)=le(b,a)\nderive pick:int(a,b,lo)=if(lo,a,b)\n'
  arithmetic='source a:int=2\nsource b:int=-3\nderive x:int(a,b)=mul(a,b)\nderive y:int(a,b)=add(a,b)\nderive z:bool(x,y)=lt(x,y)\n'
+ wide='source x:int=2\n'+''.join(f'derive g{i}:bool(x)=eq(x,{i})\n' for i in range(96))
  mixed='source x:int=2\nsource xs:ints=[1,2]\n'+''.join(f'derive g{i}:bool(x)=eq(x,{i})\n' for i in range(96))+''.join(f'derive c{i}:ints(xs)=append(xs,{i})\n' for i in range(32))
  with tempfile.TemporaryDirectory() as tmp:
   root=Path(tmp);src=root/'test.doc';c=root/'generated.c';exe=root/'app';gh=root/'gpu_generated.h'
-  for name,program,args,mode in [('scalar',scalar,['--next','a=0'],'gpu'),('arithmetic',arithmetic,['--next','a=4'],'gpu'),('mixed',mixed,['--next','x=3','xs=[4]'],'auto')]:
+  for name,program,args,mode in [('scalar',scalar,['--next','a=0'],'gpu'),('arithmetic',arithmetic,['--next','a=4'],'gpu'),('wide',wide,['--next','x=3'],'gpu'),('mixed',mixed,['--next','x=3','xs=[4]'],'auto')]:
    src.write_text(program);snapshot=program.encode()
    if a.prebuilt:
     exe=a.prebuilt.resolve()/name;expected=(a.prebuilt.resolve()/(name+'.expected')).read_bytes()
@@ -43,6 +44,7 @@ def main():
      shutil.copy2(exe,a.artifacts/name);(a.artifacts/(name+'.expected')).write_bytes(expected)
    actual=run([exe,'--backend='+mode,*args],root,a.physical);assert actual.returncode==0 and actual.stdout==expected,(name,actual.stderr,actual.stdout[:300],expected[:300]);assert b'DOC11_GPU_DISPATCH:' in actual.stderr and b'DOC11_REGIONS: live=0 ' in actual.stderr,actual.stderr
    if a.physical:assert b'physical=1' in actual.stderr
+   if name=='wide':assert b'DOC11_GPU_DISPATCH: lanes=96 workgroups=2' in actual.stderr,actual.stderr
    if name=='mixed':
     assert b'DOC11_GPU_BUFFER_POOL: action=created' in actual.stderr and b'DOC11_GPU_BUFFER_POOL: action=reused' in actual.stderr,actual.stderr
     injected=run([exe,'--backend=auto',*args],root,a.physical,{'DOC_GPU_TEST_FAIL_DISPATCH':'2'});assert injected.returncode and b'epoch: 0' in injected.stdout and b'epoch: 1' not in injected.stdout and b'DOC11_GPU_INJECTED_FAILURE: dispatch=2' in injected.stderr and b'DOC11_REGIONS: live=0 ' in injected.stderr,injected

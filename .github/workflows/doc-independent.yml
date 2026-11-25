@@ -17,7 +17,7 @@ concurrency:
 jobs:
   bootstrap-stages:
     if: ${{ github.repository_id == '1471748051' && github.ref_name == 'master' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
@@ -69,7 +69,7 @@ jobs:
           path: doc11-evidence/
   self-reproduction:
     needs: bootstrap-stages
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -94,7 +94,7 @@ jobs:
           path: doc11-self-evidence/
   stage2-games:
     needs: [bootstrap-stages, self-reproduction]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
@@ -136,7 +136,7 @@ jobs:
           path: doc11-game-evidence/
   stage2-webgpu:
     needs: [bootstrap-stages, stage2-games]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
@@ -164,6 +164,8 @@ jobs:
           echo '86f3eb9f74d7f1ac82ee52d9b2ab15e366ef86a932759c750b7472652836ee59  doc11-wgpu.zip' | sha256sum -c -
           unzip -q doc11-wgpu.zip -d doc11-wgpu
           sha256sum doc11-wgpu.zip > doc11-stage2-gpu-evidence/wgpu-sha256.txt
+          cp doc11-wgpu/lib/libwgpu_native.so doc11-stage2-gpu-evidence/
+          ldd --version | head -1 > doc11-stage2-gpu-evidence/host-abi.txt
       - name: Execute GPU graphs compiled by self-hosted Stage-2 tools
         shell: bash
         run: |
@@ -183,7 +185,7 @@ jobs:
 
   stage2-native-scalar:
     needs: [bootstrap-stages, self-reproduction, stage2-games]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
@@ -223,7 +225,7 @@ jobs:
 
   stage2-mesh-plan:
     needs: [bootstrap-stages, self-reproduction, stage2-games]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 50
     steps:
       - uses: actions/checkout@v4
@@ -266,6 +268,9 @@ jobs:
           echo '86f3eb9f74d7f1ac82ee52d9b2ab15e366ef86a932759c750b7472652836ee59  doc11-wgpu.zip' | sha256sum -c -
           unzip -q doc11-wgpu.zip -d doc11-wgpu
           sha256sum doc11-wgpu.zip > doc11-mesh-evidence/wgpu-sha256.txt
+          cargo generate-lockfile --manifest-path runtime-rust/Cargo.toml
+          cp runtime-rust/Cargo.lock doc11-mesh-evidence/oracle-Cargo.lock
+          sha256sum doc11-mesh-evidence/oracle-Cargo.lock > doc11-mesh-evidence/oracle-lock-SHA256SUMS
           cargo build --release --locked --manifest-path runtime-rust/Cargo.toml --features webgpu --bin doc-scene3d
       - name: Compare native DOC rendering to frozen reference
         shell: bash
@@ -285,7 +290,7 @@ jobs:
 
   stage2-physical:
     needs: [stage2-games, stage2-webgpu, stage2-native-scalar, stage2-mesh-plan]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 360
     steps:
       - uses: actions/checkout@v4
