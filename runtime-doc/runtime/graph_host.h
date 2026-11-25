@@ -2,17 +2,19 @@
 #define DOC_GRAPH_HOST_H
 #include "graph_variant_abi.h"
 #include "graph_generation_generated.h"
+#include "graph_reader_slots.h"
 #include <pthread.h>
 /* Single-writer prelinked-variant coordinator. Reader callbacks see private
  * materializations and may overlap a replacement. The caller must quiesce
- * all host entry points before shutdown; variants remain linked throughout. */
-typedef struct {pthread_mutex_t lock;const GraphVariant *variant;void *instance;int64_t generation;} GraphHost;
+ * all host entry points before shutdown; variants remain linked throughout.
+ * Admission is bounded by independent slots, not by ownership counts. */
+typedef struct {pthread_mutex_t lock;const GraphVariant *variant;void *instance;int64_t generation;uint64_t reader_slots;} GraphHost;
 typedef struct {Region owner;GraphFact *facts;size_t n;} GraphCopy;
 typedef void (*GraphReader)(void *,int64_t,const GraphFact *,size_t);
 static void graph_lock(GraphHost *g){if(pthread_mutex_lock(&g->lock))_Exit(1);}
 static void graph_unlock(GraphHost *g){if(pthread_mutex_unlock(&g->lock))_Exit(1);}
 static int graph_init(GraphHost *g,const GraphVariant *v){*g=(GraphHost){0};if(!v||pthread_mutex_init(&g->lock,NULL))return 0;g->instance=v->create(NULL,0);if(!g->instance){pthread_mutex_destroy(&g->lock);return 0;}g->variant=v;return 1;}
-static void graph_destroy(GraphHost *g){g->variant->destroy(g->instance);if(pthread_mutex_destroy(&g->lock))_Exit(1);*g=(GraphHost){0};}
+static void graph_destroy(GraphHost *g){if(g->reader_slots)_Exit(1);g->variant->destroy(g->instance);if(pthread_mutex_destroy(&g->lock))_Exit(1);*g=(GraphHost){0};}
 static int graph_update(GraphHost *g,int64_t ticket,int argc,char **argv){graph_lock(g);int ok=ticket==g->generation&&g->variant->update(g->instance,argc,argv);graph_unlock(g);return ok;}
 static int graph_copy(void *opaque,const GraphFact *facts,size_t n){
     GraphCopy *c=opaque;if(n>SIZE_MAX/sizeof(*c->facts))return 0;c->facts=calloc(n?n:1,sizeof(*c->facts));if(!c->facts)return 0;c->n=n;
@@ -23,8 +25,13 @@ static int graph_copy(void *opaque,const GraphFact *facts,size_t n){
 static void graph_copy_free(GraphCopy *c){clear(&c->owner);free(c->facts);}
 static int graph_read(GraphHost *g,int64_t ticket,GraphReader visit,void *ctx){
     if(!visit||active||failure_target)return 0;
-    GraphCopy c={0};graph_lock(g);int ok=ticket==g->generation&&g->variant->read(g->instance,graph_copy,&c);graph_unlock(g);
-    if(ok)visit(ctx,ticket,c.facts,c.n);graph_copy_free(&c);return ok;
+    GraphCopy c={0};graph_lock(g);
+    int slot=ticket==g->generation?graph_slot_take(&g->reader_slots):-1;
+    if(slot<0){graph_unlock(g);return 0;}
+    int ok=g->variant->read(g->instance,graph_copy,&c);graph_unlock(g);
+    if(ok)visit(ctx,ticket,c.facts,c.n);
+    graph_copy_free(&c);
+    graph_lock(g);if(!graph_slot_drop(&g->reader_slots,slot))_Exit(1);graph_unlock(g);return ok;
 }
 typedef struct {const GraphVariant *next;void *candidate;} GraphReplacement;
 static int graph_prepare(void *opaque,const GraphFact *facts,size_t n){GraphReplacement *r=opaque;r->candidate=r->next->create(facts,n);return !!r->candidate;}
