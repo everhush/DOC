@@ -81,12 +81,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          chmod +x doc11-evidence/managed
           test "$(cat doc11-evidence/source-sha.txt)" = "$(git rev-parse HEAD)"
+          sha256sum -c doc11-evidence/SHA256SUMS
+          chmod +x doc11-evidence/managed
           test "$(git rev-parse HEAD:runtime-rust)" = a95a38bc6e9300aae815f83b570db5f99d32f221
           mkdir -p doc11-self-evidence
           python3 runtime-doc/tests/test_self_reproduction.py --native doc11-evidence/managed --evidence doc11-self-evidence | tee doc11-self-evidence/self-test.log
-          sha256sum doc11-self-evidence/stage{2,3}{,.c} > doc11-self-evidence/SHA256SUMS
+          git rev-parse HEAD > doc11-self-evidence/source-sha.txt
+          sha256sum doc11-self-evidence/stage{2,3}{,.c} doc11-self-evidence/{source-sha.txt,self-test.log} > doc11-self-evidence/SHA256SUMS
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -113,6 +115,8 @@ jobs:
           chmod +x doc11-evidence/{doc,module_scan} doc11-self-evidence/stage2
           test "$(cat doc11-evidence/source-sha.txt)" = "$(git rev-parse HEAD)"
           sha256sum -c doc11-evidence/oracle-SHA256SUMS
+          sha256sum -c doc11-evidence/SHA256SUMS
+          test "$(cat doc11-self-evidence/source-sha.txt)" = "$(git rev-parse HEAD)"
           sha256sum -c doc11-self-evidence/SHA256SUMS
           mkdir -p doc11-game-evidence
           python3 -u runtime-doc/tests/test_stage2_games.py --stage2 doc11-self-evidence/stage2 --scanner doc11-evidence/module_scan --reference doc11-evidence/doc --evidence doc11-game-evidence | tee doc11-game-evidence/test.log
@@ -208,6 +212,7 @@ jobs:
           test "$(cat doc11-evidence/source-sha.txt)" = "$(git rev-parse HEAD)"
           test "$(cat doc11-game-evidence/source-sha.txt)" = "$(git rev-parse HEAD)"
           test "$(git rev-parse HEAD:runtime-rust)" = a95a38bc6e9300aae815f83b570db5f99d32f221
+          test "$(cat doc11-self-evidence/source-sha.txt)" = "$(git rev-parse HEAD)"
           sha256sum -c doc11-self-evidence/SHA256SUMS
           sha256sum -c doc11-game-evidence/SHA256SUMS
           chmod +x doc11-self-evidence/stage2 doc11-game-evidence/scanner2
@@ -216,7 +221,7 @@ jobs:
           mkdir -p doc11-native-evidence
           python3 -u runtime-doc/tests/test_native_scalar.py --stage2 doc11-self-evidence/stage2 --scanner doc11-game-evidence/scanner2 --evidence doc11-native-evidence --boot | tee doc11-native-evidence/test.log
           git rev-parse HEAD > doc11-native-evidence/source-sha.txt
-          sha256sum doc11-native-evidence/{native_scalar2,native_scalar2.c,boot.c,boot.h,regions.c,regions.h,region-host,arena.c,arena.h,arena-host,intrinsics.c,intrinsics.h,external.c,external.h,intrinsic-host,buffer.c,buffer.h,buffer-host,kernel64.elf,kernel.elf} > doc11-native-evidence/SHA256SUMS
+          sha256sum doc11-native-evidence/{native_scalar2,native_scalar2.c,boot.c,boot.h,regions.c,regions.h,region-host,arena.c,arena.h,arena-host,intrinsics.c,intrinsics.h,external.c,external.h,intrinsic-host,buffer.c,buffer.h,buffer-host,kernel64.elf,kernel.elf,host,alternate.c,alternate.o,boot.o,verify.o,entry.o,elf.txt,qemu-version.txt,device.txt,source-sha.txt,test.log} > doc11-native-evidence/SHA256SUMS
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -248,6 +253,7 @@ jobs:
           test "$(cat doc11-evidence/source-sha.txt)" = "$(git rev-parse HEAD)"
           test "$(cat doc11-game-evidence/source-sha.txt)" = "$(git rev-parse HEAD)"
           test "$(git rev-parse HEAD:runtime-rust)" = a95a38bc6e9300aae815f83b570db5f99d32f221
+          test "$(cat doc11-self-evidence/source-sha.txt)" = "$(git rev-parse HEAD)"
           sha256sum -c doc11-self-evidence/SHA256SUMS
           sha256sum -c doc11-game-evidence/SHA256SUMS
           chmod +x doc11-self-evidence/stage2 doc11-game-evidence/scanner2
