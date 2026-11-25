@@ -67,6 +67,7 @@ def main():
             assert actual.returncode==0 and actual.stdout==expected,(name,actual.returncode,actual.stderr[-8000:])
             assert b'DOC11_GPU_ADAPTER:' in actual.stderr and b'DOC11_REGIONS: live=0 ' in actual.stderr
             if a.physical:assert re.search(rb'(?m)^DOC11_GPU_ADAPTER: .* physical=1 ',actual.stderr)
+            assert b'DOC11_GPU_BUFFER_POOL: action=created' in actual.stderr and b'DOC11_GPU_BUFFER_POOL: action=reused' in actual.stderr,actual.stderr
             epochs=trace(actual.stderr)
             assert len(epochs)==len(starts) and sum(e['mixed_frontiers'] for e in epochs[1:])>0 and sum(e['concurrent_frontiers'] for e in epochs[1:])>0,'no actual concurrent mixed successor frontier'
             epoch,ordinal=first_successor_dispatch(epochs)

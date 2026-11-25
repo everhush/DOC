@@ -36,6 +36,7 @@ def main():
    expected=check([ref,src,*args],root);actual=run([exe,'--backend='+mode,*args],root,a.physical);assert actual.returncode==0 and actual.stdout==expected,(name,actual.stderr,actual.stdout[:300],expected[:300]);assert b'DOC11_GPU_DISPATCH:' in actual.stderr and b'DOC11_REGIONS: live=0 ' in actual.stderr,actual.stderr
    if a.physical:assert b'physical=1' in actual.stderr
    if name=='mixed':
+    assert b'DOC11_GPU_BUFFER_POOL: action=created' in actual.stderr and b'DOC11_GPU_BUFFER_POOL: action=reused' in actual.stderr,actual.stderr
     injected=run([exe,'--backend=auto',*args],root,a.physical,{'DOC_GPU_TEST_FAIL_DISPATCH':'2'});assert injected.returncode and b'epoch: 0' in injected.stdout and b'epoch: 1' not in injected.stdout and b'DOC11_GPU_INJECTED_FAILURE: dispatch=2' in injected.stderr and b'DOC11_REGIONS: live=0 ' in injected.stderr,injected
     # Destroy the actual adapter device after a successful mixed frontier.
     # Verify the previously published state and masks in the same process.
