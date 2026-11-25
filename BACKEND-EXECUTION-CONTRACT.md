@@ -1,48 +1,20 @@
-# DOC execution-backend contract — 2026-11-22 decision
+# DOC active execution contract — Rust reference, WebGPU/WGSL only
 
-This supersedes prior *automatic CPU/GPU selection* proposals. It is a **host execution policy**, not a DOC language or calculus primitive. One directly authored DOC program retains its logical meaning regardless of which supported backend is selected. Rust and Goose (not Go) remain independently implemented native runtimes.
+**Current #15 reconciliation (2026-11-25).** Initial host Linux x86_64. Active development rtu0/doc2/main; Rust is the reference/bootstrap, Goose is historical and excluded from active CI. The independent DOC implementation belongs in runtime-doc/ only after the audited Rust handoff. The normative manuscript is unchanged. This contract distinguishes actual supported entry points and does not promise final self-hosting or universal GPU coverage.
 
-## Normative behavior
+## Entry points and placement
 
-1. **CPU by default.** The general-purpose native CLI runs CPU when no backend is specified. The first option immediately after the source path may be `--backend=cpu` or `--backend=gpu`. All other source assignments and supported CLI options follow this selection. There is no need to annotate DOC source code with backend decisions.
-2. **Strict explicit execution.** `--backend=cpu` uses the native CPU runtime. `--backend=gpu` must either execute the *supported DOC computation* on a real selected GPU execution path or fail nonzero with an actionable diagnostic. Never silently execute an unsupported GPU computation on CPU, print GPU-success markers without actual GPU dispatch, or publish half-computed results. A GPU path may still use CPU for operating-system effects, device setup, transfers and necessary host coordination.
-3. **No `auto` mode.** There is no automatic backend choice, cost model, runtime switching, or implicit CPU/GPU migration requirement. An explicit hybrid mode, if ever needed, requires a new separate documented opt-in contract. It must not silently change this strict behavior.
-4. **Physical capability checks remain necessary.** The selected device must still be created/validated, with feature limits, memory, synchronization and errors handled safely. Driver/API selection under `wgpu` or SDL3 `gfx` is not automatic DOC CPU/GPU placement. A software Vulkan adapter (e.g., llvmpipe/lavapipe) may be used for *explicitly labeled software-backend tests* but must not count as physical GPU acceleration. Hardware proof requires a physically identified adapter.
-5. **Same program, same semantics.** Both native Rust and Goose must preserve typed DOC source/repair behavior, demanded recurrence, immutable publication, graph generations, effects/failure boundaries, and output when supported on both execution backends. Resource constraints and unsupported constructs should be diagnosed, not silently downgraded.
-6. **No speedup assumption.** CPU parallelism follows DOC ready-frontier dependencies. A GPU is not necessarily faster, and a full DOC program with OS I/O cannot literally run wholly inside a shader. GPU execution is about the declared computational evaluator, not an absence of CPU-side orchestration.
+- Standalone `doc FILE.doc` defaults to CPU. Its first optional selector is strictly `--backend=cpu|gpu`; it rejects `--backend=auto` and arbitrary selectors. See runtime-rust/src/main.rs:118–128. Selected GPU must execute admitted work on wgpu or fail, not secretly use CPU for the claimed shader.
+- Automatic heterogeneous placement is implemented through AutomaticScheduler and Runtime::stabilize_automatic, used by automatic recurrence, game/scene hosts and dependency-family proofs. It is not an authored placement directive or an extra source-language mode. Independent ready scalar work may be split into CPU and GPU candidates by typed eligibility, actual adapter admission and conservative grain (64 lanes); nonadmitted work remains CPU. Initial absence/unavailability may choose a reported CPU-only path; after dispatch starts failure rejects the private candidate. The standalone CLI does not expose automatic mode at this revision; do not infer automatic support at every entry.
+- CPU worker count and task grain are host/evidence controls, not DOC source. Hardware-limited scoped workers evaluate a common pre-valuation; join and validate all results before frontier publication. C Stage-0 CPU compilation is a separate bootstrap profile; it does not implement the final independent GPU compiler.
+- `wgpu::Instance::default()` chooses the platform provider. No DOC-level native API/driver/manifest/ICD selection or inspection. WebGPU-exposed device class, limits and errors determine admission. A discrete/integrated adapter may certify hardware execution; CPU adapter only through explicit software-test allowance, never as physical evidence.
+- The current Rust compute path specializes typed source expressions into generated WGSL (src/wgsl.rs:302; src/gpu.rs:297–318), not a permanent instruction interpreter. Device-local bounded cache keys by complete generated shader source; dispatch buffers are private, error scope and readback completion precede candidate publication. Graphics uses DOC-authored generated mesh shaders (graphics.rs, scene_gpu.rs), separately from pure computation.
+- Pure eligible bool/signed-i32 fragments only. Range/unsupported operation/type checks and WebGPU buffer/device limits fail closed. Automatic CPU selection for unprofitable/ineligible work is not strict GPU fallback. Source authority, native effects and dependent recurrence boundaries remain ordered by actual dependencies; no promise that arbitrary effects or values run in a shader.
 
-## Status at adoption (NOT a general-purpose GPU release)
+## Evidence boundary
 
-The current general-purpose Rust `doc` and native Goose `doc-goose` CLIs are **CPU executors only**. They default to CPU, permit an explicit `--backend=cpu`, and **reject `--backend=gpu`** because a general-purpose DOC GPU evaluator has not been implemented. Both reject `--backend=auto` and unknown values.
+At accepted #24 revision 11e22c484a35a183ed9f77a2125afa5f22746c41, [CPU/software CI](https://github.com/rtu0/doc2/actions/runs/45535169012) and [physical GPU](https://github.com/rtu0/doc2/actions/runs/45535910015) succeeded. Software job raw logs include generated mesh readback, scene replay, 512 software-test-only family lanes and rollback, generated WGSL cache, selected-GPU recurrence parity and failure boundaries. Physical job authenticated exact-byte bundle and reports 42 native signed GPU episodes and 62 source cases; artifact 14986159569 matches source revision. These results are bounded evidence, not physical proof for later commits or speed guarantees. #15 audits actual model conformance; #11 must reproduce all required behavior independently.
 
-```sh
-# Both CLIs accept this shape: source path first, backend selector next.
-doc program.doc
-doc program.doc --backend=cpu
-doc-goose program.doc
-doc-goose program.doc --backend=cpu
+Earlier explicit-only dual-runtime and instruction-ABI policies remain historical (Git history and docs/GPU-INSTRUCTION-ABI-v1.md). They do not override the current generated-WGSL / automatic placement contract.
 
-# Both currently fail with DOC_GPU_UNSUPPORTED (strict fail-closed).
-doc program.doc --backend=gpu
-doc-goose program.doc --backend=gpu
-```
-
-Separate *GPU test executables* remain operational for bounded DOC-derived Boolean, signed integer comparisons, dependent stages and reductions. They **are not general-purpose DOC GPU interpreters**. Rust's dedicated `webgpu_bool` test executable defaults to GPU (because it is a GPU regression program); it supports `DOC_GPU_EXECUTION=gpu|cpu` with no `auto`. `webgpu_integer_eq` likewise offers explicit CPU/GPU selection. Goose's `doc_sdl3_gpu.goose` is a native Goose `gfx` / SDL3 **GPU-only** experimental execution path and fails closed when no device is available. Rust `wgpu` and Goose SDL3 are different native device interfaces; SDL3 does not expose the WebGPU API.
-
-## Implementation work remaining — required for the selected-backend goal
-
-- Design and implement a **general-purpose DOC GPU execution realization** beyond a fixed operator-kernel catalog. Define the evaluable computational subset, graph/recurrence representation, dynamic work where applicable, data model, scheduling/barriers, termination, memory ownership, error/cancellation and immutable publication policies. Avoid claiming arbitrary OS effects can run in shaders.
-- Connect `--backend=gpu` from **both native general-purpose DOC CLIs** to genuinely executed supported GPU computations using independent Rust `wgpu` and Goose SDL3 `gfx` implementations. Unsupported programs/devices must reject, not fake GPU execution. Expand supported semantic coverage to meet the agreed HVM-like general-purpose goal.
-- Execute identical DOC source cases in selected CPU and selected GPU modes, including nontrivial recurrence/dependent work, malformed/resource-limited inputs, injection/device loss, pure-state parity, no partial publication, physical-adapter identification, and honest CPU/GPU end-to-end performance measurements. Keep real and software GPU adapter evidence separate.
-- Verify the strict selector with `bash ci/check-explicit-backend.sh DOC_EXECUTABLE runtime-rust/examples/repair.doc`, using both Rust and Goose native binaries. CI and `ci/run-all-local.sh` exercise this regression. This proves CLI admission only, **not GPU generality**.
-
-## Scope and tracking
-
-This changes **execution selection and acceptance criteria**, not the submitted manuscript's theorems or the game-engine priority. Do not add a `gpu` or `cpu` DOC core primitive. Do not reintroduce Goose's deprecated WGSL generator, Rust-hosted Goose GPU dispatch, C/C++ native DOC runtime, or unnecessary compatibility layers.
-
-- [Secondary final local acceptance #2](https://github.com/x0796666-ui/DOC/issues/2)
-- [Canonical language and runtime #7](https://github.com/imxade/DOC/issues/7)
-- [Experimental evidence #9](https://github.com/imxade/DOC/issues/9)
-- [Deferred DOC-native game engine #10](https://github.com/imxade/DOC/issues/10)
-
-The strict backend selection contract must be satisfied independently in both runtimes before any general-purpose GPU readiness claim. Kaggle live validation remains a separate ChatGPT-side task; no DOC-imposed artificial GPU-run caps apply.
+Related: [#15](https://github.com/imxade/DOC/issues/15), [#22](https://github.com/imxade/DOC/issues/22), [#21](https://github.com/imxade/DOC/issues/21), [#24](https://github.com/imxade/DOC/issues/24), [#11](https://github.com/imxade/DOC/issues/11).

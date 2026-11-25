@@ -1,0 +1,13 @@
+# General-purpose DOC search by finite, demand-driven recurrence.
+# This program locates the first matching signed element without an interpreter-specific search primitive.
+source remaining: ints = [4,9,-2,9]
+source index: int = 0
+source needle: int = 9
+source found_at: maybe_int = none
+derive next_needle: int (needle) = needle
+derive has_items: bool (remaining) = lt(0,len(remaining))
+derive head_matches: bool (remaining,needle,has_items) = if(has_items,eq(get(remaining,0),needle),false)
+derive next_found_at: maybe_int (found_at,head_matches,index) = if(eq(found_at,none()),if(head_matches,some(index),none()),found_at)
+derive next_remaining: ints (remaining,head_matches) = if(head_matches,remaining,if(eq(len(remaining),0),remaining,tail(remaining)))
+derive next_index: int (index,head_matches,has_items) = if(head_matches,index,if(has_items,add(index,1),index))
+derive done: bool (next_found_at,next_remaining) = if(eq(next_found_at,none()),eq(len(next_remaining),0),true)

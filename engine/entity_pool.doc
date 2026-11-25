@@ -1,0 +1,7 @@
+# Reusable, pure DOC bounded entity-column operations.
+# An invalid index is guarded by the caller; operations themselves reject it.
+fn entity_insert(column,insert_value,allowed) = if(allowed,append(column,insert_value),column)
+fn entity_remove(column,remove_slot,allowed) = if(allowed,remove_at(column,remove_slot),column)
+fn entity_move(column,index,value,allowed) = if(allowed,replace_at(column,index,value),column)
+fn entity_slot_is(ids,index,expected_id) = if(lt(index,0),false,if(lt(index,len(ids)),eq(get(ids,index),expected_id),false))
+fn entity_position(values,index,valid) = if(valid,get(values,index),-1)

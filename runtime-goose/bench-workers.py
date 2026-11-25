@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Same-source, same-host 1/2/4 native DOC ready-frontier worker measurements.
+"""Same-source, same-host 1/2/4/auto native DOC frontier measurements.
 Records raw measurements, correctness and negative speedups. No acceleration
 claims or GPU claims; processes start fresh for every sample.
 """
@@ -14,8 +14,12 @@ samples=[]
 reference=None
 def invoke(runtime,workers):
     env=os.environ.copy()
-    env["DOC_WORKERS"]=str(workers)
-    env["DOC_GOOSE_WORKERS"]=str(workers)
+    if workers=="auto":
+        env.pop("DOC_WORKERS",None)
+        env.pop("DOC_GOOSE_WORKERS",None)
+    else:
+        env["DOC_WORKERS"]=str(workers)
+        env["DOC_GOOSE_WORKERS"]=str(workers)
     started=time.perf_counter_ns()
     p=subprocess.run([binaries[runtime],file],capture_output=True,text=True,
                      env=env,timeout=30)
@@ -26,18 +30,17 @@ def invoke(runtime,workers):
                          if not line.startswith("DOC_TYPED_EVALUATIONS="))+"\n"
     if "p127: false" not in normalized or "folded: true" not in normalized:
         raise AssertionError("invalid wide ready-frontier result")
-    if runtime=="goose" and workers>1 and (
-        f"DOC_GOOSE_PARALLEL_FRONTIER: workers={workers} candidates=128"
-        not in p.stderr):
+    if runtime=="goose" and workers!="auto" and workers>1 and (
+        "DOC_GOOSE_PARALLEL_FRONTIER:" not in p.stderr and (os.cpu_count() or 1)>1):
         raise AssertionError("Goose worker implementation did not dispatch typed-queue jobs")
     return normalized,elapsed
 for runtime in binaries:
-    for w in (1,2,4):
+    for w in (1,2,4,"auto"):
         for _ in range(3):
             text,_=invoke(runtime,w)
             if reference is None: reference=text
             if text!=reference:raise AssertionError("worker count changed DOC semantics")
-jobs=[(runtime,w,i) for runtime in binaries for w in (1,2,4) for i in range(31)]
+jobs=[(runtime,w,i) for runtime in binaries for w in (1,2,4,"auto") for i in range(31)]
 random.Random(97413).shuffle(jobs)
 for runtime,w,i in jobs:
     text,ms=invoke(runtime,w)
@@ -51,7 +54,7 @@ with (out/"doc-ready-frontier-workers.csv").open("w",newline="") as f:
     writer.writeheader();writer.writerows(samples)
 summary={}
 for runtime in binaries:
-    for w in (1,2,4):
+    for w in (1,2,4,"auto"):
         values=sorted(s["wall_ms"] for s in samples
                       if s["runtime"]==runtime and s["workers"]==w)
         summary[f"{runtime}/{w}"]={

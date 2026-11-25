@@ -2,7 +2,7 @@
 
 The secondary CI workspace produces Linux native Rust and Goose DOC interpreter archives.
 They are independently authored in Rust and Goose and accept the same .doc source files.
-These archives are not yet production releases or cross-platform binaries.
+These Linux x86_64 archives are not yet production releases.
 
 ## Build locally
 
@@ -15,8 +15,10 @@ Goose: ./doc-goose runtime-rust/examples/repair.doc a=4 b=1
 ## CI artifact contents
 
 - doc-rust-linux-x86_64.tar.gz: bin/doc-rust, LICENSE, sample .doc source
-- doc-goose-linux-x86_64.tar.gz: bin/doc-goose, LICENSE, sample .doc source
-- Per-run dynamic library listings and extracted-install execution logs.
+- doc-goose-linux-x86_64.tar.gz: bin/doc-goose (CPU-only), LICENSE, sample .doc source
+- doc-rust-gpu-linux-x86_64.tar.gz: bin/doc-rust-gpu (native wgpu-enabled DOC CLI), LICENSE, sample DOC source
+- doc-goose-sdl3-linux-x86_64.tar.gz: doc-goose-sdl3 (native Goose gfx-enabled DOC CPU/selected-GPU CLI), LICENSE, sample DOC source
+- Per-run dynamic library listings, software Vulkan results, and extracted-install smoke logs.
 - CI extracts each archive into a temporary directory and runs the included binary.
 
 ## Safety and scope
@@ -27,8 +29,9 @@ Upstream Goose is NOT transitive-C-free: its standard OS module uses native C ru
 for zero C code in the final linked Goose binary requires changing the upstream
 Goose compiler/runtime backend. Do not claim the current Goose build meets that requirement.
 
-The release artifacts and current tests do not prove WebGPU hardware/browser portability,
-Goose-owned WebGPU device dispatch, complete memory isolation/reconstruction, OS sandboxing,
+The Linux release artifacts and tests exercise a **restricted** same-source Goose SDL3
+GPU Boolean-derived path, but do not prove physical GPU coverage, general DOC GPU
+integer/recurrence/effects execution, complete memory isolation/reconstruction, OS sandboxing,
 all-worker parallel scheduling, or production readiness. These gates remain open.
 
 ## Explicit output effects

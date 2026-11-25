@@ -44,3 +44,30 @@ fn functions_reject_arity_type_cycles_and_reserved_identifiers() {
         assert!(Graph::parse(&failure).is_err(),"{failure}");
     }
 }
+
+#[test]
+fn lexical_function_specialization_preserves_literals_and_removes_old_arity_limit(){
+    let doc=concat!(
+        "fn label(x) = concat(text(\"x, café (literal) \"),x)\n",
+        "fn total(a,b,c,d,e,f) = add(add(add(a,b),add(c,d)),add(e,f))\n",
+        "source suffix: text = \"ok\"\nsource n: int = 1\n",
+        "derive message: text (suffix) = label(suffix)\n",
+        "derive result: int (n) = total(n,2,3,4,5,6)\n");
+    let g=Graph::parse(doc).unwrap();let message=g.id("message").unwrap();let result=g.id("result").unwrap();
+    let mut r=Runtime::new(g,4,Cutoff::Exact);r.stabilize().unwrap();
+    assert_eq!(r.value(message),Some(Value::Text("x, café (literal) ok".into())));
+    assert_eq!(r.value(result),Some(Value::Int(21)));
+    let body=(0..100).fold("x".to_string(),|b,_|format!("add(x,{b})"));
+    assert!(body.len()>512);
+    let g=Graph::parse(&format!("fn many(x) = {body}\nsource n: int = 1\nderive result: int (n) = many(n)\n")).unwrap();
+    let result=g.id("result").unwrap();let mut r=Runtime::new(g,2,Cutoff::Exact);r.stabilize().unwrap();assert_eq!(r.value(result),Some(Value::Int(101)));
+}
+#[test]
+fn lexical_function_specialization_limits_expansion_and_rejects_hidden_binders(){
+    let mut doc="fn f0(x) = add(x,x)\n".to_owned();
+    for i in 1..18{doc.push_str(&format!("fn f{i}(x) = f{}(f{}(x))\n",i-1,i-1));}
+    doc.push_str("source n: int = 0\n");
+    assert!(Graph::parse(&doc).is_err());
+    assert!(Graph::parse("fn hidden(xs) = map_ints(xs,x,x)\nsource xs: ints = [1]\n").is_err());
+    assert!(Graph::parse("fn hidden(seed) = recur(seed,x,true,x)\nsource seed: int = 0\n").is_err());
+}

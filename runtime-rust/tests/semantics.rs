@@ -82,3 +82,36 @@ fn example() -> Graph {
         assert_eq!(a.snapshot().into_iter().map(Option::unwrap).collect::<Vec<_>>(),a.oracle().unwrap());
     }
 }
+
+
+#[test]
+fn host_constructed_naturals_cannot_bypass_typed_admission(){
+    use doc_runtime::resources::DataResources;
+    let graph=Graph::parse("source n: nat = 0012\nsource flag: bool = false\nderive next: nat (n) = add(n,nat(1))\n").unwrap();
+    let mut rt=Runtime::new(graph.clone(),1,Cutoff::Exact);
+    rt.stabilize().unwrap();
+    let before=rt.snapshot();
+    let token=rt.observation_token();
+    let mut resources=DataResources::new(2,128).unwrap();
+    let handle=resources.insert(Value::Nat("12".into())).unwrap();
+    for raw in ["","00","012","-1","abc","/","é"] {
+        let invalid=Value::Nat(raw.into());
+        assert!(Graph::new(vec![State::source("bad",invalid.clone())]).is_err());
+        assert!(Graph::new(vec![State::derived("bad",Type::Nat,vec![],Expr::Lit(invalid.clone()))]).is_err());
+        assert!(Expr::Lit(invalid.clone()).eval(&[]).is_err());
+        assert!(Expr::Arg(0).eval(&[invalid.clone()]).is_err());
+        assert!(rt.update(&[(1,Value::Bool(true)),(0,invalid.clone())]).is_err());
+        assert_eq!(rt.snapshot(),before);
+        assert_eq!(rt.observation_token(),token);
+        assert!(rt.stable());
+        assert!(resources.insert(invalid.clone()).is_err());
+        assert!(resources.replace(handle,invalid).is_err());
+        assert_eq!(resources.get(handle,Type::Nat).unwrap(),&Value::Nat("12".into()));
+        assert_eq!(resources.live_payload_bytes(),2);
+        assert_eq!(resources.live_count(),1);
+    }
+    assert_eq!(Value::parse_for_type("00012",Type::Nat).unwrap(),Value::Nat("12".into()));
+    rt.update(&[(0,Value::Nat("99".into()))]).unwrap();
+    rt.stabilize().unwrap();
+    assert_eq!(rt.value(2),Some(Value::Nat("100".into())));
+}

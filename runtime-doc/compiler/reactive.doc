@@ -1,0 +1,30 @@
+import lexer_core.doc
+import parser_core.doc
+import common_core.doc
+import scalar_core.doc
+import reactive_core.doc
+source input: ints = []
+derive validated: ints (input) = utf8_bytes(utf8_text(input))
+derive seed: ints () = append(append(append(empty(),0),0),0)
+derive scanned: ints (seed,validated) = recur(seed,s,eq(get(s,0),len(validated)),step(s,get(validated,get(s,0))))
+derive completed: ints (scanned) = finish(scanned)
+derive tokens: ints (completed) = slice(completed,3,sub(len(completed),3))
+derive end_tokens: ints (tokens,validated) = append(append(append(tokens,10),len(validated)),0)
+derive parse_seed: ints () = append(append(append(append(empty(),0),0),0),0)
+derive parsed: ints (parse_seed,end_tokens,validated) = recur(parse_seed,s,eq(get(s,0),quot(len(end_tokens),3)),pstep(s,end_tokens,validated))
+derive syntax: ints (parsed) = if(eq(get(parsed,1),0),slice(parsed,4,sub(len(parsed),4)),preject(parsed))
+derive event_count: int (syntax) = quot(len(syntax),3)
+derive r_seed: ints () = append(append(append(append(append(empty(),0),0),0),0),0)
+derive resolved_state: ints (r_seed,syntax,end_tokens,validated,event_count) = recur(r_seed,s,eq(get(s,0),event_count),rstep(s,syntax,end_tokens,validated))
+derive resolved: ints (resolved_state) = slice(resolved_state,5,sub(len(resolved_state),5))
+derive n_seed: ints () = append(append(append(append(append(empty(),0),0),0),0),0)
+derive numeric_state: ints (n_seed,syntax,end_tokens,validated,event_count) = recur(n_seed,s,eq(get(s,0),event_count),nstep(s,syntax,end_tokens,validated))
+derive numbers: ints (numeric_state) = slice(numeric_state,5,sub(len(numeric_state),5))
+derive t_seed: ints (event_count) = append(append(empty(),sub(event_count,1)),0)
+derive checked: ints (t_seed,syntax,end_tokens,validated,resolved) = recur(t_seed,s,lt(get(s,0),0),tstep(s,syntax,end_tokens,validated,resolved))
+derive o_seed: ints () = append(append(empty(),0),0)
+derive owned_events: ints (o_seed,syntax,event_count) = recur(o_seed,s,eq(own_i(s),event_count),own_step(s,ev(syntax,own_i(s)),own_i(s)))
+derive owners: ints (owned_events) = slice(owned_events,2,sub(len(owned_events),2))
+derive reactive_seed: ints (checked,event_count) = if(if(eq(len(checked),2),lt(0,event_count),false),append(append(utf8_bytes(rheader(event_count)),0),0),preject(checked))
+derive reactive_emitted: ints (reactive_seed,syntax,end_tokens,validated,resolved,numbers,owners,event_count) = recur(reactive_seed,s,eq(e_body(s),8),r_emit(s,syntax,end_tokens,validated,resolved,numbers,owners,event_count))
+derive code: text (reactive_emitted) = concat(utf8_text(slice(reactive_emitted,0,sub(len(reactive_emitted),2))),cli_adapter())

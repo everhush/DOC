@@ -1,0 +1,36 @@
+# Standalone DOC-authored planner. The caller holds candidate values privately
+# and supplies changed flags only after successful typed candidate evaluation.
+import repair_core.doc
+source roles: ints = [0,1]
+source offsets: ints = [0,0,1]
+source premises: ints = [0]
+source active: ints = [0,1]
+source materialized: ints = [1,0]
+source source_changed: ints = [0,0]
+source requested: ints = [1,1]
+source selected: ints = [0,1]
+source changed: ints = [0,1]
+derive count: int (roles) = len(roles)
+derive admission: ints (roles,offsets,premises,active,materialized,source_changed,requested,selected,changed) = if(shape(roles,offsets,premises,active,materialized,source_changed,requested,selected,changed),append(append(append(empty(),0),0),0),append(empty(),fail()))
+derive validated: ints (admission,roles,offsets,premises,active,materialized,source_changed,requested,selected,changed,count) = recur(admission,s,eq(get(s,0),count),vstep(s,roles,offsets,premises,active,materialized,source_changed,requested,selected,changed))
+derive zero_seed: ints (validated) = if(eq(len(validated),3),empty(),append(empty(),fail()))
+derive zero: ints (zero_seed,count) = recur(zero_seed,s,eq(len(s),count),append(s,0))
+derive update_seed: ints (validated,active) = if(eq(len(validated),3),forward_seed(active),append(empty(),fail()))
+derive update_scan: ints (update_seed,offsets,premises,source_changed,count) = recur(update_seed,s,eq(cur_node(s),count),activate(s,offsets,premises,source_changed))
+derive after_update: ints (update_scan) = mask_value(update_scan)
+derive blocked_seed: ints (zero) = forward_seed(zero)
+derive blocked_scan: ints (blocked_seed,offsets,premises,after_update,count) = recur(blocked_seed,s,eq(cur_node(s),count),blocked(s,offsets,premises,after_update))
+derive blocked_mask: ints (blocked_scan) = mask_value(blocked_scan)
+derive ready: ints (zero_seed,count,after_update,blocked_mask) = recur(zero_seed,s,eq(len(s),count),append(s,ready_bit(after_update,blocked_mask,len(s))))
+derive demand_seed: ints (validated,requested,premises) = if(eq(len(validated),3),backward_seed(requested,premises),append(empty(),fail()))
+derive demand_scan: ints (demand_seed,offsets,premises) = recur(demand_seed,s,lt(cur_node(s),0),demand_step(s,offsets,premises))
+derive closure: ints (demand_scan) = mask_value(demand_scan)
+derive eligible: ints (zero_seed,count,ready,closure) = recur(zero_seed,s,eq(len(s),count),append(s,intersect(ready,closure,len(s))))
+derive select_seed: ints (zero_seed) = append(zero_seed,0)
+derive selection: ints (select_seed,count,after_update,materialized,selected,changed,eligible) = recur(select_seed,s,eq(sub(len(s),1),count),select_step(s,after_update,materialized,selected,changed,eligible,sub(len(s),1)))
+derive clear_mask: ints (selection) = if(lt(0,get(selection,0)),tail(selection),append(empty(),fail()))
+derive publish_seed: ints (clear_mask) = forward_seed(clear_mask)
+derive publish_scan: ints (publish_seed,offsets,premises,changed,count) = recur(publish_seed,s,eq(cur_node(s),count),activate(s,offsets,premises,changed))
+derive after_frontier: ints (publish_scan) = mask_value(publish_scan)
+derive after_materialized: ints (clear_mask,zero_seed,count,materialized,selected) = recur(zero_seed,s,eq(len(s),count),if(eq(len(clear_mask),count),append(s,materialized_bit(materialized,selected,len(s))),append(s,fail())))
+derive proof: ints (zero_seed,count,after_update,ready,closure,eligible,after_frontier,after_materialized) = recur(zero_seed,s,eq(len(s),mul(count,6)),append(s,proof_bit(len(s),count,after_update,ready,closure,eligible,after_frontier,after_materialized)))

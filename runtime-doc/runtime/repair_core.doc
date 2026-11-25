@@ -1,0 +1,39 @@
+# Finite active-set planning for a topologically ordered typed DAG.
+# CSR premises are ordered: offsets[i]..offsets[i+1], each p < i.
+# Role 0 source, 1 derived; all masks are canonical 0/1 integer flags.
+# This plans candidates, not their local computation or physical publication.
+fn fail() = get(empty(),0)
+fn invalid(s) = replace_at(s,0,fail())
+fn flag(v) = if(eq(v,0),true,eq(v,1))
+fn valid_role(v,a,m,x) = if(eq(v,0),if(eq(a,0),eq(m,1),false),if(eq(v,1),if(eq(x,0),if(eq(a,0),eq(m,1),true),false),false))
+fn valid_flags(r,a,m,x,d,f,c) = if(flag(r),if(flag(a),if(flag(m),if(flag(x),if(flag(d),if(flag(f),flag(c),false),false),false),false),false),false)
+fn shape(r,o,p,a,m,x,d,f,c) = if(eq(len(o),add(len(r),1)),if(eq(get(o,0),0),if(eq(get(o,len(r)),len(p)),if(eq(len(a),len(r)),if(eq(len(m),len(r)),if(eq(len(x),len(r)),if(eq(len(d),len(r)),if(eq(len(f),len(r)),eq(len(c),len(r)),false),false),false),false),false),false),false),false)
+fn vnode(r,o,p,a,m,x,d,f,c,i) = if(valid_flags(get(r,i),get(a,i),get(m,i),get(x,i),get(d,i),get(f,i),get(c,i)),if(valid_role(get(r,i),get(a,i),get(m,i),get(x,i)),if(le(0,get(o,i)),if(le(get(o,i),get(o,add(i,1))),if(le(get(o,add(i,1)),len(p)),if(eq(get(r,i),0),eq(get(o,i),get(o,add(i,1))),true),false),false),false),false),false)
+# Validation state is [node, next edge, phase]; phase 0 validates node,
+# phase 1 checks each premise. Source boundaries require materialization.
+fn vstep(s,r,o,p,a,m,x,d,f,c) = if(eq(get(s,2),0),if(vnode(r,o,p,a,m,x,d,f,c,get(s,0)),replace_at(s,2,1),invalid(s)),if(eq(get(s,1),get(o,add(get(s,0),1))),replace_at(replace_at(s,0,add(get(s,0),1)),2,0),if(if(le(0,get(p,get(s,1))),lt(get(p,get(s,1)),get(s,0)),false),replace_at(s,1,add(get(s,1),1)),invalid(s))))
+# Scan state stores N mask bits, then node and edge cursors. The mask is
+# private to the current scan; result has no cursor or partial progress.
+fn cur_node(s) = get(s,sub(len(s),2))
+fn cur_edge(s) = get(s,sub(len(s),1))
+fn node_at(s,i) = replace_at(s,sub(len(s),2),i)
+fn edge_at(s,i) = replace_at(s,sub(len(s),1),i)
+fn forward_seed(mask) = append(append(mask,0),0)
+fn mask_value(s) = slice(s,0,sub(len(s),2))
+# Propagate changed source/derived facts to DIRECT users only.
+fn activate(s,o,p,x) = if(eq(cur_edge(s),get(o,add(cur_node(s),1))),node_at(s,add(cur_node(s),1)),edge_at(if(eq(get(x,get(p,cur_edge(s))),1),replace_at(s,cur_node(s),1),s),add(cur_edge(s),1)))
+# Propagate strict active ancestors through the whole DAG, including inactive
+# intermediate states, before selecting the dependency-minimal frontier.
+fn blocked(s,o,p,a) = if(eq(cur_edge(s),get(o,add(cur_node(s),1))),node_at(s,add(cur_node(s),1)),edge_at(if(if(eq(get(a,get(p,cur_edge(s))),1),true,eq(get(s,get(p,cur_edge(s))),1)),replace_at(s,cur_node(s),1),s),add(cur_edge(s),1)))
+# Demand travels backwards over the same topology; every demanded state
+# contributes all of its actual premises, not a hand-selected schedule.
+fn backward_seed(mask,p) = append(append(mask,sub(len(mask),1)),sub(len(p),1))
+fn demand_step(s,o,p) = if(lt(cur_edge(s),get(o,cur_node(s))),node_at(s,sub(cur_node(s),1)),edge_at(if(eq(get(s,cur_node(s)),1),replace_at(s,get(p,cur_edge(s)),1),s),sub(cur_edge(s),1)))
+fn ready_bit(a,b,i) = if(eq(get(a,i),1),if(eq(get(b,i),0),1,0),0)
+fn intersect(a,b,i) = if(eq(get(a,i),1),get(b,i),0)
+# Selection is validated completely before returning a successor mask.
+# State contains count of selected candidates followed by the new active mask.
+fn legal_choice(a,m,f,c,e,i) = if(eq(get(f,i),0),eq(get(c,i),0),if(eq(get(e,i),1),if(eq(get(m,i),0),eq(get(c,i),1),true),false))
+fn select_step(s,a,m,f,c,e,i) = if(legal_choice(a,m,f,c,e,i),if(eq(get(f,i),1),append(replace_at(s,0,add(get(s,0),1)),0),append(s,get(a,i))),invalid(s))
+fn materialized_bit(m,f,i) = if(eq(get(f,i),1),1,get(m,i))
+fn proof_bit(i,n,a,r,d,e,f,m) = if(lt(i,n),get(a,i),if(lt(i,mul(n,2)),get(r,sub(i,n)),if(lt(i,mul(n,3)),get(d,sub(i,mul(n,2))),if(lt(i,mul(n,4)),get(e,sub(i,mul(n,3))),if(lt(i,mul(n,5)),get(f,sub(i,mul(n,4))),get(m,sub(i,mul(n,5))))))))

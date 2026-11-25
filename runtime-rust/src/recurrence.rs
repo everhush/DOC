@@ -2,7 +2,7 @@
 
 use std::collections::{BTreeMap, HashSet, VecDeque};
 
-use crate::{Cutoff, Graph, Result, Runtime, StateId, Value};
+use crate::{automatic::{AutomaticScheduler,AutomaticStats},Cutoff, Graph, Result, Runtime, StateId, Value};
 
 /// A demand-driven sequence of stable epochs with retention of the latest one.
 /// Template source literals supply defaults. The caller can supply facts for
@@ -10,6 +10,7 @@ use crate::{Cutoff, Graph, Result, Runtime, StateId, Value};
 #[derive(Debug)]
 pub struct Recurrence {
     carry: Vec<(StateId, StateId)>,
+    automatic:Option<AutomaticScheduler>,
     carried_sources: HashSet<StateId>,
     current: Runtime,
     epoch: u64,
@@ -67,6 +68,7 @@ impl Recurrence {
         snapshots.push_back((0, current.snapshot()));
         Ok(Self {
             carry,
+            automatic:None,
             carried_sources,
             current,
             epoch: 0,
@@ -78,6 +80,32 @@ impl Recurrence {
         })
     }
 
+    /// Select engine-owned automatic placement; DOC authored source is unchanged.
+    /// This does not assert a physical GPU exists: pure CPU is always valid.
+    pub fn enable_automatic(&mut self){
+        self.automatic=Some(AutomaticScheduler::new());
+    }
+    pub fn new_automatic_with_retention(
+        template:Graph,carry:Vec<(StateId,StateId)>,
+        facts:&[(StateId,Value)],workers:usize,retention:usize
+    )->Result<Self>{
+        let mut recurrence=Self::new_with_retention(template,carry,facts,workers,retention)?;
+        recurrence.enable_automatic();
+        Ok(recurrence)
+    }
+    pub fn automatic_stats(&self)->Option<AutomaticStats>{
+        self.automatic.as_ref().map(AutomaticScheduler::stats)
+    }
+    pub fn automatic_report(&self)->Option<String>{
+        self.automatic.as_ref().map(AutomaticScheduler::report)
+    }
+
+    /// Read-only schema used to validate independently persisted source facts.
+    pub fn graph(&self) -> &Graph { &self.template }
+
+    /// Forward-carry authority is included in the checkpoint schema.
+    pub fn carries(&self) -> &[(StateId,StateId)] { &self.carry }
+
     pub fn epoch(&self) -> u64 {
         self.epoch
     }
@@ -86,6 +114,32 @@ impl Recurrence {
         self.current.value(state)
     }
 
+    /// Independently owned typed source facts for the latest *stable* epoch.
+    /// This is a pure checkpoint boundary: effects have already been sampled,
+    /// derived values are rebuilt by DOC when restoring, and no host gameplay
+    /// state or interpreter dispatch is embedded in the checkpoint.
+    pub fn current_source_facts(&self) -> Result<Vec<(StateId, Value)>> {
+        self.current.graph.states.iter().enumerate()
+            .filter(|(_, state)| state.definition.is_none())
+            .map(|(id, _)| self.current.value(id)
+                .map(|value| (id, value))
+                .ok_or_else(|| format!("missing stable source value for state {id}")))
+            .collect()
+    }
+
+    /// Restore the current logical DOC valuation in an independent recurrence.
+    /// The fork starts at epoch zero and does not copy historical epoch indices
+    /// or externally performed effects. Callers may persist typed source facts
+    /// separately, subject to their own explicit I/O and provenance policy.
+    pub fn fork_current(&self) -> Result<Self> {
+        let facts=self.current_source_facts()?;
+        let mut fork=Self::new_with_retention(
+            self.template.clone(),self.carry.clone(),&facts,
+            self.current.workers,self.retention,
+        )?;
+        if self.automatic.is_some(){fork.enable_automatic();}
+        Ok(fork)
+    }
 
     /// This returns an owned, immutable view of a retained past stable epoch.
     /// An evicted epoch is absent, never a stale or silently reconstructed value.
@@ -154,6 +208,15 @@ impl Recurrence {
 
     /// Demand exactly one more epoch. Facts apply only to that epoch.
     pub fn advance(&mut self, facts: &[(StateId, Value)]) -> Result<()> {
+        self.advance_validated(facts, |_| Ok(()))
+    }
+
+    /// Admit a platform-bound projection of the private stabilized candidate
+    /// before publishing any epoch, source facts or snapshot. The validator
+    /// is a pure check and must not perform externally visible effects.
+    pub fn advance_validated(
+        &mut self, facts: &[(StateId, Value)], validate: impl FnOnce(&Runtime)->Result<()>
+    ) -> Result<()> {
         let next = self.epoch.checked_add(1).ok_or("epoch index exhausted")?;
         if facts
             .iter()
@@ -176,7 +239,12 @@ impl Recurrence {
             Cutoff::Exact,
         );
         candidate.update(&changes)?;
-        candidate.stabilize()?;
+        if let Some(scheduler)=self.automatic.as_mut(){
+            candidate.stabilize_automatic(scheduler)?;
+        }else{
+            candidate.stabilize()?;
+        }
+        validate(&candidate)?;
         let snapshot = candidate.snapshot();
         // Record only successful explicitly supplied facts; never log a
         // failed candidate or invent a value for an uncarried source.

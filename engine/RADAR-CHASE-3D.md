@@ -1,0 +1,16 @@
+# Radar Chase 3D — typed DOC scene foundation
+
+The scene graph reuses Radar Chase gameplay and automatic compute probes, adds DOC gravity, vertical velocity, jump impulse and ground contact, and defines draw commands from game state. Mesh data is a typed text asset; camera projection, material/lighting, geometry transform and fragment color are ordinary DOC-derived expressions compiled to WGSL. The generic Scene3d adapter validates declarative stage bindings, carries, actions, mesh rows, draw spans and domains. It has no game-specific state names beyond the scene ABI and no host game rules. The current fixed-point/flat-shading ABI is bounded and deliberately small, not a complete graphics API. CPU tests cover original win/spawn replay, jump/landing, worker parity, scene data and Naga validation. Real GPU game rendering/window/physical proof remains the next slice; no claim of accepted #21 yet. Controls: WASD, J jump, E spawn, X remove, P pause, R restart.
+
+## Run the game candidate
+
+```sh
+cargo run --release --manifest-path runtime-rust/Cargo.toml --features window --bin doc-scene3d -- engine/radar_chase_3d.doc
+cargo run --release --manifest-path runtime-rust/Cargo.toml --features webgpu --bin doc-scene3d -- engine/radar_chase_3d.doc --offscreen --replay=jedsssxwddddsspr --snapshot=/tmp/doc-scene.ppm
+```
+
+The shared renderer uses a genuine depth attachment and indexed triangle draws with generated vertex/fragment WGSL. Software surface presentation, offscreen readback, native CPU replay oracle, and physical offscreen proof are separately checked. PPM files are CI artifacts, not tracked source. The generic host reads action/recurrence/report metadata from DOC. Current pipeline uses bounded fixed-point geometry and synchronous readback/lifetime completion. Interactive input/resize and error paths, save/restore/audio and stronger pixel/physics evidence still require verification. No claim of complete #21 until all binding gates pass.
+
+Scene projection validation occurs on the private stabilized recurrence candidate before its epoch is published. Optional `--save=relative.chk`, `--load=relative.chk` and `--audio-dir=existing_relative_directory` reuse typed checkpoint and confined WAV effects. Restore rejects changed static render interfaces. Tests cover checkpoint/replay equivalence, WAV output and invalid render projection rollback. Platform effects run only after a validated logical frame, not as atomically reversible external operations.
+
+`scene3d_gpu_proof` is a test-only executable: the exact same game mesh is rendered at two depths with equal projected coordinates, both draw orders must agree with the nearer-only pixels, three authored light intensities must appear, a fragment DOC source edit must change only non-background red channels, jump and floor contact are checked, and invalid geometry/dimensions plus repeated renders are exercised. Software CI also drives actual X11 keyboard and resize events using `xdotool`; physical Kaggle executes the same native proof binary and checks raw logs. No hardware pass is implied until actual runs complete.

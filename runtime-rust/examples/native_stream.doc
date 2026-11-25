@@ -1,0 +1,17 @@
+# Explicit causal native epochs, not a host-side read/write loop.
+native region buffer: u8 plain
+native import read(i32,bytes) -> i64
+native import write(i32,const_bytes) -> i64
+native repeat until stopped carry total=next_total
+source input_fd: int = 0
+source output_fd: int = 1
+source chunk: int = 2
+source offset: int = 0
+source total: int = 0
+source skipped: int = -1
+native call received: int (input_fd,offset,chunk) = read(input_fd,buffer,offset,chunk)
+derive send: bool (received,chunk) = if(le(0,received),le(received,chunk),false)
+native call sent: int (output_fd,offset,received,send,skipped) = write(output_fd,buffer,offset,received) when send else skipped
+derive complete: bool (received,sent,send) = if(send,eq(received,sent),false)
+derive stopped: bool (complete,received) = if(complete,eq(received,0),true)
+derive next_total: int (total,sent,complete) = if(complete,add(total,sent),total)

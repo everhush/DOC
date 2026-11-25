@@ -66,7 +66,11 @@ def auth_environment(secret, directory, username_hint):
     directory.mkdir(mode=0o700, parents=True, exist_ok=True)
     directory.chmod(0o700)
     env = dict(os.environ)
-    env.pop("KAGGLE_DOC_1", None)
+    # Prevent unrelated inherited runner credentials from shadowing the
+    # secret the user explicitly selected for this dispatch.
+    for credential in ("KAGGLE_DOC_1", "KAGGLE_API_TOKEN",
+                       "KAGGLE_USERNAME", "KAGGLE_KEY"):
+        env.pop(credential, None)
     env["KAGGLE_CONFIG_DIR"] = str(directory)
     username = username_hint.strip().lower()
     if secret.startswith("{"):
@@ -78,6 +82,18 @@ def auth_environment(secret, directory, username_hint):
         fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
         with os.fdopen(fd, "w") as f:
             json.dump({"username": obj["username"], "key": obj["key"]}, f)
+    elif re.fullmatch(r"[a-fA-F0-9]{32}", secret):
+        # Kaggle legacy keys are 32 hexadecimal characters. In GitHub, a
+        # user may save only the generated key rather than full kaggle.json.
+        # Such a key is NOT a modern bearer token; pair it with the
+        # already-configured DOC_KAGGLE_USERNAME, never echo either value.
+        if not re.fullmatch(r"[a-z0-9_-]{2,60}", username):
+            raise ValueError(
+                "Bare Kaggle legacy API key requires DOC_KAGGLE_USERNAME")
+        path = directory / "kaggle.json"
+        fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o600)
+        with os.fdopen(fd, "w") as f:
+            json.dump({"username": username, "key": secret}, f)
     else:
         env["KAGGLE_API_TOKEN"] = secret
         if not username:
@@ -93,14 +109,38 @@ def auth_environment(secret, directory, username_hint):
         raise ValueError("Kaggle token owner could not be resolved; set DOC_KAGGLE_USERNAME")
     return env, username
 
+def cli_failure_category(output):
+    # Emit only fixed labels, never authenticated output or command arguments.
+    match = re.search(r"(?im)\b(?:HTTP(?:Error| status)?[: ]+|status(?:_code| code)?[:= ]+)(401|403|404|429|500|502|503|504)\b", output)
+    if match:
+        code = int(match.group(1))
+        return "http-" + str(code)
+    if re.search(r"(?i)\b(?:ConnectionError|ConnectTimeout|ReadTimeout|TimeoutError)\b", output):
+        return "network"
+    return "unclassified"
+
 def kaggle(command, env, timeout=60):
-    p = subprocess.run(["kaggle", *command], env=env, capture_output=True,
-                       text=True, timeout=timeout)
-    if p.returncode:
-        # Do not print authenticated process stdout/stderr, which may include
-        # usernames, tokens or other credentials.
-        raise RuntimeError("Kaggle CLI operation failed: " + command[0])
-    return p.stdout
+    operation = tuple(command[:2])
+    labels = {("kernels", "push"): "kernels-push",
+              ("kernels", "status"): "kernels-status",
+              ("kernels", "output"): "kernels-output",
+              ("quota", "--format"): "quota"}
+    label = labels.get(operation, "other")
+    # Never retry an ambiguous write: the remote service may have accepted it.
+    attempts = 3 if label in ("kernels-status", "quota") else 1
+    for attempt in range(attempts):
+        try:
+            p = subprocess.run(["kaggle", *command], env=env, capture_output=True,
+                               text=True, timeout=timeout)
+            if p.returncode == 0:
+                return p.stdout
+            category = cli_failure_category(p.stdout + "\n" + p.stderr)
+        except subprocess.TimeoutExpired:
+            category = "network"
+        transient = category in ("network", "http-429", "http-500", "http-502", "http-503", "http-504")
+        if not transient or attempt + 1 == attempts:
+            raise RuntimeError("Kaggle CLI operation failed: " + label + " category=" + category) from None
+        time.sleep(2 ** attempt)
 
 def prepare_kernel(folder, template, spec, username):
     folder.mkdir(parents=True, exist_ok=False)
@@ -129,9 +169,10 @@ def prepare_kernel(folder, template, spec, username):
 def verify_result(folder, spec):
     result = json.loads((folder / "doc-kaggle-summary.json").read_text())
     expected = {"sha": spec["sha"], "run_id": spec["run_id"],
-                "result": "pass", "backend": "vulkan", "hardware": True,
+                "result": "pass", "backend": "webgpu", "hardware": True,
                 "accelerator": spec["accelerator"],
-                "goose_sdl3_checks": 77, "dual_backend_episodes": 42}
+                "rust_gpu_episodes": 42,
+                "selected_rust_doc_gpu_cases": 62}
     if "bundle_dataset" in spec:
         expected["bundle_dataset"] = spec["bundle_dataset"]
         expected["native_standard_ci_run_id"] = spec["standard_ci_run_id"]
@@ -143,12 +184,22 @@ def verify_result(folder, spec):
         with tarfile.open(archive_path, "r:gz") as archive:
             members = {entry.name for entry in archive.getmembers() if entry.isfile()}
             required = {
-                "report/native-gpu-equivalence.log":
-                    "DOC_RUST_WGPU_GOOSE_SDL3_PARITY_PASS: 42 observed GPU episodes",
-                "goose/goose-sdl3/doc-goose-sdl3-summary.log":
-                    "DOC_GOOSE_SDL3_NATIVE_PARITY_PASS: 77 checks",
-                "physical-vulkan.log": "PHYSICAL_DEVICE_TYPE_DISCRETE_GPU",
-                "nvidia-smi.log": "GPU",
+                "report/rust-gpu-conformance.log":
+                    "DOC_RUST_NATIVE_PHYSICAL_GPU_PASS: 42 signed GPU episodes",
+                "report/webgpu-device-admission.log":
+                    "DOC_WEBGPU_HARDWARE_ADMISSION_PASS: 62 executed DOC source cases",
+                "report/doc-selected-gpu-equivalence.log":
+                    "DOC_SELECTED_RUST_DOC_GPU_PARITY_PASS: 62 real GPU-selected executions",
+                "report/radar-auto-result.log":"DOC_RADAR_PHYSICAL_AUTO_PASS:",
+                "report/radar-auto-physical.log":"DOC_AUTO_SUMMARY: gpu_kind=physical",
+                "report/radar-auto-cpu.log":"DOC_AUTO_SUMMARY: gpu_kind=none",
+                "report/radar-auto-fault.log":"DOC_GPU_INJECTED_STAGE_FAILURE: stage=0",
+                "report/scene3d-physical.log":"DOC_SCENE_REPLAY_PASS: mode=offscreen actions=16 frames=17",
+                "report/scene3d-cpu.log":"DOC_SCENE_REPLAY_PASS: mode=headless actions=16 frames=17",
+                "report/scene3d-result.log":"DOC_SCENE3D_PHYSICAL_PASS:",
+                "report/scene3d-pixel-proof.log":"DOC_SCENE_GPU_PROOF_PASS:",
+                "report/scene3d-fault.log":"DOC_GPU_INJECTED_STAGE_FAILURE: stage=0",
+                "report/dependency-family.log":"DOC_FAMILY_PROOF_PASS: device=physical gpu_lanes=512 episodes=5 rollback=true",
             }
             if not required.keys() <= members:
                 raise AssertionError("Incomplete raw physical-GPU evidence archive")
@@ -159,20 +210,100 @@ def verify_result(folder, spec):
                 observed = stream.read(262144).decode("utf-8", errors="replace")
                 if expected_text not in observed:
                     raise AssertionError("GPU evidence disagrees with result: " + name)
-                if name == "physical-vulkan.log":
+                if name == "report/webgpu-device-admission.log":
                     devices = re.findall(
-                        r"(?ms)^GPU\d+:\s*\n(.*?)(?=^GPU\d+:|\Z)", observed)
-                    if not devices or not all(
-                        re.search(r"\bvendorID\s*=\s*0x10de\b", device, re.I)
-                        and re.search(
-                            r"\bdeviceType\s*=\s*PHYSICAL_DEVICE_TYPE_(?:DISCRETE|INTEGRATED)_GPU\b",
-                            device)
-                        for device in devices):
+                        r"(?m)^DOC_GPU_SELECTED_DEVICE: name=([^\n]+?) "
+                        r"type=(DiscreteGpu|IntegratedGpu) vendor=([0-9]+) device=([0-9]+)$",
+                        observed)
+                    if len(devices)!=62 or "DOC_GPU_SOFTWARE_TEST_ONLY" in observed:
                         raise AssertionError(
-                            "GPU evidence contains non-NVIDIA/software or unverified Vulkan adapters")
+                            "WebGPU evidence lacks 62 physical adapter admissions")
+
+            # Require raw same-game compute provenance, not a summary alone.
+            def read_log(name):
+                return archive.extractfile(name).read(262144).decode("utf-8",errors="replace")
+            raw=read_log("report/radar-auto-physical.log")
+            cpu=read_log("report/radar-auto-cpu.log")
+            fault=read_log("report/radar-auto-fault.log")
+            radar=result.get("radar_auto_physical",{})
+            devices=re.findall(r"(?m)^DOC_GPU_SELECTED_DEVICE: name=([^\n]+?) type=(DiscreteGpu|IntegratedGpu) vendor=\d+ device=\d+$",raw)
+            physical_records=re.findall(r"(?m)^DOC_GPU_SELECTED_DEVICE: [^\n]*$",raw)
+            mixed=re.findall(r"(?m)^DOC_AUTO_FRONTIER: cpu=(\d+) gpu=(\d+) gpu_kind=physical placement=typed-independent$",raw)
+            dispatch=re.findall(r"(?m)^DOC_RUST_GPU_FRONTIER_DISPATCH: states=(\d+) workgroups=\d+ workgroup_size=\d+$",raw)
+            stats=re.findall(r"(?m)^DOC_AUTO_SUMMARY: gpu_kind=physical cpu_nodes=(\d+) gpu_nodes=(\d+) cpu_parallel_frontiers=\d+ cpu_only_frontiers=\d+ gpu_frontiers=(\d+) mixed_frontiers=(\d+)$",raw)
+            game_lines=lambda log:[x for x in log.splitlines() if x.startswith(("DOC_GAME_FRAME:","DOC_GAME_ENTITIES:","DOC_GAME_RADAR:"))]
+            if not (len(physical_records)==len(devices)==1 and "DOC_GPU_SOFTWARE_TEST_ONLY" not in raw
+                and radar.get("adapter")==devices[0][0] and radar.get("device_type")==devices[0][1]
+                and len(mixed)==15 and all(int(c)>0 and int(g)>=128 for c,g in mixed)
+                and len(dispatch)>=15 and sum(map(int,dispatch))==sum(int(g) for _,g in mixed)==radar.get("gpu_nodes")
+                and isinstance(radar.get("cpu_nodes"),int) and radar["cpu_nodes"]>0
+                and radar["cpu_nodes"]+radar["gpu_nodes"]==2940
+                and radar.get("mixed_frontiers")==radar.get("gpu_frontiers")==15
+                and stats==[(str(radar["cpu_nodes"]),str(radar["gpu_nodes"]),"15","15")]
+                and radar.get("complete_replay_parity") is True and radar.get("failure_rollback") is True
+                and raw.count("DOC_AUTO_GPU_SESSION_CREATED: gpu_kind=physical")==1
+                and raw.count("DOC_AUTO_GPU_SESSION_REUSED: gpu_kind=physical")==14
+                and game_lines(raw)==game_lines(cpu)
+                and "DOC_GAME_FRAME: tick=13 player=(6,4) score=2 paused=false won=true coin=(6,4)" in game_lines(raw)
+                and len([x for x in game_lines(raw) if x.startswith("DOC_GAME_FRAME:")])==16
+                and fault.count("DOC_GAME_FRAME:")==1):
+                raise AssertionError("Physical automatic Radar Chase raw evidence is incomplete or inconsistent")
+            # Independently check raw physical 3D render AND actual mixed compute.
+            sraw=read_log("report/scene3d-physical.log")
+            scpu=read_log("report/scene3d-cpu.log")
+            proof=read_log("report/scene3d-pixel-proof.log")
+            sfault=read_log("report/scene3d-fault.log")
+            sresult=result.get("scene3d_physical",{})
+            sdev=re.findall(r"(?m)^DOC_SCENE_RENDER_DEVICE: name=([^\n]+?) type=(DiscreteGpu|IntegratedGpu)$",sraw)
+            spix=re.findall(r"(?m)^DOC_SCENE_PIXELS: epoch=(\d+) distinct=(\d+) digest=([0-9a-f]{16})$",sraw)
+            smix=re.findall(r"(?m)^DOC_AUTO_FRONTIER: cpu=(\d+) gpu=(\d+) gpu_kind=physical placement=typed-independent$",sraw)
+            sdispatch=re.findall(r"(?m)^DOC_RUST_GPU_FRONTIER_DISPATCH: states=(\d+) workgroups=\d+ workgroup_size=\d+$",sraw)
+            frames=lambda s:[x for x in s.splitlines() if x.startswith("DOC_SCENE_FRAME:")]
+            if not (len(sdev)==1 and sresult.get("adapter")==sdev[0][0] and sresult.get("device_type")==sdev[0][1]
+                and "DOC_SCENE_RENDER_SOFTWARE_TEST_ONLY" not in sraw and "DOC_GPU_SOFTWARE_TEST_ONLY" not in sraw
+                and len(frames(sraw))==17 and frames(sraw)==frames(scpu)
+                and any("next_won=true" in x for x in frames(sraw))
+                and any("next_elevation=24" in x for x in frames(sraw))
+                and len(spix)==17 and [int(x[0]) for x in spix]==list(range(17))
+                and all(int(x[1])>=3 for x in spix) and len({x[2] for x in spix})>3
+                and len(smix)==16 and all(int(c)>0 and int(g)>=128 for c,g in smix)
+                and sum(map(int,sdispatch))==sum(int(g) for _,g in smix)
+                and "DOC_GPU_GENERATED_PIPELINE_CREATED:" in sraw and "DOC_GPU_GENERATED_PIPELINE_REUSED:" in sraw
+                and "DOC_SCENE_GENERATED_PIPELINE:" in sraw
+                and re.findall(r"(?m)^DOC_SCENE_RENDER_DEVICE: name=([^\n]+?) type=(DiscreteGpu|IntegratedGpu)$",proof)==sdev
+                and "DOC_SCENE_RENDER_SOFTWARE_TEST_ONLY" not in proof
+                and re.search(r"(?m)^DOC_SCENE_GPU_PROOF_PASS: covered=[1-9][0-9]+ mutated=[1-9][0-9]+ lighting=3 depth_orders=2 jump=24 landed=0 repeats=16 rejected=2$",proof)
+                and sfault.count("DOC_SCENE_FRAME:")==1 and "DOC_GPU_INJECTED_STAGE_FAILURE: stage=0" in sfault
+                and sresult.get("frames")==17 and sresult.get("mixed_frontiers")==16
+                and sresult.get("complete_replay_parity") is True):
+                raise AssertionError("Physical 3D rendering/compute raw evidence incomplete")
+            family=read_log("report/dependency-family.log")
+            family_episodes=re.findall(r"(?m)^DOC_FAMILY_EPISODE: lanes=(\d+) gpu_lanes=(\d+)$",family)
+            family_dispatch=re.findall(r"(?m)^DOC_RUST_GPU_FRONTIER_DISPATCH: states=(\d+) workgroups=\d+ workgroup_size=\d+$",family)
+            fdev=re.findall(r"(?m)^DOC_GPU_SELECTED_DEVICE: name=([^\n]+?) type=(DiscreteGpu|IntegratedGpu) vendor=\d+ device=\d+$",family)
+            if not (family_episodes==[("128","128"),("0","0"),("256","256"),("3","0"),("128","128")]
+                and fdev==sdev and "DOC_GPU_SOFTWARE_TEST_ONLY" not in family
+                and sum(map(int,family_dispatch))==512
+                and "DOC_GPU_GENERATED_PIPELINE_REUSED:" in family):
+                raise AssertionError("Physical runtime-sized dependency family evidence incomplete")
     except (OSError, tarfile.TarError) as error:
         raise AssertionError("Missing or invalid raw physical-GPU evidence archive") from error
     return result
+
+def missing_private_mount(folder, spec):
+    """Retry only a failed, same-SHA, same-dataset input attachment."""
+    try:
+        result=json.loads((folder/"doc-kaggle-summary.json").read_text())
+    except (OSError,ValueError):
+        return False
+    return (result.get("sha")==spec["sha"]
+        and result.get("run_id")==spec["run_id"]
+        and result.get("bundle_dataset")==spec.get("bundle_dataset")
+        and result.get("result")=="failed"
+        and result.get("hardware") is False
+        and result.get("failure")==
+            "INFRA_BLOCKED: precompiled native GPU dataset not mounted")
+
 
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
@@ -209,8 +340,8 @@ def main():
             "doc_gpu_run_cap": None, "doc_gpu_reserve_hours": None,
             "doc_gpu_session_limit": None}, indent=2))
         if remaining <= 0:
-            print("DOC_KAGGLE_QUOTA_SKIP: Kaggle account reports no remaining GPU time")
-            return 0
+            print("DOC_KAGGLE_INFRA_BLOCKED: Kaggle account reports no remaining GPU time")
+            raise RuntimeError("INFRA_BLOCKED: Kaggle GPU quota unavailable; no physical test")
         # Native binary compilation is entirely on GitHub's CPU runner.
         # Upload a private SHA-verified input dataset BEFORE the GPU kernel is
         # launched; GPU time is only spent on real native device execution.
@@ -222,29 +353,43 @@ def main():
         spec.update(bundle)
         (out/"doc-kaggle-bundle-provenance.json").write_text(
             json.dumps({"sha":spec["sha"],**bundle},indent=2)+"\n")
-        name = prepare_kernel(Path(temp) / "kernel", Path(args.template), spec, owner)
+        kernel_folder=Path(temp)/"kernel"
+        name=prepare_kernel(kernel_folder,Path(args.template),spec,owner)
         print(f"DOC_KAGGLE_DISPATCH: notebook={name} sha={spec['sha']} accelerator={args.accelerator} "
               f"dataset={bundle['bundle_dataset']} built-on-github-cpu={bundle['standard_ci_run_id']}")
-        kaggle(["kernels", "push", "-p", str(Path(temp) / "kernel"),
-                "--accelerator", args.accelerator], env, timeout=180)
-        state = "UNKNOWN"
-        while True:
-            state = status_from_cli(kaggle(["kernels", "status", name], env))
-            if state in ("COMPLETE", "FAILED"):
-                break
-            time.sleep(30)
-        print("DOC_KAGGLE_REMOTE_STATUS: " + state)
-        remote = out / "remote"
-        remote.mkdir(exist_ok=True)
-        try:
-            kaggle(["kernels", "output", name, "-p", str(remote), "--force"], env, timeout=180)
-        except (RuntimeError, subprocess.TimeoutExpired):
-            print("DOC_KAGGLE_NOTE: remote evidence was not available")
-        if state != "COMPLETE":
-            raise RuntimeError("Kaggle physical-GPU notebook did not complete: " + state)
-        actual = verify_result(remote, spec)
-        print("DOC_KAGGLE_PHYSICAL_GPU_PARITY_PASS: {} paired episodes; {} native Goose checks".format(
-            actual["dual_backend_episodes"], actual["goose_sdl3_checks"]))
+        remote_root=out/"remote"
+        remote_root.mkdir(exist_ok=True)
+        for submission in (1,2):
+            if submission==2:
+                print("DOC_KAGGLE_PRIVATE_MOUNT_REATTACH: re-push identical notebook source and dataset")
+            kaggle(["kernels","push","-p",str(kernel_folder),
+                    "--accelerator",args.accelerator],env,timeout=180)
+            state="UNKNOWN"
+            while True:
+                state=status_from_cli(kaggle(["kernels","status",name],env))
+                if state in ("COMPLETE","FAILED"):
+                    break
+                time.sleep(30)
+            print("DOC_KAGGLE_REMOTE_STATUS: "+state+" submission="+str(submission))
+            remote=remote_root/("submission-"+str(submission))
+            remote.mkdir()
+            try:
+                kaggle(["kernels","output",name,"-p",str(remote),"--force"],
+                       env,timeout=180)
+            except (RuntimeError,subprocess.TimeoutExpired):
+                print("DOC_KAGGLE_NOTE: remote evidence unavailable submission="+str(submission))
+            if state=="COMPLETE":
+                actual=verify_result(remote,spec)
+                print("DOC_KAGGLE_RUST_PHYSICAL_GPU_PASS: {} native signed GPU episodes and {} DOC source cases".format(
+                    actual["rust_gpu_episodes"],actual["selected_rust_doc_gpu_cases"]))
+                return 0
+            if submission==1 and state=="FAILED" and missing_private_mount(remote,spec):
+                # Kaggle may attach a newly added source only on the next
+                # identical kernel version. No other failure can trigger
+                # a GPU rerun or be mistaken for a GPU pass.
+                continue
+            raise RuntimeError("Kaggle physical-GPU notebook did not complete: "+state)
+        raise RuntimeError("Kaggle private input mount missing after exact-source reattachment")
     return 0
 
 if __name__ == "__main__":

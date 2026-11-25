@@ -1,7 +1,28 @@
 //! Executable finite DOC calculus and bounded-value forward recurrence.
 //! The finite-core proof excludes recurrence, placement and effects.
 pub mod recurrence;
+pub mod automatic;
+pub mod checkpoint;
+mod confined;
+pub mod resources;
+pub mod audio;
+pub mod typed_ir;
+pub mod aot;
+pub mod native_abi;
 pub mod wgsl;
+pub mod graphics;
+pub mod scene3d;
+pub mod family;
+pub mod causal;
+pub mod word;
+mod pure_fn;
+#[cfg(feature = "webgpu")]
+pub mod scene_gpu;
+pub mod gpu_abi;
+#[cfg(feature = "webgpu")]
+pub mod gpu;
+#[cfg(feature = "webgpu")]
+mod gpu_health;
 pub mod nat;
 pub mod publication;
 use std::collections::{HashMap, HashSet, VecDeque};
@@ -20,6 +41,17 @@ impl Value {
         match self {Self::Int(_)=>Type::Int,Self::Bool(_)=>Type::Bool,
             Self::Nat(_)=>Type::Nat,Self::Ints(_)=>Type::Ints,
             Self::MaybeInt(_)=>Type::MaybeInt,Self::Text(_)=>Type::Text}
+    }
+    /// Public host constructors can bypass parsing. Check the value-domain
+    /// invariant before admitting a value as a source, literal or resource.
+    pub(crate) fn validate(&self)->Result<()> {
+        if let Self::Nat(digits)=self {
+            if digits.is_empty() || !digits.bytes().all(|b|b.is_ascii_digit())
+                || (digits.len()>1 && digits.starts_with('0')) {
+                return Err("DOC_VALUE: natural must be canonical decimal".into());
+            }
+        }
+        Ok(())
     }
     pub fn parse_for_type(s:&str,kind:Type)->Result<Self>{
         if kind==Type::Nat {return Ok(Self::Nat(nat::canonical(s.trim())?));}
@@ -94,18 +126,33 @@ pub enum Expr {
     Mul(Box<Self>,Box<Self>), Eq(Box<Self>,Box<Self>),
     Lt(Box<Self>,Box<Self>), Le(Box<Self>,Box<Self>),
     Empty, Append(Box<Self>,Box<Self>),
+    RemoveAt(Box<Self>,Box<Self>), ReplaceAt(Box<Self>,Box<Self>,Box<Self>),
     Length(Box<Self>), Get(Box<Self>,Box<Self>), Tail(Box<Self>),
+    Slice(Box<Self>,Box<Self>,Box<Self>),
     NoInt, SomeInt(Box<Self>), TryGet(Box<Self>,Box<Self>),
     UnwrapOr(Box<Self>,Box<Self>),
     Concat(Box<Self>,Box<Self>), StartsWith(Box<Self>,Box<Self>),
+    MapInts(Box<Self>,Box<Self>),
+    Recur(Box<Self>,Box<Self>,Box<Self>),
+    WordBinary(word::WordOp,Box<Self>,Box<Self>),
+    BitNot(Box<Self>), Utf8Bytes(Box<Self>), Utf8Text(Box<Self>),
     If(Box<Self>,Box<Self>,Box<Self>),
 }
 impl Expr {
     pub fn kind(&self,args:&[Type])->Result<Type>{
         use Expr::*;
         match self {
-            Lit(v)=>Ok(v.kind()),
+            Lit(v)=>{v.validate()?;Ok(v.kind())},
             Arg(i)=>args.get(*i).copied().ok_or_else(||"missing formal parameter".into()),
+            MapInts(list,body)=>family::kind(list,body,args),
+            Recur(seed,done,next)=>causal::kind(seed,done,next,args),
+            WordBinary(_,a,b)=>{
+                if a.kind(args)?==Type::Int&&b.kind(args)?==Type::Int{Ok(Type::Int)}
+                else{Err("DOC_WORD: binary word operands must be int".into())}
+            },
+            BitNot(a)=>if a.kind(args)?==Type::Int{Ok(Type::Int)}else{Err("DOC_WORD: bit_not requires int".into())},
+            Utf8Bytes(a)=>if a.kind(args)?==Type::Text{Ok(Type::Ints)}else{Err("DOC_BYTES: utf8_bytes requires text".into())},
+            Utf8Text(a)=>if a.kind(args)?==Type::Ints{Ok(Type::Text)}else{Err("DOC_BYTES: utf8_text requires ints".into())},
             Empty=>Ok(Type::Ints),
             NoInt=>Ok(Type::MaybeInt),
             SomeInt(value)=>{
@@ -147,6 +194,22 @@ impl Expr {
                     Ok(Type::Bool)
                 }else{Err("starts_with requires (text,text)".into())}
             }
+            RemoveAt(list,index)=>{
+                if list.kind(args)?==Type::Ints && index.kind(args)?==Type::Int {
+                    Ok(Type::Ints)
+                }else{Err("remove_at requires (ints,int)".into())}
+            }
+            ReplaceAt(list,index,value)=>{
+                if list.kind(args)?==Type::Ints && index.kind(args)?==Type::Int
+                    && value.kind(args)?==Type::Int {
+                    Ok(Type::Ints)
+                }else{Err("replace_at requires (ints,int,int)".into())}
+            }
+            Slice(list,start,count)=>{
+                if list.kind(args)?==Type::Ints && start.kind(args)?==Type::Int && count.kind(args)?==Type::Int {
+                    Ok(Type::Ints)
+                }else{Err("slice requires (ints,int,int)".into())}
+            }
             Tail(list)=>{
                 if list.kind(args)?==Type::Ints {Ok(Type::Ints)}
                 else{Err("tail requires ints".into())}
@@ -178,8 +241,21 @@ impl Expr {
     pub fn eval(&self,args:&[Value])->Result<Value>{
         use Expr::*;
         match self {
-            Lit(v)=>Ok(v.clone()),
-            Arg(i)=>args.get(*i).cloned().ok_or_else(||"missing parameter".into()),
+            Lit(v)=>{v.validate()?;Ok(v.clone())},
+            Arg(i)=>{
+                let value=args.get(*i).ok_or("missing parameter")?;
+                value.validate()?;
+                Ok(value.clone())
+            },
+            MapInts(list,body)=>family::evaluate(list,body,args),
+            Recur(seed,done,next)=>causal::evaluate(seed,done,next,args),
+            WordBinary(op,a,b)=>match(a.eval(args)?,b.eval(args)?){
+                (Value::Int(x),Value::Int(y))=>op.eval(x,y).map(Value::Int),
+                _=>Err("DOC_WORD: binary word operands must be int".into()),
+            },
+            BitNot(a)=>match a.eval(args)?{Value::Int(x)=>Ok(Value::Int(!x)),_=>Err("DOC_WORD: bit_not requires int".into())},
+            Utf8Bytes(a)=>word::utf8_bytes(a.eval(args)?),
+            Utf8Text(a)=>word::utf8_text(a.eval(args)?),
             Empty=>Ok(Value::Ints(Vec::new())),
             NoInt=>Ok(Value::MaybeInt(None)),
             SomeInt(e)=>match e.eval(args)?{
@@ -221,7 +297,7 @@ impl Expr {
             Concat(a,b)=>match (a.eval(args)?,b.eval(args)?) {
                 (Value::Text(mut lhs),Value::Text(rhs))=>{
                     if lhs.len().checked_add(rhs.len()).is_none(){
-                        return Err("DOC text exceeds 16KiB limit".into());
+                        return Err("DOC text byte-length overflow".into());
                     }
                     lhs.push_str(&rhs);
                     Ok(Value::Text(lhs))
@@ -232,6 +308,38 @@ impl Expr {
                 (Value::Text(text),Value::Text(prefix))=>
                     Ok(Value::Bool(text.starts_with(&prefix))),
                 _=>Err("starts_with requires text inputs".into())
+            },
+            RemoveAt(list,index)=>match (list.eval(args)?,index.eval(args)?) {
+                (Value::Ints(mut xs),Value::Int(index))=>{
+                    let index=usize::try_from(index)
+                        .map_err(|_|"negative collection index")?;
+                    if index>=xs.len(){
+                        return Err("DOC collection index out of range".into());
+                    }
+                    xs.remove(index);
+                    Ok(Value::Ints(xs))
+                }
+                _=>Err("remove_at expects ints collection and int index".into())
+            },
+            ReplaceAt(list,index,value)=>match (list.eval(args)?,index.eval(args)?,value.eval(args)?) {
+                (Value::Ints(mut xs),Value::Int(index),Value::Int(value))=>{
+                    let index=usize::try_from(index)
+                        .map_err(|_|"negative collection index")?;
+                    let target=xs.get_mut(index)
+                        .ok_or("DOC collection index out of range")?;
+                    *target=value;
+                    Ok(Value::Ints(xs))
+                }
+                _=>Err("replace_at expects ints collection, int index and int value".into())
+            },
+            Slice(list,start,count)=>match (list.eval(args)?,start.eval(args)?,count.eval(args)?) {
+                (Value::Ints(xs),Value::Int(start),Value::Int(count))=>{
+                    let start=usize::try_from(start).map_err(|_|"DOC slice negative start")?;
+                    let count=usize::try_from(count).map_err(|_|"DOC slice negative count")?;
+                    let end=start.checked_add(count).ok_or("DOC slice range overflow")?;
+                    Ok(Value::Ints(xs.get(start..end).ok_or("DOC slice range out of bounds")?.to_vec()))
+                }
+                _=>Err("slice expects ints collection, int start and int count".into())
             },
             Tail(list)=>match list.eval(args)?{
                 Value::Ints(xs)=>Ok(Value::Ints(xs.into_iter().skip(1).collect())),
@@ -296,12 +404,9 @@ pub struct Graph {
     pub states:Vec<State>,pub users:Vec<Vec<StateId>>,pub topo:Vec<StateId>,
     names:HashMap<String,StateId>,
 }
-// Bounded, compile-time, hygienic-by-name pure DOC functions. Definitions
-// may refer to earlier functions; calls are lowered inside the DOC frontend
-// to existing typed Expr nodes, NOT handed to a foreign transpiler/runtime.
-// Formal replacement only touches full identifier tokens, never substrings.
-#[derive(Clone)]
-struct UserFn { params: Vec<String>, body: String }
+// Pure function definitions are lexical typed-expression templates, parsed
+// once against earlier declarations and specialized at the call site.
+struct UserFn { arity: usize, body: Expr }
 fn valid_user_ident(s:&str)->bool {
     let mut bytes=s.bytes();
     matches!(bytes.next(), Some(c) if c.is_ascii_alphabetic() || c==b'_')
@@ -309,149 +414,17 @@ fn valid_user_ident(s:&str)->bool {
 }
 fn reserved_user_ident(s:&str)->bool {
     matches!(s,"add"|"sub"|"mul"|"eq"|"if"|"lt"|"le"|"nat"|
-        "empty"|"append"|"get"|"len"|"tail"|
+        "empty"|"append"|"get"|"len"|"tail"|"remove_at"|"replace_at"|"slice"|
         "none"|"some"|"try_get"|"unwrap_or"|
-        "text"|"concat"|"starts_with"|
+        "text"|"concat"|"starts_with"|"map_ints"|"recur"|
+        "quot"|"rem"|"bit_and"|"bit_or"|"bit_xor"|"bit_not"|"shift_left"|"shift_right"|"utf8_bytes"|"utf8_text"|
         "true"|"false"|"source"|"derive"|"fn")
 }
-fn replace_function_formals(body:&str,params:&[String],args:&[String])->String {
-    let bytes=body.as_bytes();
-    let mut out=String::new();
-    let mut i=0;
-    while i<bytes.len() {
-        if bytes[i].is_ascii_alphabetic() || bytes[i]==b'_' {
-            let mut j=i+1;
-            while j<bytes.len() &&
-                (bytes[j].is_ascii_alphanumeric() || bytes[j]==b'_') {j+=1;}
-            let name=&body[i..j];
-            if let Some(idx)=params.iter().position(|s|s==name) {
-                out.push_str(&args[idx]);
-            }else{out.push_str(name);}
-            i=j;
-        } else {
-            out.push(bytes[i] as char);i+=1;
-        }
-    }
-    out
-}
-fn expand_function_calls(input:&str,functions:&HashMap<String,UserFn>,depth:usize)
-    ->Result<String>
-{
-    if depth>32 || input.len()>4096 {
-        return Err("DOC function expansion exceeded resource bounds".into());
-    }
-    if !input.is_ascii(){return Err("DOC function expressions must be ASCII".into());}
-    let bytes=input.as_bytes();
-    let mut out=String::new();
-    let mut i=0;
-    while i<bytes.len(){
-        if bytes[i].is_ascii_alphabetic() || bytes[i]==b'_'{
-            let mut end=i+1;
-            while end<bytes.len() &&
-                (bytes[end].is_ascii_alphanumeric() || bytes[end]==b'_'){end+=1;}
-            let name=&input[i..end];
-            let mut open=end;
-            while open<bytes.len() && bytes[open].is_ascii_whitespace(){open+=1;}
-            if let Some(function)=functions.get(name).filter(|_|open<bytes.len()&&bytes[open]==b'('){
-                let mut args=Vec::new();let mut cursor=open+1;let mut start=cursor;let mut nesting=0usize;
-                let after_close=loop {
-                    if cursor>=bytes.len(){return Err("unterminated DOC function call".into());}
-                    match bytes[cursor] {
-                        b'('=>nesting+=1,
-                        b')' if nesting>0=>nesting-=1,
-                        b')'=>{
-                            if cursor>start {
-                                let argument=input[start..cursor].trim();
-                                if argument.is_empty(){return Err("empty DOC function argument".into());}
-                                args.push(expand_function_calls(argument,functions,depth+1)?);
-                            } else if !args.is_empty(){
-                                return Err("empty trailing DOC function argument".into());
-                            }
-                            break cursor+1;
-                        }
-                        b',' if nesting==0=>{
-                            let argument=input[start..cursor].trim();
-                            if argument.is_empty(){return Err("empty DOC function argument".into());}
-                            args.push(expand_function_calls(argument,functions,depth+1)?);
-                            start=cursor+1;
-                        }
-                        _=>{}
-                    }
-                    cursor+=1;
-                };
-                if args.len()!=function.params.len(){
-                    return Err(format!("wrong number of DOC function arguments for {name}"));
-                }
-                let substituted=replace_function_formals(&function.body,&function.params,&args);
-                let expanded=expand_function_calls(&substituted,functions,depth+1)?;
-                out.push_str(&expanded);
-                i=after_close;
-            }else{
-                out.push_str(name);i=end;
-            }
-        }else{
-            out.push(bytes[i] as char);i+=1;
-        }
-        if out.len()>512{return Err("expanded DOC expression exceeds 512 bytes".into());}
-    }
-    Ok(out)
-}
-
-/// Portable lexical DOC path policy: no parent/current traversal, absolute,
-/// drive, whitespace, or alternate separator tokens. The Rust file boundary
-/// also verifies canonical containment to reject symlink escapes.
-fn safe_doc_relative_path(path:&str)->bool{
-    !path.is_empty() && path.len()<=256 && path.is_ascii() &&
-    path.split('/').all(|component|
-        !component.is_empty() && component!="." && component!=".." &&
-        component.bytes().all(|b|
-            b.is_ascii_alphanumeric() || matches!(b,b'_'|b'-'|b'.')))
-}
-fn confined_doc_path(base:&std::path::Path,raw:&str)->Result<std::path::PathBuf>{
-    if !safe_doc_relative_path(raw) {return Err("DOC path rejected by confinement policy".into());}
-    let root=std::fs::canonicalize(base)
-        .map_err(|e|format!("DOC source directory unavailable: {e}"))?;
-    let file=std::fs::canonicalize(base.join(raw))
-        .map_err(|e|format!("DOC input path unavailable: {e}"))?;
-    if !file.starts_with(&root){
-        return Err("DOC path escapes source directory".into());
-    }
-    Ok(file)
-}
-/// Explicit fallible, after-stabilization filesystem output effect.
-/// This does NOT roll back externally visible effects and is not a claim of
-/// exactly-once delivery. Temp-file + same-directory rename avoids half files.
-pub fn write_doc_output(
-    doc_file:&str,relative:&str,value:&Value
-)->Result<()>{
-    use std::{fs,io::Write,path::Path};
-    if !safe_doc_relative_path(relative){
-        return Err("DOC output path must be a confined relative path".into());
-    }
-    let base=Path::new(doc_file).parent().unwrap_or(Path::new("."));
-    let root=fs::canonicalize(base)
-        .map_err(|e|format!("DOC output base unavailable: {e}"))?;
-    let requested=base.join(relative);
-    let parent=requested.parent().ok_or("DOC output has no directory")?;
-    let dir=fs::canonicalize(parent)
-        .map_err(|e|format!("DOC output directory unavailable: {e}"))?;
-    if !dir.starts_with(&root){return Err("DOC output escapes source directory".into());}
-    let name=requested.file_name().ok_or("missing DOC output name")?;
-    let output=dir.join(name);
-    let temporary=dir.join(format!(
-        ".doc-write-{}-{}.tmp",std::process::id(),name.to_string_lossy()
-    ));
-    let mut file=fs::OpenOptions::new().write(true).create_new(true)
-        .open(&temporary).map_err(|e|format!("DOC temporary write: {e}"))?;
-    let result=(||->Result<()>{
-        write!(file,"{value}\n").map_err(|e|format!("DOC write: {e}"))?;
-        file.sync_all().map_err(|e|format!("DOC sync: {e}"))?;
-        drop(file);
-        fs::rename(&temporary,&output).map_err(|e|format!("DOC rename: {e}"))?;
-        Ok(())
-    })();
-    if result.is_err(){let _=fs::remove_file(&temporary);}
-    result
+/// Explicit fallible filesystem output after stabilization. Descriptor-relative
+/// replacement publishes complete bytes; irreversible effects are not replayed.
+pub fn write_doc_output(doc_file:&str,relative:&str,value:&Value)->Result<()> {
+    value.validate()?;
+    confined::write(doc_file,relative,format!("{value}\n").as_bytes())
 }
 
 impl Graph {
@@ -466,13 +439,14 @@ impl Graph {
             }
             if names.insert(s.name.clone(),id).is_some(){return Err(format!("duplicate name {}",s.name));}
             match (&s.initial,&s.definition){
-                (Some(v),None) if v.kind()==s.kind=>{},
+                (Some(v),None) if v.kind()==s.kind=>{v.validate()?;},
                 (None,Some(d))=>{
                     let mut kinds=Vec::new();
                     for &p in &d.premises {
                         let ps=states.get(p).ok_or_else(||format!("invalid premise {p}"))?;
                         kinds.push(ps.kind);users[p].push(id);indegree[id]+=1;
                     }
+                    family::placement(&d.expr,true)?;
                     if d.expr.kind(&kinds)?!=s.kind {return Err(format!("wrong result type: {}",s.name));}
                 },
                 _=>return Err(format!("invalid source/definition: {}",s.name))
@@ -498,10 +472,49 @@ impl Graph {
     /// Imported files may not contain sources, derivations or further imports:
     /// this prevents hidden effects, source injection and import cycles.
     pub fn parse_file(file:&str)->Result<Self>{
+        let source=Self::read_source_file(file)?;
+        Self::parse_file_snapshot(file,&source,None)
+    }
+
+    /// Read one bounded, regular UTF-8 source snapshot. The host-selected
+    /// top-level filename is trusted; child effect paths remain confined.
+    pub fn read_source_file(file:&str)->Result<String>{
+        confined::read_source(std::path::Path::new(file),1_048_576)
+    }
+
+    /// Strict selected-GPU source admission and parsing of the SAME bytes.
+    /// Never reopen a checked source or invoke the effectful file frontend.
+    pub fn parse_pure_gpu_file(file:&str)->Result<Self>{
+        let source=Self::read_source_file(file)?;
+        for line in source.lines(){
+            if matches!(line.split_whitespace().next(),Some("effect"|"import")){
+                return Err("DOC_GPU_UNSUPPORTED: source imports and effects must be rejected before execution".into());
+            }
+        }
+        Self::parse(&source)
+    }
+
+    /// AOT frontend: validate and elaborate imports and effect declarations,
+    /// without reading startup assets at build time. The placeholders are
+    /// typed, not actual source facts; the generated host must replace them
+    /// all before initial stabilization.
+    pub fn parse_file_deferred(file:&str)->Result<(Self,Vec<(String,String)>)>{
+        let source=Self::read_source_file(file)?;
+        Self::parse_aot_snapshot(file,&source,false)
+    }
+
+    /// Bootstrap driver already inspected this source snapshot for native
+    /// declarations. Elaborate the identical bytes, not a second file read.
+    pub fn parse_aot_snapshot(file:&str,source:&str,freeze:bool)->Result<(Self,Vec<(String,String)>)>{
+        let mut assets=Vec::new();
+        let graph=Self::parse_file_snapshot(file,source,if freeze{None}else{Some(&mut assets)})?;
+        Ok((graph,assets))
+    }
+
+    fn parse_file_snapshot(file:&str,source:&str,mut deferred:Option<&mut Vec<(String,String)>>)->Result<Self>{
         use std::path::Path;
-        let source=std::fs::read_to_string(file)
-            .map_err(|e|format!("cannot read DOC file {file}: {e}"))?;
-        let base=Path::new(file).parent().unwrap_or(Path::new("."));
+        if source.len()>1_048_576{return Err("DOC source exceeds parse resource bound".into());}
+        let base=confined::source_directory(Path::new(file));
         let mut assembled=String::new();
         let mut modules=0usize;
         let mut effects=0usize;
@@ -509,20 +522,16 @@ impl Graph {
             let line=original.split('#').next().unwrap_or("").trim();
             if let Some(path)=line.strip_prefix("import "){
                 let path=path.trim();
-                if !safe_doc_relative_path(path) || !path.ends_with(".doc"){
+                if !confined::safe_path(path) || !path.ends_with(".doc"){
                     return Err("DOC module import requires one relative .doc path".into());
                 }
                 modules+=1;
                 if modules>64{return Err("DOC module import limit exceeded".into());}
-                let module=confined_doc_path(base,path)?;
-                let body=std::fs::read_to_string(&module)
-                    .map_err(|e|format!("DOC module {}: {e}",module.display()))?;
-                if body.len()>65_536{return Err("DOC module exceeds 64KiB".into());}
+                let body=confined::read(base,path,65_536)?;
                 for declaration in body.lines(){
                     let trimmed=declaration.split('#').next().unwrap_or("").trim();
                     if !trimmed.is_empty() && !trimmed.starts_with("fn "){
-                        return Err(format!("DOC module {} may only declare pure functions",
-                            module.display()));
+                        return Err(format!("DOC module {path} may only declare pure functions"));
                     }
                 }
                 assembled.push_str(&body);
@@ -546,12 +555,20 @@ impl Graph {
                 let relative=operand.trim().strip_prefix('"')
                     .and_then(|s|s.strip_suffix('"'))
                     .ok_or("effect read path must be quoted")?;
-                if !safe_doc_relative_path(relative) {
+                if !confined::safe_path(relative) {
                     return Err("DOC effect read requires a confined relative path".into());
                 }
-                let file_path=confined_doc_path(base,relative)?;
-                let raw=std::fs::read_to_string(&file_path)
-                    .map_err(|e|format!("DOC read effect {}: {e}",file_path.display()))?;
+                if let Some(assets)=deferred.as_deref_mut(){
+                    let placeholder=match kind{
+                        Type::Int=>"0",Type::Bool=>"false",Type::Nat=>"0",
+                        Type::Ints=>"[]",Type::MaybeInt=>"none",Type::Text=>"\"\"",
+                    };
+                    assets.push((name.to_owned(),relative.to_owned()));
+                    assembled.push_str(&format!("source {name}: {ty} = {placeholder}\n"));
+                    if assembled.len()>1_048_576{return Err("DOC file exceeds parse limit".into());}
+                    continue;
+                }
+                let raw=confined::read(base,relative,1_048_576)?;
                 let typed=if kind==Type::Text {
                     let data=raw.trim_end_matches(['\r','\n']);
                     if data.chars().any(|ch|matches!(ch,'\r'|'\n'|'"'|'\\')) {
@@ -573,6 +590,8 @@ impl Graph {
     }
 
     pub fn parse(src:&str)->Result<Self>{
+        if src.len()>1_048_576{return Err("DOC source exceeds parse resource bound".into());}
+        let mut expression_budget=1_048_576usize;
         let mut states=Vec::new();
         let mut names=HashMap::new();
         let mut functions:HashMap<String,UserFn>=HashMap::new();
@@ -590,8 +609,8 @@ impl Graph {
                     names.contains_key(name) || functions.contains_key(name) {
                     return Err(format!("invalid or duplicate DOC function: {name}"));
                 }
-                if body.trim().is_empty() || body.len()>512 {
-                    return Err("DOC function body must have 1..=512 bytes".into());
+                if body.trim().is_empty() || body.len()>65536 {
+                    return Err("DOC function body source resource bound".into());
                 }
                 let mut params=Vec::new();
                 if !arguments.trim().is_empty() {
@@ -604,11 +623,15 @@ impl Graph {
                         params.push(param.to_string());
                     }
                 }
-                if params.len()>4 {
-                    return Err("DOC function arity exceeds four".into());
-                }
-                let _=lex(body)?;
-                functions.insert(name.to_string(),UserFn{params,body:body.trim().into()});
+                if params.len()>pure_fn::MAX_FORMALS{return Err("DOC function formal resource bound".into());}
+                let args=params.iter().enumerate().map(|(i,s)|(s.clone(),i)).collect::<HashMap<_,_>>();
+                let tokens=lex(body)?;
+                let budget=expression_budget.min(pure_fn::MAX_EXPR_NODES);
+                let mut parser=Parser{tokens:&tokens,pos:0,args:&args,functions:&functions,depth:0,remaining:budget,allow_dynamic:false};
+                let expr=parser.expr()?;
+                if parser.pos!=tokens.len(){return Err("trailing function body tokens".into());}
+                expression_budget-=budget-parser.remaining;
+                functions.insert(name.to_string(),UserFn{arity:params.len(),body:expr});
                 continue;
             }
             let parsed=if let Some(rest)=line.strip_prefix("source "){
@@ -633,16 +656,12 @@ impl Graph {
                         premises.push(id);
                     }
                 }
-                // Preserve the original finite-core nesting diagnostic for
-                // programs not using user functions. Expanded functions have
-                // a separate bounded-size policy shared with native Goose.
-                let expanded=if functions.is_empty() {
-                    body.to_string()
-                }else{expand_function_calls(body,&functions,0)?};
-                let tokens=lex(&expanded)?;
-                let mut parser=Parser{tokens:&tokens,pos:0,args:&args,depth:0};
+                let tokens=lex(body)?;
+                let budget=expression_budget.min(pure_fn::MAX_EXPR_NODES);
+                let mut parser=Parser{tokens:&tokens,pos:0,args:&args,functions:&functions,depth:0,remaining:budget,allow_dynamic:true};
                 let expr=parser.expr()?;
                 if parser.pos!=tokens.len(){return Err("trailing tokens".into());}
+                expression_budget-=budget-parser.remaining;
                 State::derived(name.trim(),Type::parse(t)?,premises,expr)
             }else{return Err(format!("line {}: expected source or derive",line_no+1));};
             if functions.contains_key(&parsed.name) ||
@@ -685,7 +704,7 @@ fn lex(text:&str)->Result<Vec<String>>{
     if !word.is_empty(){tokens.push(word);}
     Ok(tokens)
 }
-struct Parser<'a>{tokens:&'a[String],pos:usize,args:&'a HashMap<String,usize>,depth:usize}
+struct Parser<'a>{tokens:&'a[String],pos:usize,args:&'a HashMap<String,usize>,functions:&'a HashMap<String,UserFn>,depth:usize,remaining:usize,allow_dynamic:bool}
 impl Parser<'_>{
     fn next(&mut self)->Result<String>{
         let tok=self.tokens.get(self.pos).cloned().ok_or("unexpected end")?;
@@ -698,6 +717,8 @@ impl Parser<'_>{
     fn expr(&mut self)->Result<Expr>{
         // Bound untrusted source nesting before recursive descent can exhaust the host stack.
         if self.depth >= 128 { return Err("expression nesting exceeds 128".into()); }
+        if self.remaining==0{return Err("DOC expression node resource bound".into());}
+        self.remaining-=1;
         self.depth += 1;
         let result=self.parse_expr_inner();
         self.depth -= 1;
@@ -707,6 +728,48 @@ impl Parser<'_>{
         let token=self.next()?;
         if self.tokens.get(self.pos).map(String::as_str)==Some("("){
             self.eat("(")?;
+            let functions=self.functions;
+            if let Some(function)=functions.get(&token){
+                let mut actuals=Vec::new();
+                if self.tokens.get(self.pos).map(String::as_str)!=Some(")"){
+                    loop{
+                        if actuals.len()>=function.arity{return Err(format!("wrong number of DOC function arguments for {token}"));}
+                        actuals.push(self.expr()?);
+                        if self.tokens.get(self.pos).map(String::as_str)==Some(")"){break;}
+                        self.eat(",")?;
+                    }
+                }
+                self.eat(")")?;
+                if actuals.len()!=function.arity{return Err(format!("wrong number of DOC function arguments for {token}"));}
+                return pure_fn::instantiate(&function.body,Some(&actuals),self.depth,&mut self.remaining);
+            }
+            if token=="recur"{
+                if !self.allow_dynamic||self.depth!=1{return Err("DOC_RECUR: use a named top-level derive".into());}
+                let seed=Box::new(self.expr()?);self.eat(",")?;
+                let binder=self.next()?;
+                if !valid_user_ident(&binder)||reserved_user_ident(&binder)||self.args.contains_key(&binder){
+                    return Err("DOC_RECUR: invalid or shadowing state binder".into());
+                }
+                self.eat(",")?;
+                let mut scoped=self.args.clone();scoped.insert(binder,self.args.len());
+                let mut parser=Parser{tokens:self.tokens,pos:self.pos,args:&scoped,functions:self.functions,depth:self.depth,remaining:self.remaining,allow_dynamic:self.allow_dynamic};
+                let done=Box::new(parser.expr()?);parser.eat(",")?;
+                let next=Box::new(parser.expr()?);self.pos=parser.pos;self.remaining=parser.remaining;self.eat(")")?;
+                return Ok(Expr::Recur(seed,done,next));
+            }
+            if token=="map_ints"{
+                if !self.allow_dynamic||self.depth!=1{return Err("DOC_FAMILY: map_ints needs a named top-level derive".into());}
+                let input=Box::new(self.expr()?);self.eat(",")?;
+                let binder=self.next()?;
+                if !valid_user_ident(&binder)||reserved_user_ident(&binder)||self.args.contains_key(&binder){
+                    return Err("DOC_FAMILY: invalid or shadowing lane binder".into());
+                }
+                self.eat(",")?;
+                let mut scoped=self.args.clone();scoped.insert(binder,self.args.len());
+                let mut parser=Parser{tokens:self.tokens,pos:self.pos,args:&scoped,functions:self.functions,depth:self.depth,remaining:self.remaining,allow_dynamic:self.allow_dynamic};
+                let body=Box::new(parser.expr()?);self.pos=parser.pos;self.remaining=parser.remaining;self.eat(")")?;
+                return Ok(Expr::MapInts(input,body));
+            }
             if token=="nat"{
                 let digits=self.next()?;
                 self.eat(")")?;
@@ -727,11 +790,21 @@ impl Parser<'_>{
                 self.eat(")")?;
                 return Ok(Expr::SomeInt(value));
             }
+            if matches!(token.as_str(),"bit_not"|"utf8_bytes"|"utf8_text"){
+                let argument=Box::new(self.expr()?);self.eat(")")?;
+                return Ok(match token.as_str(){"bit_not"=>Expr::BitNot(argument),"utf8_bytes"=>Expr::Utf8Bytes(argument),_=>Expr::Utf8Text(argument)});
+            }
             if token=="len" || token=="tail"{
                 let argument=Box::new(self.expr()?);
                 self.eat(")")?;
                 return Ok(if token=="len"{Expr::Length(argument)}
                     else{Expr::Tail(argument)});
+            }
+            if token=="replace_at" || token=="slice" {
+                let list=Box::new(self.expr()?);self.eat(",")?;
+                let index=Box::new(self.expr()?);self.eat(",")?;
+                let value=Box::new(self.expr()?);self.eat(")")?;
+                return Ok(if token=="slice"{Expr::Slice(list,index,value)}else{Expr::ReplaceAt(list,index,value)});
             }
             let expr=if token=="if"{
                 let c=Box::new(self.expr()?);self.eat(",")?;
@@ -745,11 +818,12 @@ impl Parser<'_>{
                     "mul"=>Expr::Mul(a,b),"eq"=>Expr::Eq(a,b),
                     "lt"=>Expr::Lt(a,b),"le"=>Expr::Le(a,b),
                     "append"=>Expr::Append(a,b),"get"=>Expr::Get(a,b),
+                    "remove_at"=>Expr::RemoveAt(a,b),
                     "try_get"=>Expr::TryGet(a,b),
                     "unwrap_or"=>Expr::UnwrapOr(a,b),
                     "concat"=>Expr::Concat(a,b),
                     "starts_with"=>Expr::StartsWith(a,b),
-                    _=>return Err(format!("unknown operator {token}"))
+                    other=>if let Some(op)=word::WordOp::parse(other){Expr::WordBinary(op,a,b)}else{return Err(format!("unknown operator {token}"))}
                 }
             };
             self.eat(")")?;Ok(expr)
@@ -782,11 +856,18 @@ pub struct Runtime {
     pub cutoff:Cutoff,pub workers:usize,pub stats:Stats,pub generation:u64,
     pub source_epoch:u64,
 }
+/// Hardware-aware bounded task grain for ready DOC frontiers. No CPU cap.
+pub fn cpu_frontier_workers(requested:usize,hardware:usize,ready:usize)->usize{
+    if ready<64 {return 1;}
+    requested.max(1).min(hardware.max(1)).min((ready/32).max(1))
+}
 impl Runtime {
     pub fn new(graph:Graph,workers:usize,cutoff:Cutoff)->Self{
         let values=graph.states.iter().map(|s|s.initial.clone()).collect();
         let active=graph.states.iter().map(|s|s.definition.is_some()).collect();
-        Self{graph,values,active,cutoff,workers:workers.max(1),stats:Stats::default(),generation:0,source_epoch:0}
+        let detected=thread::available_parallelism().map_or(1,|n|n.get());
+        let requested=if workers==0 {detected} else {workers};
+        Self{graph,values,active,cutoff,workers:requested.max(1),stats:Stats::default(),generation:0,source_epoch:0}
     }
     pub fn value(&self,id:StateId)->Option<Value>{self.values.get(id).cloned().flatten()}
     pub fn snapshot(&self)->Vec<Option<Value>>{self.values.clone()}
@@ -858,6 +939,7 @@ impl Runtime {
             let s=self.graph.states.get(*id).ok_or("unknown state")?;
             if s.definition.is_some(){return Err("cannot update derived state".into());}
             if s.kind!=v.kind(){return Err("source update type mismatch".into());}
+            v.validate()?;
             if !ids.insert(*id){return Err("duplicate source assignment".into());}
         }
         // One atomic source batch advances exactly one source epoch, not
@@ -925,31 +1007,30 @@ impl Runtime {
         let args:Result<Vec<Value>>=d.premises.iter().map(|p|self.values[*p].clone().ok_or("missing premise".into())).collect();
         d.expr.eval(&args?)
     }
-    /// Evaluate selected ready definitions against one settled pre-valuation.
-    /// Validation or evaluation errors leave ALL selected states and values intact.
-    pub fn step(&mut self,selected:&[StateId])->Result<()>{
-        if selected.is_empty(){return Err("empty frontier subset".into());}
-        let ready:HashSet<StateId>=self.ready().into_iter().collect();
-        let mut seen=HashSet::new();
-        for id in selected{
-            if !ready.contains(id)||!seen.insert(*id){return Err("illegal frontier subset".into());}
-        }
+    /// Evaluate a ready CPU subset privately, using the same bounded worker
+    /// grain in CPU-only and mixed CPU/GPU frontiers.
+    fn eval_many(&self,selected:&[StateId])->Result<Vec<(StateId,Value)>> {
+        let hardware=thread::available_parallelism().map_or(1,|n|n.get());
+        let count=cpu_frontier_workers(self.workers,hardware,selected.len());
         let candidates:Result<Vec<(StateId,Value)>>=
-        if self.workers<2||selected.len()<64{
+        if count<2{
             selected.iter().map(|&id|self.eval(id).map(|v|(id,v))).collect()
         }else{
-            let count=self.workers.min(selected.len());
             let chunk=selected.len().div_ceil(count);
             let runtime:&Runtime=self;
+            eprintln!("DOC_RUST_PARALLEL_FRONTIER: workers={count} candidates={} hardware={hardware}",selected.len());
             thread::scope(|scope|{
                 let mut handles=Vec::new();
+                let mut error=None;
                 for ids in selected.chunks(chunk){
-                    handles.push(scope.spawn(move||ids.iter()
+                    match thread::Builder::new().spawn_scoped(scope,move||ids.iter()
                         .map(|&id|runtime.eval(id).map(|v|(id,v)))
-                        .collect::<Result<Vec<_>>>()));
+                        .collect::<Result<Vec<_>>>()){
+                        Ok(handle)=>handles.push(handle),
+                        Err(e)=>{error=Some(format!("DOC worker admission failed: {e}"));break;}
+                    }
                 }
                 let mut results=Vec::new();
-                let mut error=None;
                 for handle in handles{
                     match handle.join(){
                         Ok(Ok(mut part))=>results.append(&mut part),
@@ -961,6 +1042,29 @@ impl Runtime {
             })
         };
         let candidates=candidates?;
+        Ok(candidates)
+    }
+    /// Evaluate selected ready definitions against one settled pre-valuation.
+    /// Validation or evaluation errors leave ALL selected states and values intact.
+    pub fn step(&mut self,selected:&[StateId])->Result<()>{
+        if selected.is_empty(){return Err("empty frontier subset".into());}
+        let ready:HashSet<StateId>=self.ready().into_iter().collect();
+        let mut seen=HashSet::new();
+        for id in selected{
+            if !ready.contains(id)||!seen.insert(*id){return Err("illegal frontier subset".into());}
+        }
+        let candidates=if family::has_map(self,selected){
+            let expanded=family::expand(self,selected)?;
+            let mut child=Runtime::new(expanded.graph.clone(),self.workers,self.cutoff);
+            child.stabilize()?;
+            expanded.gather(&child)?
+        }else{self.eval_many(selected)?};
+        self.commit_frontier(candidates);
+        Ok(())
+    }
+    /// Commit one validated ready frontier from CPU or jointly completed CPU/GPU candidates.
+    /// All effectful/device/CPU candidate errors are checked BEFORE entering this barrier.
+    fn commit_frontier(&mut self,candidates:Vec<(StateId,Value)>){
         self.stats.frontiers+=1;
         self.stats.evaluations+=candidates.len() as u64;
         // Apply the logical publication barrier only after all candidates succeed.
@@ -974,6 +1078,74 @@ impl Runtime {
             }
         }
         for (id,_) in &candidates{self.active[*id]=false;}
+    }
+
+    /// Automatically schedule one dependency-ready frontier on CPU workers
+    /// and (if proved eligible and available) real WebGPU compute. No authored
+    /// placement hints, and no GPU publication before CPU AND GPU succeed.
+    pub fn step_automatic(&mut self,scheduler:&mut automatic::AutomaticScheduler)->Result<()>{
+        let ready=self.ready();
+        if ready.is_empty(){return Err("automatic scheduler has no ready DOC frontier".into());}
+        if family::has_map(self,&ready){
+            let expanded=family::expand(self,&ready)?;
+            let mut child=Runtime::new(expanded.graph.clone(),self.workers,self.cutoff);
+            child.stabilize_automatic(scheduler)?;
+            let candidates=expanded.gather(&child)?;
+            self.commit_frontier(candidates);
+            return Ok(());
+        }
+        #[cfg(feature="webgpu")]
+        if let Some(plan)=scheduler.plan(self,&ready)?{
+            // Device initialization precedes selection/dispatch commitment.
+            // If no usable adapter is present, choose the ordinary CPU path.
+            if !scheduler.ensure_gpu(){
+                self.step(&ready)?;
+                scheduler.cpu_completed(self,ready.len());
+                return Ok(());
+            }
+            let automatic::SelectedGpuFrontier{graph,outputs,cpu}=plan;
+            let cpu_count=cpu.len();
+            let gpu_count=outputs.len();
+            let (cpu_values,gpu_values)=thread::scope(|scope|{
+                // CPU and persistent WebGPU execute from the same immutable,
+                // dependency-ready values. No partial result can publish.
+                let current:&Runtime=&*self;
+                let cpu_thread=thread::Builder::new().spawn_scoped(scope,move||current.eval_many(&cpu))
+                    .map_err(|e|format!("DOC automatic CPU worker admission failed: {e}"))?;
+                let gpu_result=scheduler.run_gpu(&graph);
+                let cpu_values=cpu_thread.join()
+                    .map_err(|_|"DOC automatic CPU worker panicked")??;
+                Ok::<_,String>((cpu_values,gpu_result?))
+            })?;
+            let mut results=HashMap::<StateId,Value>::new();
+            for (id,value) in cpu_values{results.insert(id,value);}
+            for (original,local) in outputs{
+                let value=gpu_values.get(local).cloned()
+                    .ok_or("DOC automatic GPU missing a fully read-back result")?;
+                if results.insert(original,value).is_some(){
+                    return Err("DOC automatic duplicate frontier candidate".into());
+                }
+            }
+            let candidates:Result<Vec<_>>=ready.iter().map(|id|
+                results.remove(id).map(|v|(*id,v))
+                    .ok_or_else(||"DOC automatic frontier lost a candidate".into())).collect();
+            self.commit_frontier(candidates?);
+            let hardware=thread::available_parallelism().map_or(1,|x|x.get());
+            let cpu_parallel=cpu_frontier_workers(self.workers,hardware,cpu_count)>1;
+            scheduler.mixed_completed(cpu_count,gpu_count,cpu_parallel);
+            return Ok(());
+        }
+        let count=ready.len();
+        self.step(&ready)?;
+        scheduler.cpu_completed(self,count);
+        Ok(())
+    }
+    pub fn stabilize_automatic(
+        &mut self,scheduler:&mut automatic::AutomaticScheduler
+    )->Result<()> {
+        while !self.stable(){
+            self.step_automatic(scheduler)?;
+        }
         Ok(())
     }
     pub fn stabilize(&mut self)->Result<()>{
@@ -1019,5 +1191,21 @@ mod source_depth_regression {
     fn ordinary_nested_doc_source_still_elaborates() {
         let source = "source a: bool = true\nderive chosen: bool (a) = eq(eq(a,true),true)\n";
         assert!(Graph::parse(source).is_ok());
+    }
+}
+
+#[cfg(test)]
+mod scheduler_budget_tests {
+    use super::*;
+    #[test]
+    fn cpu_parallel_budget_tracks_hardware_and_frontier_width() {
+        for hardware in [1usize,2,4,8,16,64,128] {
+            assert_eq!(cpu_frontier_workers(0,hardware,4096),1);
+            assert_eq!(cpu_frontier_workers(usize::MAX,hardware,4096),hardware);
+            assert_eq!(cpu_frontier_workers(usize::MAX,hardware,16),1);
+            assert_eq!(cpu_frontier_workers(usize::MAX,hardware,64),hardware.min(2));
+            assert_eq!(cpu_frontier_workers(usize::MAX,hardware,128),hardware.min(4));
+            assert_eq!(cpu_frontier_workers(3,hardware,4096),hardware.min(3));
+        }
     }
 }

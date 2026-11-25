@@ -1,53 +1,37 @@
 #!/usr/bin/env bash
-# Independent LOCAL run-all entrypoint for DOC verification
-# Allows local developers and agents to run full regression without hosted CI.
+# DOC Rust-only local source validation; native GPU admission remains explicit.
+# Hardware acceptance is performed separately by the SHA-pinned Kaggle workflow.
 set -euo pipefail
-
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
-echo "=== DOC Local Acceptance Run-All Entrypoint ==="
+echo "=== DOC Rust CPU and WebGPU local verification ==="
 echo "Commit: $(git rev-parse HEAD)"
 echo "Date: $(date -u)"
+python3 ci/check-rust-only-scope.py
+python3 -m unittest discover -s ci/kaggle -p 'test_*.py' -v
 
-GOOSE_BIN="${GOOSE_BIN:-/tmp/doc-goose-plain-build/goose}"
-if [ ! -x "$GOOSE_BIN" ]; then
-  if command -v goose >/dev/null 2>&1; then
-    GOOSE_BIN="$(command -v goose)"
-  else
-    echo "DOC_LOCAL_ACCEPTANCE_BLOCKED: native Goose compiler unavailable; set GOOSE_BIN to the pinned compiler and rerun the complete suite." >&2
-    exit 1
-  fi
-fi
-
-echo "--- 1. Rust cargo test --all-targets ---"
 cargo test --release --manifest-path runtime-rust/Cargo.toml --all-targets
+cargo test --release --manifest-path runtime-rust/Cargo.toml --features webgpu --lib
+cargo build --release --manifest-path runtime-rust/Cargo.toml --features webgpu --bin doc --examples
 
-echo "--- 2. Rust WebGPU example and feature build ---"
-cargo test --release --manifest-path runtime-rust/Cargo.toml --features webgpu --example webgpu_integer_eq
-cargo build --release --manifest-path runtime-rust/Cargo.toml --bin doc
-cargo build --release --manifest-path runtime-rust/Cargo.toml --features webgpu --examples
+scratch="$(mktemp -d)"
+trap 'rm -rf -- "$scratch"' EXIT
+doc="runtime-rust/target/release/doc"
+DOC_WORKERS=1 "$doc" runtime-rust/examples/repair.doc --backend=cpu a=4 b=1 > "$scratch/cpu-1"
+DOC_WORKERS=4 "$doc" runtime-rust/examples/repair.doc --backend=cpu a=4 b=1 > "$scratch/cpu-4"
+diff -u "$scratch/cpu-1" "$scratch/cpu-4"
+grep -Fx 'chosen: 10' "$scratch/cpu-1"
+bash ci/check-explicit-backend.sh "$doc" runtime-rust/examples/repair.doc
 
-echo "--- 2b. Rust CLI strict backend selection ---"
-bash ci/check-explicit-backend.sh runtime-rust/target/release/doc runtime-rust/examples/repair.doc
-
-echo "--- 3. Python unit and integration tests (ci/) ---"
-python3 -m unittest discover -s ci -p 'test_*.py' -v
-
-echo "--- 4. Verify committed local GPU evidence ---"
-python3 ci/verify-local-gpu-evidence.py local-evidence
-if [ -d local-evidence/forced-hardware ]; then
-  python3 ci/verify-local-gpu-evidence.py local-evidence/forced-hardware
+# Software WebGPU correctness is developer opt-in and never physical evidence.
+if [[ "${DOC_GPU_ALLOW_SOFTWARE:-0}" == "1" ]]; then
+  for fixture in boolean_staged gpu_arithmetic_chain gpu_nested_arithmetic parallel_frontier; do
+    source="runtime-rust/examples/$fixture.doc"
+    "$doc" "$source" --backend=cpu > "$scratch/$fixture.cpu"
+    "$doc" "$source" --backend=gpu > "$scratch/$fixture.gpu"
+    diff -u "$scratch/$fixture.cpu" "$scratch/$fixture.gpu"
+  done
+  echo DOC_RUST_LOCAL_WEBGPU_SOFTWARE_PARITY_PASS
 fi
-
-if [ -x "$GOOSE_BIN" ]; then
-  echo "--- 5. Native Goose typed check & differential suite ---"
-  SCRATCH_DIR="$(mktemp -d)"
-  trap 'rm -rf -- "$SCRATCH_DIR"' EXIT
-  bash runtime-goose/check-doc-typed.sh "$GOOSE_BIN" runtime-rust/target/release/doc "$SCRATCH_DIR"
-  echo "Goose typed checks passed in $SCRATCH_DIR"
-  "$GOOSE_BIN" build runtime-goose/doc_typed.goose --offline -o "$SCRATCH_DIR/doc-goose"
-  bash ci/check-explicit-backend.sh "$SCRATCH_DIR/doc-goose" runtime-rust/examples/repair.doc
-fi
-
-echo "=== LOCAL NATIVE REGRESSION CHECKS PASSED (not production, hosted CI, or physical GPU acceptance) ==="
+echo "DOC_RUST_LOCAL_SOURCE_CHECKS_PASS (not physical-GPU or final release acceptance)"
