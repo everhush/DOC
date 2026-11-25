@@ -12,6 +12,7 @@ VARIANTS = {
     'changed': 'source amount:bool=true\nsource total:int=3\nderive xs:int(total)=add(total,1)\n',
 }
 HARNESS = r'''
+#define DOC_TEST_ALLOC_FAILURE
 #include "graph_host.h"
 #include <assert.h>
 extern const GraphVariant old_variant,new_variant,bad_variant,changed_variant;
@@ -21,18 +22,21 @@ static int entered,released;
 static const GraphFact *lookup(const GraphFact *f,size_t n,const char *name){for(size_t i=0;i<n;i++)if(f[i].name&&!strcmp(f[i].name,name))return f+i;return NULL;}
 static V get(const GraphFact *f,size_t n,const char *name){const GraphFact *p=lookup(f,n,name);assert(p);return p->value;}
 static void old_check(void *ctx,int64_t g,const GraphFact *f,size_t n){(void)ctx;assert(g==0&&num(get(f,n,"amount"))==7&&num(get(f,n,"total"))==8);V xs=get(f,n,"xs");assert(xs.n==2&&((const int64_t*)xs.p)[0]==9);}
-static void pinned(void *ctx,int64_t g,const GraphFact *f,size_t n){old_check(ctx,g,f,n);pthread_mutex_lock(&gate);entered=1;pthread_cond_broadcast(&ready);while(!released)pthread_cond_wait(&ready,&gate);pthread_mutex_unlock(&gate);old_check(ctx,g,f,n);}
+static void pinned(void *ctx,int64_t g,const GraphFact *f,size_t n){old_check(ctx,g,f,n);pthread_mutex_lock(&gate);entered++;pthread_cond_broadcast(&ready);while(!released)pthread_cond_wait(&ready,&gate);pthread_mutex_unlock(&gate);old_check(ctx,g,f,n);}
 static void *reader(void *p){assert(graph_read(p,0,pinned,NULL));return NULL;}
 static void new_check(void *ctx,int64_t g,const GraphFact *f,size_t n){(void)ctx;assert(g==1&&num(get(f,n,"amount"))==7&&num(get(f,n,"total"))==14&&truth(get(f,n,"extra")));V xs=get(f,n,"xs"),ys=get(f,n,"ys");assert(xs.n==2&&ys.n==3&&((const int64_t*)ys.p)[0]==9&&((const int64_t*)ys.p)[2]==3);}
 static void changed_check(void *ctx,int64_t g,const GraphFact *f,size_t n){(void)ctx;assert(g==2&&truth(get(f,n,"amount"))&&num(get(f,n,"total"))==3&&num(get(f,n,"xs"))==4);}
 static void never(void *ctx,int64_t g,const GraphFact *f,size_t n){(void)ctx;(void)g;(void)f;(void)n;assert(0);}
 int main(void){GraphHost h;assert(graph_init(&h,&old_variant));char *updates[]={"amount=7","xs=[9,2]"};assert(graph_update(&h,0,2,updates));assert(graph_read(&h,0,old_check,NULL));
-    pthread_t t;assert(!pthread_create(&t,NULL,reader,&h));pthread_mutex_lock(&gate);while(!entered)pthread_cond_wait(&ready,&gate);pthread_mutex_unlock(&gate);
-    assert(!graph_replace(&h,0,&bad_variant));assert(!bad_variant.live());assert(graph_read(&h,0,old_check,NULL));assert(graph_replace(&h,0,&new_variant));assert(!old_variant.live());assert(graph_read(&h,1,new_check,NULL));assert(!graph_read(&h,0,never,NULL));assert(!graph_update(&h,0,2,updates));assert(!graph_replace(&h,0,&changed_variant));
+    atomic_store(&allocation_budget,0);assert(!graph_read(&h,0,never,NULL));atomic_store(&allocation_budget,SIZE_MAX);assert(!h.reader_slots&&!atomic_load(&live_bytes));
+    pthread_t t[DOC_GRAPH_READER_SLOTS];for(int i=0;i<DOC_GRAPH_READER_SLOTS;i++)assert(!pthread_create(t+i,NULL,reader,&h));pthread_mutex_lock(&gate);while(entered!=DOC_GRAPH_READER_SLOTS)pthread_cond_wait(&ready,&gate);pthread_mutex_unlock(&gate);
+    assert(!graph_read(&h,0,never,NULL));
+    assert(!graph_replace(&h,0,&bad_variant));assert(!bad_variant.live());assert(!graph_read(&h,0,never,NULL));assert(graph_replace(&h,0,&new_variant));assert(!old_variant.live());assert(!graph_read(&h,1,never,NULL));assert(!graph_read(&h,0,never,NULL));assert(!graph_update(&h,0,2,updates));assert(!graph_replace(&h,0,&changed_variant));
+    pthread_mutex_lock(&gate);released=1;pthread_cond_broadcast(&ready);pthread_mutex_unlock(&gate);for(int i=0;i<DOC_GRAPH_READER_SLOTS;i++)assert(!pthread_join(t[i],NULL));assert(!h.reader_slots&&!atomic_load(&live_bytes));assert(graph_read(&h,1,new_check,NULL));
     assert(graph_replace(&h,1,&changed_variant));assert(!new_variant.live());assert(graph_read(&h,2,changed_check,NULL));
-    pthread_mutex_lock(&gate);released=1;pthread_cond_broadcast(&ready);pthread_mutex_unlock(&gate);assert(!pthread_join(t,NULL));assert(!atomic_load(&live_bytes));
     assert(graph_replace(&h,2,&old_variant));assert(!changed_variant.live());char *d[]={"amount=7","--demand=amount"};assert(graph_update(&h,3,2,d));assert(!graph_replace(&h,3,&new_variant));assert(!new_variant.live());assert(graph_update(&h,3,0,NULL));assert(graph_replace(&h,3,&new_variant));
-    graph_destroy(&h);assert(!old_variant.live()&&!new_variant.live()&&!bad_variant.live()&&!changed_variant.live()&&!atomic_load(&live_bytes));puts("DOC11_GRAPH_GENERATION_PASS: prelinked native variants, compatible managed source carry, changed type/role reset, failed and unstable candidates, stale tokens, stalled reader survives retirement, live=0");return 0;}
+    for(int i=0;i<32;i++){int64_t generation=h.generation;assert(graph_replace(&h,generation,&old_variant));assert(!new_variant.live());assert(graph_replace(&h,generation+1,&new_variant));assert(!old_variant.live());assert(!h.reader_slots&&!atomic_load(&live_bytes));}
+    graph_destroy(&h);assert(!old_variant.live()&&!new_variant.live()&&!bad_variant.live()&&!changed_variant.live()&&!atomic_load(&live_bytes));puts("DOC11_GRAPH_GENERATION_PASS: prelinked native variants, compatible managed source carry, changed type/role reset, failed and unstable candidates, stale tokens, bounded stalled readers survive retirement, full-capacity rejection, allocation-failure slot recovery, 64 replacement stress transitions, live=0");return 0;}
 '''
 
 
