@@ -66,6 +66,14 @@ def main():
     run(['cc','-std=c11','-O1','-g','-fsanitize=address,undefined','-fno-sanitize-recover=all','-fno-pie','-no-pie','-I',out,out/'regions.c',Path(__file__).with_name('native_regions_host.c'),'-o',out/'region-host'])
     print(run([out/'region-host']).decode().strip(),flush=True)
     print('DOC11_NATIVE_REGIONS_PASS: unchanged volatile and atomic fixture, 14 compiler rejection checks',flush=True)
+    # The unmodified frozen arena fixture exercises capacity and allocator policy.
+    arena=(fixture/'runtime-rust/examples/native_arena.doc').read_bytes()
+    for target in ('code','header'):
+        data=compile_doc(target,arena,'arena','','arena')
+        assert data==compile_doc(target,arena,'arena','','arena')
+        (out/('arena.c' if target=='code' else 'arena.h')).write_bytes(data)
+    run(['cc','-std=c11','-O1','-g','-fsanitize=address,undefined','-fno-sanitize-recover=all','-fno-pie','-no-pie','-I',out,out/'arena.c',Path(__file__).with_name('native_arena_host.c'),'-o',out/'arena-host'])
+    print(run([out/'arena-host']).decode().strip(),flush=True)
     # Renamed declarations and a changed graph prove this is not a fixed boot template.
     alt=src.replace(b'scratch',b'ram').replace(b'x86_out8',b'foreign_byte').replace(b'add(seed,1)',b'sub(seed,2)')
     ac=compile_doc('code',alt,'ram','foreign_byte','alternate'); assert b'__asm__("foreign_byte")' in ac and b'doc_sub(doc_v_seed' in ac and b'doc_export_alternate' in ac
