@@ -216,7 +216,7 @@ jobs:
           mkdir -p doc11-native-evidence
           python3 -u runtime-doc/tests/test_native_scalar.py --stage2 doc11-self-evidence/stage2 --scanner doc11-game-evidence/scanner2 --evidence doc11-native-evidence --boot | tee doc11-native-evidence/test.log
           git rev-parse HEAD > doc11-native-evidence/source-sha.txt
-          sha256sum doc11-native-evidence/{native_scalar2,native_scalar2.c,boot.c,boot.h,regions.c,regions.h,region-host,arena.c,arena.h,arena-host,intrinsics.c,intrinsics.h,external.c,external.h,intrinsic-host,kernel64.elf,kernel.elf} > doc11-native-evidence/SHA256SUMS
+          sha256sum doc11-native-evidence/{native_scalar2,native_scalar2.c,boot.c,boot.h,regions.c,regions.h,region-host,arena.c,arena.h,arena-host,intrinsics.c,intrinsics.h,external.c,external.h,intrinsic-host,buffer.c,buffer.h,buffer-host,kernel64.elf,kernel.elf} > doc11-native-evidence/SHA256SUMS
       - uses: actions/upload-artifact@v4
         if: always()
         with:

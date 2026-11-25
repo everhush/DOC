@@ -28,8 +28,8 @@ def main():
         code=emit([a.stage2.resolve()],bundle([a.scanner.resolve()],ROOT/'compiler/native_scalar.doc',stream=True),stream=True)
         c=out/'native_scalar2.c'; c.write_bytes(code); native=out/'native_scalar2'
         run(['cc','-std=gnu11','-O0','-I',ROOT/'runtime',c,'-o',native],timeout=300)
-    def compile_doc(target,source=src,region='scratch',imp='x86_out8',name='boot',reject=False,region2='',intrinsic=''):
-        argv=[native,'--demand='+target,'--input-stdin','grant_region="'+region+'"','grant_region2="'+region2+'"','grant_import="'+imp+'"','grant_intrinsic="'+intrinsic+'"','export_name="'+name+'"']
+    def compile_doc(target,source=src,region='scratch',imp='x86_out8',name='boot',reject=False,region2='',intrinsic='',allow_read=False,allow_write=False):
+        argv=[native,'--demand='+target,'--input-stdin','grant_region="'+region+'"','grant_region2="'+region2+'"','grant_import="'+imp+'"','grant_intrinsic="'+intrinsic+'"','allow_read='+str(allow_read).lower(),'allow_write='+str(allow_write).lower(),'export_name="'+name+'"']
         r=subprocess.run([str(x) for x in argv],input=source,capture_output=True,timeout=120)
         if reject:
             assert r.returncode and not r.stdout,(target,r.returncode,r.stdout[:100])
@@ -100,6 +100,29 @@ def main():
     run(['cc','-std=c11','-O1','-g','-fsanitize=address,undefined','-fno-sanitize-recover=all','-fno-pie','-no-pie','-I',out,out/'intrinsics.c',out/'external.c',Path(__file__).with_name('native_intrinsic_host.c'),'-o',out/'intrinsic-host'])
     print(run([out/'intrinsic-host']).decode().strip(),flush=True)
     print('DOC11_NATIVE_INTRINSICS_PASS: original built-in and external fixtures; 20 compiler rejection checks',flush=True)
+    # The unchanged POSIX fixture must call actual read/write, not a host evaluator.
+    buf=(fixture/'runtime-rust/examples/native_buffer.doc').read_bytes()
+    for target,suffix in [('code','c'),('header','h')]:
+        data=compile_doc(target,buf,'buffer','','buffer',allow_read=True,allow_write=True)
+        assert data==compile_doc(target,buf,'buffer','','buffer',allow_read=True,allow_write=True)
+        (out/('buffer.'+suffix)).write_bytes(data)
+    buf_neg=[
+        (buf,False,True),(buf,True,False),
+        (buf.replace(b'read(i32,bytes)',b'read(i32,const_bytes)'),True,True),
+        (buf.replace(b'write(i32,const_bytes)',b'write(i32,bytes)'),True,True),
+        (buf.replace(b'read(input_fd,buffer',b'read(input_fd,other'),True,True),
+        (buf.replace(b'(input_fd,offset,requested,enabled,skipped)',b'(input_fd,requested,enabled,skipped)'),True,True),
+        (buf.replace(b'when enabled else skipped',b'when requested else skipped'),True,True),
+        (buf.replace(b'native region buffer: u8 plain',b'native region buffer: u8 volatile'),True,True),
+        (buf.replace(b'write(output_fd,buffer,offset,received)',b'write(output_fd,buffer,offset)'),True,True),
+        (buf.replace(b'native import read(i32,bytes) -> i64',b'native import read(i32,bytes) -> i64\nnative import read(i32,bytes) -> i64'),True,True),
+    ]
+    for source,rd,wr in buf_neg:
+        for target in ('code','header'):
+            compile_doc(target,source,'buffer','','buffer_negative',reject=True,allow_read=rd,allow_write=wr)
+    run(['cc','-std=c11','-O1','-g','-fsanitize=address,undefined','-fno-sanitize-recover=all','-fno-pie','-no-pie','-I',out,out/'buffer.c',Path(__file__).with_name('native_buffer_host.c'),'-o',out/'buffer-host'])
+    print(run([out/'buffer-host'],timeout=10).decode().strip(),flush=True)
+    print('DOC11_NATIVE_BUFFER_PASS: original POSIX fixture and 20 compiler rejection checks',flush=True)
     # Renamed declarations and a changed graph prove this is not a fixed boot template.
     alt=src.replace(b'scratch',b'ram').replace(b'x86_out8',b'foreign_byte').replace(b'add(seed,1)',b'sub(seed,2)')
     ac=compile_doc('code',alt,'ram','foreign_byte','alternate'); assert b'__asm__("foreign_byte")' in ac and b'doc_sub(doc_v_seed' in ac and b'doc_export_alternate' in ac
