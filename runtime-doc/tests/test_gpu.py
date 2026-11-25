@@ -44,7 +44,11 @@ def main():
      shutil.copy2(exe,a.artifacts/name);(a.artifacts/(name+'.expected')).write_bytes(expected)
      (a.artifacts/(name+'.wgsl')).write_bytes((root/'generated.wgsl').read_bytes())
      (a.artifacts/(name+'.c')).write_bytes(c.read_bytes())
-   actual=run([exe,'--backend='+mode,*args],root,a.physical);assert actual.returncode==0 and actual.stdout==expected,(name,actual.stderr,actual.stdout[:300],expected[:300]);assert b'DOC11_GPU_DISPATCH:' in actual.stderr and b'DOC11_REGIONS: live=0 ' in actual.stderr,actual.stderr
+   actual=run([exe,'--backend='+mode,*args],root,a.physical)
+   if a.artifacts:
+    (a.artifacts/(name+'.actual')).write_bytes(actual.stdout)
+    (a.artifacts/(name+'.stderr')).write_bytes(actual.stderr)
+   assert actual.returncode==0 and actual.stdout==expected,(name,actual.stderr,actual.stdout[:300],expected[:300]);assert b'DOC11_GPU_DISPATCH:' in actual.stderr and b'DOC11_REGIONS: live=0 ' in actual.stderr,actual.stderr
    if a.physical:assert b'physical=1' in actual.stderr
    if name=='wide':assert b'DOC11_GPU_DISPATCH: lanes=96 workgroups=2' in actual.stderr,actual.stderr
    if name=='mixed':
@@ -60,6 +64,21 @@ def main():
      if a.artifacts:shutil.copy2(loss,a.artifacts/'device_loss')
     lost=run([loss],root,a.physical);assert lost.returncode==0 and b'DOC11_GPU_DEVICE_LOSS_PASS:' in lost.stdout,(lost.stdout,lost.stderr)
     print(lost.stdout.decode().strip(),flush=True)
+    if a.prebuilt:
+     authority=a.prebuilt.resolve()/'gpu_epoch_authority'
+    else:
+     authority=root/'gpu_epoch_authority'
+     authority_source=Path(__file__).resolve().parent/'gpu_epoch_authority_host.c'
+     check(['cc','-std=gnu11','-O1','-pthread','-DDOC_ENABLE_GPU','-I',root,'-I',headers,'-I',wgpu/'include',authority_source,'-L',wgpu/'lib','-Wl,-rpath,'+str(wgpu/'lib'),'-lwgpu_native','-o',authority],root)
+     if a.artifacts:shutil.copy2(authority,a.artifacts/'gpu_epoch_authority')
+    retired=run([authority],root,a.physical)
+    if a.artifacts:
+     (a.artifacts/'gpu_epoch_authority.stdout').write_bytes(retired.stdout)
+     (a.artifacts/'gpu_epoch_authority.stderr').write_bytes(retired.stderr)
+    assert retired.returncode==0 and b'DOC11_GPU_EPOCH_AUTHORITY_PASS:' in retired.stdout and b'DOC11_GPU_RETIRED: outcome=device-lost' in retired.stderr,(retired.stdout,retired.stderr)
+    assert b'DOC11_GPU_DISPATCH: lanes=96 workgroups=2' in retired.stderr and b'DOC11_GPU_BUFFER_POOL: action=reused' in retired.stderr,retired.stderr
+    if a.physical:assert b'physical=1' in retired.stderr
+    print(retired.stdout.decode().strip(),retired.stderr.decode(),flush=True)
     assert b'DOC11_GPU_FRONTIER: cpu=32 gpu=96' in actual.stderr,actual.stderr;bad=run([exe,'--backend=gpu'],root,a.physical);assert bad.returncode and not bad.stdout and b'DOC_GPU_UNSUPPORTED' in bad.stderr,bad
    if name=='arithmetic':
     bad=run([exe,'--backend=gpu','--next','a=40000'],root,a.physical);assert bad.returncode and b'epoch: 1' not in bad.stdout and b'epoch: 0' in bad.stdout and b'DOC_GPU_UNSUPPORTED' in bad.stderr,bad
