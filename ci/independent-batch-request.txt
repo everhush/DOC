@@ -4,3 +4,4 @@ Local transport ASan/UBSan: PASS (17 Python rejections, 21 corrupted packets, 49
 Run independent bootstrap, native conformance, Stage-2 self-reproduction, game replay, benchmark, QEMU scalar, WebGPU compute and offscreen pixel parity.
 Physical GPU acceptance is separate. Do not treat software execution as physical proof.
 2026-11-25: verified private CI fork; consolidated Stage-2 regression including mesh allocation fault sweep.
+2026-11-25: consolidated Stage-2 games, mixed WebGPU and rollback, compiler self-reproduction, native scalar boot, render, memory and race validation.
