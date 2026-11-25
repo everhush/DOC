@@ -303,6 +303,8 @@ jobs:
         with:
           name: doc11-stage2-mesh-plan
           path: doc11-mesh-evidence
+      - name: Verify exact-build bundle transport offline
+        run: python3 -m unittest discover -s ci/kaggle -p test_independent_bundle.py -v
       - name: Install Kaggle dispatcher
         run: python3 -m pip install 'kaggle>=2.2.1,<3' 'six>=1.16'
       - name: Execute exact prebuilt independent binaries on one private physical GPU
