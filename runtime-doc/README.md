@@ -99,3 +99,7 @@ Independent parsing, type/authority validation, dependency IR, native C and WGSL
 
 Canonical tracker: https://github.com/imxade/DOC/issues/11
 Historical mirror: https://github.com/x0796666-ui/doc2/issues/2 (archival only; active tracker is #11 in this private repository).
+
+### Native scalar regions (candidate)
+
+The DOC-authored native compiler now admits the original frozen `native_regions.doc` alongside the plain-byte freestanding fixture: explicit distinct region grants, `u8 volatile`, `u32 atomic`, checked load/store/fetch_add, extent, and `seq_cst` fence. The emitted C has typed region accesses and checks alignment, byte extent overflow and disjointness from other admitted regions and the result record. A caller must still supply actual valid accessible storage with appropriate C atomic object lifetimes. External effects are irreversible; a later error prevents result-record publication but cannot retract an earlier device store. Hosted ASan/UBSan execution of Stage-2-emitted original region code passed locally; the new compiler negatives, wrap and effect tests and unchanged boot must pass CI. This is a bounded two-region scalar profile, not the complete system ABI or resource/FFI closure.
