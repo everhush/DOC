@@ -13,6 +13,8 @@ import os
 import re
 from pathlib import Path
 import stat
+import signal
+import time
 import subprocess
 import tempfile
 
@@ -127,8 +129,28 @@ def gpu_artifacts(planner, data, stream=False):
     return shader,header
 
 
+def compile_c(argv, *, timeout=240, evidence=None):
+    """Run the actual C toolchain, retire its process group on timeout, and
+    optionally record the exact command and raw diagnostics for audit."""
+    argv=[str(x) for x in argv];start=time.monotonic();expired=False
+    with subprocess.Popen(argv,stdout=subprocess.PIPE,stderr=subprocess.PIPE,start_new_session=True) as proc:
+        try:
+            out,err=proc.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            expired=True
+            try:os.killpg(proc.pid,signal.SIGKILL)
+            except ProcessLookupError:pass
+            out,err=proc.communicate()
+    if evidence is not None:
+        Path(evidence).write_text(json.dumps(dict(argv=argv,seconds=round(time.monotonic()-start,3),timeout_seconds=timeout,timed_out=expired,returncode=proc.returncode,stdout=out.decode('utf-8',errors='replace'),stderr=err.decode('utf-8',errors='replace')),indent=2)+'\n')
+    if expired:raise subprocess.TimeoutExpired(argv,timeout,output=out,stderr=err)
+    if proc.returncode:raise subprocess.CalledProcessError(proc.returncode,argv,output=out,stderr=err)
+    return out,err
+
+
 def build_bundled(compiler, data, output, headers, reactive=False, emit_c=None, cc='cc', stream=False,
-                  *, gpu_plan=None, wgpu_root=None, emit_wgsl=None, emit_gpu_header=None):
+                  *, gpu_plan=None, wgpu_root=None, emit_wgsl=None, emit_gpu_header=None,
+                  compile_timeout=240, compile_evidence=None, cc_flags=()):
     """Compile one admitted byte snapshot through native DOC C/WGSL stages."""
     output=Path(output).absolute();headers=Path(headers).resolve()
     if (gpu_plan is None)!=(wgpu_root is None) or gpu_plan is not None and not reactive:
@@ -152,7 +174,13 @@ def build_bundled(compiler, data, output, headers, reactive=False, emit_c=None, 
             link=['-L',str(wgpu/'lib'),'-Wl,-rpath,'+str(wgpu/'lib'),'-lwgpu_native']
         if reactive:
             flags+=['-DDOC_SOURCE_SHA256="'+hashlib.sha256(data).hexdigest()+'"'];link+=['-lm']
-        subprocess.run([cc,*flags,str(src),*link,'-o',str(exe)],check=True,timeout=240)
+        if compile_evidence is not None:
+            # Diagnostic-only sidecar; never replace the last successful
+            # executable or --emit-c output until compilation succeeds.
+            Path(str(compile_evidence)+'.candidate.c').write_bytes(code)
+        try:compile_c([cc,*flags,*cc_flags,str(src),*link,'-o',str(exe)],timeout=compile_timeout,evidence=compile_evidence)
+        except subprocess.CalledProcessError as exc:
+            raise ValueError('C compiler failed: '+exc.stderr.decode('utf-8',errors='replace')[-4000:]) from exc
         if emit_c:Path(emit_c).write_bytes(code)
         if emit_wgsl:Path(emit_wgsl).write_bytes(shader)
         if emit_gpu_header:Path(emit_gpu_header).write_bytes(header)
@@ -166,7 +194,7 @@ def build(scanner, compiler, file, output, headers, reactive=False, emit_c=None,
 
 
 def main():
-    p=argparse.ArgumentParser(description=__doc__);p.add_argument('source',type=Path);p.add_argument('-o','--output',required=True,type=Path);p.add_argument('--scanner',required=True,type=Path);p.add_argument('--compiler',required=True,type=Path);p.add_argument('--headers',type=Path,default=Path(__file__).resolve().parent.parent/'runtime');p.add_argument('--reactive',action='store_true');p.add_argument('--emit-c',type=Path);p.add_argument('--cc',default='cc');p.add_argument('--stream',action='store_true',help='use byte stdin on self-hosted scanner/compiler tools');p.add_argument('--gpu-plan',type=Path);p.add_argument('--wgpu-root',type=Path);p.add_argument('--emit-wgsl',type=Path);p.add_argument('--emit-gpu-header',type=Path);a=p.parse_args()
-    try:build([a.scanner.resolve()],[a.compiler.resolve()],a.source,a.output,a.headers,a.reactive,a.emit_c,a.cc,a.stream,gpu_plan=[a.gpu_plan.resolve()] if a.gpu_plan else None,wgpu_root=a.wgpu_root,emit_wgsl=a.emit_wgsl,emit_gpu_header=a.emit_gpu_header)
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument('source',type=Path);p.add_argument('-o','--output',required=True,type=Path);p.add_argument('--scanner',required=True,type=Path);p.add_argument('--compiler',required=True,type=Path);p.add_argument('--headers',type=Path,default=Path(__file__).resolve().parent.parent/'runtime');p.add_argument('--reactive',action='store_true');p.add_argument('--emit-c',type=Path);p.add_argument('--cc',default='cc');p.add_argument('--cc-flag',action='append',default=[]);p.add_argument('--compile-timeout',type=int,default=240);p.add_argument('--compile-evidence',type=Path);p.add_argument('--stream',action='store_true',help='use byte stdin on self-hosted scanner/compiler tools');p.add_argument('--gpu-plan',type=Path);p.add_argument('--wgpu-root',type=Path);p.add_argument('--emit-wgsl',type=Path);p.add_argument('--emit-gpu-header',type=Path);a=p.parse_args()
+    try:build([a.scanner.resolve()],[a.compiler.resolve()],a.source,a.output,a.headers,a.reactive,a.emit_c,a.cc,a.stream,gpu_plan=[a.gpu_plan.resolve()] if a.gpu_plan else None,wgpu_root=a.wgpu_root,emit_wgsl=a.emit_wgsl,emit_gpu_header=a.emit_gpu_header,compile_timeout=a.compile_timeout,compile_evidence=a.compile_evidence,cc_flags=a.cc_flag)
     except (ValueError,OSError,subprocess.SubprocessError) as exc:p.exit(1,'DOC build: '+str(exc)+'\n')
 if __name__=='__main__':main()
