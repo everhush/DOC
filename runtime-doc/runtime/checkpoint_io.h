@@ -59,16 +59,17 @@ static int checkpoint_value_put(unsigned char *buf,size_t *at,V v){
     if(v.kind==L){const int64_t *p=v.p;for(size_t k=0;k<v.n;k++)if(!checkpoint_put64(buf,at,(uint64_t)p[k]))return 0;return 1;}
     return checkpoint_put(buf,at,v.p,v.n);
 }
-static int checkpoint_save(const Epoch *e,const size_t *carry,uint64_t ep,const char *path){
+static int checkpoint_save_record(const Epoch *e,const size_t *carry,uint64_t ep,const char *path,uint64_t *receipt){
     if(!checkpoint_enabled()||e->in_flight)return 0;unsigned char *buf=malloc(CHECKPOINT_LIMIT);if(!buf)return 0;size_t at=0,n=0;int ok=0;
     for(size_t i=0;i<e->n;i++)if(source_role(e->states[i].role))n++;
     if(!checkpoint_put(buf,&at,"DOC11CP1",8)||!checkpoint_put(buf,&at,checkpoint_schema,64)||!checkpoint_put64(buf,&at,ep)||!checkpoint_put64(buf,&at,n))goto done;
     for(size_t i=0;i<e->n;i++)if(source_role(e->states[i].role)){
         if(!e->have[i]||e->dirty[i]||!checkpoint_put64(buf,&at,i)||!checkpoint_put64(buf,&at,e->states[i].kind)||!checkpoint_put64(buf,&at,carry[i])||!checkpoint_value_put(buf,&at,*e->states[i].slot))goto done;
     }
-    if(!checkpoint_put64(buf,&at,checkpoint_checksum(buf,at)))goto done;ok=output_atomic(path,buf,at);
+    uint64_t checksum=checkpoint_checksum(buf,at);if(!checkpoint_put64(buf,&at,checksum))goto done;ok=output_atomic(path,buf,at);if(ok&&receipt)*receipt=checksum;
 done:free(buf);return ok;
 }
+static int checkpoint_save(const Epoch *e,const size_t *carry,uint64_t ep,const char *path){return checkpoint_save_record(e,carry,ep,path,NULL);}
 static int checkpoint_value_read(const unsigned char *buf,size_t end,size_t *at,int kind,Region *owner,V *out){
     const unsigned char *p;if(!checkpoint_take(buf,end,at,8,&p))return 0;uint64_t n=get_le(p,8);if(n>LIMIT)return 0;
     if(kind==I||kind==B||kind==M){if(kind==M&&n==0){*out=v_none();return 1;}if(n!=1||!checkpoint_take(buf,end,at,8,&p))return 0;uint64_t x=get_le(p,8);if(kind==B&&x>1)return 0;*out=kind==I?vi(checkpoint_signed(x)):kind==B?vb((int)x):v_some(vi(checkpoint_signed(x)));return 1;}
@@ -78,9 +79,10 @@ static int checkpoint_value_read(const unsigned char *buf,size_t end,size_t *at,
     if(kind==N){if(!n||(n>1&&*p=='0'))return 0;for(size_t i=0;i<n;i++)if(p[i]<'0'||p[i]>'9')return 0;}
     return store_value(owner,out,vv(kind,(size_t)n,p));
 }
-static int checkpoint_load(const Epoch *e,const size_t *carry,const char *path,Region *owner,V *values,uint64_t *saved){
+static int checkpoint_load_record(const Epoch *e,const size_t *carry,const char *path,Region *owner,V *values,uint64_t *saved,const uint64_t *receipt){
     if(!checkpoint_enabled())return 0;size_t n=0,at=0,expected=0;unsigned char *buf=output_read(path,&n);if(!buf)return 0;int ok=0;const unsigned char *p;
     if(n<96||memcmp(buf,"DOC11CP1",8)||memcmp(buf+8,checkpoint_schema,64)||checkpoint_checksum(buf,n-8)!=get_le(buf+n-8,8))goto done;
+    if(receipt&&*receipt!=get_le(buf+n-8,8))goto done;
     *saved=get_le(buf+72,8);for(size_t i=0;i<e->n;i++)if(source_role(e->states[i].role))expected++;
     if(get_le(buf+80,8)!=expected)goto done;at=88;
     for(size_t i=0;i<e->n;i++)if(source_role(e->states[i].role)){
@@ -91,6 +93,7 @@ static int checkpoint_load(const Epoch *e,const size_t *carry,const char *path,R
     ok=at==n-8;
 done:free(buf);return ok;
 }
+static int checkpoint_load(const Epoch *e,const size_t *carry,const char *path,Region *owner,V *values,uint64_t *saved){return checkpoint_load_record(e,carry,path,owner,values,saved,NULL);}
 /* WAV is a host audio effect, not DOC computation; cue and trigger are
  * evaluated by the unchanged DOC graph. Only committed successors call it. */
 static int checkpoint_audio(const Epoch *e,const char *dir,uint64_t ep){
