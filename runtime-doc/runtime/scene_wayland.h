@@ -19,7 +19,7 @@
 #include <string.h>
 #define WAYLAND_PIXEL_LIMIT (64u*1024u*1024u)
 typedef struct {
-    struct wl_buffer *buffer;unsigned char *memory;size_t size;uint32_t w,h;int busy;
+    struct wl_buffer *buffer;unsigned char *memory;size_t size;uint32_t w,h;int busy;uint64_t *releases;
 } SceneWLBuffer;
 typedef struct {
     struct wl_display *display;struct wl_registry *registry;struct wl_compositor *compositor;struct wl_shm *shm;
@@ -27,7 +27,7 @@ typedef struct {
     struct wl_seat *seat;struct wl_keyboard *keyboard;struct xkb_context *context;struct xkb_keymap *map;struct xkb_state *state;
     struct wl_callback *frame;SceneWLBuffer slots[3];
     uint32_t compositor_id,shm_id,shell_id,seat_id,w,h,pending_w,pending_h;
-    uint64_t frames,releases;int configured,closed,fault,focus;
+    uint64_t frames,releases;int configured,closed,fault,focus,xrgb;
     unsigned char keys[256];size_t head,count;
 } SceneWayland;
 static uint64_t scene_wl_ms(void){struct timespec t;if(clock_gettime(CLOCK_MONOTONIC,&t))return UINT64_MAX;return (uint64_t)t.tv_sec*1000+(uint64_t)t.tv_nsec/1000000;}
@@ -80,10 +80,12 @@ static void scene_wl_seat(void *ctx,struct wl_seat *seat,uint32_t capabilities){
     }else if(!(capabilities&WL_SEAT_CAPABILITY_KEYBOARD)&&w->keyboard){wl_keyboard_destroy(w->keyboard);w->keyboard=NULL;w->focus=0;}
 }
 static const struct wl_seat_listener scene_wl_seat_listener={.capabilities=scene_wl_seat};
+static void scene_wl_format(void *ctx,struct wl_shm *shm,uint32_t format){(void)shm;SceneWayland *w=ctx;if(format==WL_SHM_FORMAT_XRGB8888)w->xrgb=1;}
+static const struct wl_shm_listener scene_wl_shm_listener={.format=scene_wl_format};
 static void scene_wl_global(void *ctx,struct wl_registry *registry,uint32_t name,const char *interface,uint32_t version){
     SceneWayland *w=ctx;if(!version)return;
     if(!strcmp(interface,"wl_compositor")&&!w->compositor){w->compositor=wl_registry_bind(registry,name,&wl_compositor_interface,1);w->compositor_id=name;}
-    else if(!strcmp(interface,"wl_shm")&&!w->shm){w->shm=wl_registry_bind(registry,name,&wl_shm_interface,1);w->shm_id=name;}
+    else if(!strcmp(interface,"wl_shm")&&!w->shm){w->shm=wl_registry_bind(registry,name,&wl_shm_interface,1);w->shm_id=name;if(!w->shm||wl_shm_add_listener(w->shm,&scene_wl_shm_listener,w))w->fault=1;}
     else if(!strcmp(interface,"xdg_wm_base")&&!w->shell){w->shell=wl_registry_bind(registry,name,&xdg_wm_base_interface,1);w->shell_id=name;if(!w->shell||xdg_wm_base_add_listener(w->shell,&scene_wl_shell_listener,w))w->fault=1;}
     else if(!strcmp(interface,"wl_seat")&&!w->seat){w->seat=wl_registry_bind(registry,name,&wl_seat_interface,1);w->seat_id=name;if(!w->seat||wl_seat_add_listener(w->seat,&scene_wl_seat_listener,w))w->fault=1;}
 }
@@ -117,7 +119,7 @@ static int scene_wl_roundtrip(SceneWayland *w){
     while(!scene_wl_sync_done){if(scene_wl_ms()-start>=10000||!scene_wl_pump(w,100)){if(!scene_wl_sync_done)wl_callback_destroy(cb);return 0;}}
     return !w->fault;
 }
-static void scene_wl_buffer_release(void *ctx,struct wl_buffer *buffer){(void)buffer;SceneWLBuffer *s=ctx;s->busy=0;}
+static void scene_wl_buffer_release(void *ctx,struct wl_buffer *buffer){(void)buffer;SceneWLBuffer *s=ctx;if(s->busy&&s->releases)(*s->releases)++;s->busy=0;}
 static const struct wl_buffer_listener scene_wl_buffer_listener={.release=scene_wl_buffer_release};
 static void scene_wl_buffer_free(SceneWLBuffer *s){
     if(s->buffer)wl_buffer_destroy(s->buffer);if(s->memory)munmap(s->memory,s->size);*s=(SceneWLBuffer){0};
@@ -129,13 +131,13 @@ static int scene_wl_buffer_make(SceneWayland *w,SceneWLBuffer *s,uint32_t width,
     const char *dir=getenv("XDG_RUNTIME_DIR");if(!dir||!*dir)return 0;
     char path[4096];int n=snprintf(path,sizeof(path),"%s/doc-wl-XXXXXX",dir);if(n<0||(size_t)n>=sizeof(path))return 0;
     int fd=mkstemp(path);if(fd<0)return 0;unlink(path);
-    if(ftruncate(fd,(off_t)size)){close(fd);return 0;}
+    if(fcntl(fd,F_SETFD,FD_CLOEXEC)<0||ftruncate(fd,(off_t)size)){close(fd);return 0;}
     void *p=mmap(NULL,size,PROT_READ|PROT_WRITE,MAP_SHARED,fd,0);if(p==MAP_FAILED){close(fd);return 0;}
     struct wl_shm_pool *pool=wl_shm_create_pool(w->shm,fd,(int32_t)size);close(fd);
     if(!pool){munmap(p,size);return 0;}
     struct wl_buffer *buffer=wl_shm_pool_create_buffer(pool,0,(int32_t)width,(int32_t)height,(int32_t)(width*4),WL_SHM_FORMAT_XRGB8888);wl_shm_pool_destroy(pool);
     if(!buffer){munmap(p,size);return 0;}
-    *s=(SceneWLBuffer){.buffer=buffer,.memory=p,.size=size,.w=width,.h=height};
+    *s=(SceneWLBuffer){.buffer=buffer,.memory=p,.size=size,.w=width,.h=height,.releases=&w->releases};
     if(wl_buffer_add_listener(buffer,&scene_wl_buffer_listener,s)){scene_wl_buffer_free(s);return 0;}return 1;
 }
 static void scene_wl_frame_done(void *ctx,struct wl_callback *cb,uint32_t time){
@@ -155,11 +157,11 @@ static int scene_wl_open(SceneWayland *w,uint32_t width,uint32_t height){
     if(!w->top||xdg_toplevel_add_listener(w->top,&scene_wl_top_listener,w))return 0;
     xdg_toplevel_set_title(w->top,"DOC 3D scene");xdg_toplevel_set_app_id(w->top,"doc.scene");
     wl_surface_commit(w->surface);uint64_t start=scene_wl_ms();
-    while(!w->configured){if(w->closed||scene_wl_ms()-start>=10000||!scene_wl_pump(w,100))return 0;}
+    while(!w->configured||!w->xrgb){if(w->closed||scene_wl_ms()-start>=10000||!scene_wl_pump(w,100))return 0;}
     fprintf(stderr,"DOC11_WAYLAND_CONFIGURED: %ux%u\n",w->w,w->h);return 1;
 }
 static int scene_wl_present(SceneWayland *w,const unsigned char *rgba,size_t size,uint32_t width,uint32_t height,const char *title){
-    if(!w->configured||w->frame||w->fault||w->closed||!rgba||!scene_wl_dimensions(width,height)||size!=(size_t)width*height*4)return 0;
+    if(!w->configured||!w->xrgb||w->frame||w->fault||w->closed||!rgba||!scene_wl_dimensions(width,height)||size!=(size_t)width*height*4)return 0;
     SceneWLBuffer *slot=NULL;uint64_t start=scene_wl_ms();
     while(!slot){for(size_t i=0;i<3;i++)if(!w->slots[i].busy){slot=w->slots+i;break;}if(!slot&&(w->closed||scene_wl_ms()-start>=10000||!scene_wl_pump(w,100)))return 0;}
     if(!scene_wl_buffer_make(w,slot,width,height))return 0;
