@@ -88,6 +88,7 @@ def main():
     assert changed_count>1000
     packet=pack(plan,[first,first]);bad=run([exe],env,input=packet[:-1]);assert bad.returncode and not bad.stdout and b'DOC11_MESH_REJECT:' in bad.stderr
     loss=run([exe,'--test-device-loss'],env,input=packet);assert loss.returncode and not loss.stdout and b'DOC11_MESH_DEVICE_LOSS:' in loss.stderr,loss.stderr
+    (out/'device-loss.stderr').write_bytes(loss.stderr);(out/'device-loss.stdout').write_bytes(loss.stdout)
     assert b'DOC11_WGPU_DESTROY_CONFIRMED:' in loss.stderr and b'DOC11_WGPU_QUEUE_RETIRED:' in loss.stderr and b'DOC11_MESH_LOST_CALLBACK:' in loss.stderr, loss.stderr
     for name,raw in [('initial',images[0]),('jump',images[1]),('final',images[-1]),('mutated',changed)]: (out/(name+'.ppm')).write_bytes(ppm(raw,first.width,first.height))
     (out/'mesh.wgsl').write_bytes(plan.wgsl);(out/'mesh-mutated.wgsl').write_bytes(mutated.wgsl);(out/'render-summary.json').write_text(json.dumps({'physical_required':a.physical,'oracle':oracle,'changed_pixels':changed_count,'batches':records},indent=2)+'\n')

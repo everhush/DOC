@@ -5,7 +5,7 @@ from pathlib import Path
 from bundle import create_private_dataset
 from dispatch import auth_environment,gpu_remaining_hours,kaggle,prepare_kernel,status_from_cli
 from independent_bundle import pack,digest
-from independent_micro_evidence import MICRO_GRAPHS,MICRO_EXECUTABLES,validate_micro_evidence
+from independent_micro_evidence import MICRO_GRAPHS,MICRO_EXECUTABLES,validate_micro_evidence,validate_destroy
 HERE=Path(__file__).resolve().parent
 def main():
     sha=os.environ['GITHUB_SHA'];run_id=os.environ['GITHUB_RUN_ID'];attempt=os.environ['GITHUB_RUN_ATTEMPT']
@@ -69,5 +69,7 @@ def main():
             if not re.search(r'(?m)^DOC11_GPU_ADAPTER: .* physical=1 ',(base/'games'/(name+'-auto.stderr')).read_text()):raise ValueError('nonphysical game adapter')
             if (base/'games'/(name+'-auto.stdout')).read_bytes()!=paths['games/'+name+'-reference.txt'].read_bytes():raise ValueError('hardware game replay mismatch')
         if 'physical=1' not in (base/'mesh/replay.log').read_text():raise ValueError('nonphysical render adapter')
+        validate_destroy((base/'mesh/device-loss.stderr').read_bytes(),b'DOC11_MESH_LOST_CALLBACK')
+        if (base/'mesh/device-loss.stdout').read_bytes():raise ValueError('device loss published pixels')
         print('DOC11_PHYSICAL_PASS: same-run exact artifact verification and real GPU conformance',flush=True)
 if __name__=='__main__':main()

@@ -30,6 +30,37 @@ def validate_pool(log):
     if not growth or not reuse:raise ValueError('missing actual pool growth or reuse')
 
 
+DESTROY_QUEUE=b'DOC11_WGPU_QUEUE_RETIRED: destroy=1'
+DESTROY_CONFIRMED=b'DOC11_WGPU_DESTROY_CONFIRMED: actual loss callback after queue retirement'
+ABANDON_QUEUE=b'DOC11_WGPU_QUEUE_RETIRED: destroy=0'
+
+
+def validate_destroy(log,callback_prefix):
+    lines=log.splitlines()
+    try:
+        queue=lines.index(DESTROY_QUEUE)
+        confirmed=lines.index(DESTROY_CONFIRMED)
+    except ValueError as exc:
+        raise ValueError('missing destroy queue acknowledgement or confirmation') from exc
+    callbacks=[i for i,line in enumerate(lines) if re.fullmatch(re.escape(callback_prefix)+rb': reason=\d+',line)]
+    if not queue<confirmed or not any(i<confirmed for i in callbacks):
+        raise ValueError('destroy confirmation precedes queue acknowledgement or actual loss callback')
+    return lines,confirmed
+
+
+def validate_compute_retirement(log,submitted):
+    lines,confirmed=validate_destroy(log,b'DOC11_GPU_LOST_CALLBACK')
+    if submitted:
+        try:
+            abandoned=lines.index(ABANDON_QUEUE)
+            completed=lines.index(b'DOC11_GPU_RETIRED: outcome=queue-complete')
+            lost=lines.index(b'DOC11_GPU_RETIRED: outcome=device-lost')
+        except ValueError as exc:
+            raise ValueError('missing failed-submission queue/loss evidence') from exc
+        if not abandoned<completed<confirmed<lost:
+            raise ValueError('failed submission retirement ordering')
+
+
 def validate_micro_evidence(root,expected):
     for name in MICRO_EXECUTABLES:
         log=(root/(name+'.stderr')).read_bytes()
@@ -41,6 +72,7 @@ def validate_micro_evidence(root,expected):
             output=(root/(name+'.stdout')).read_bytes()
             marker=b'DOC11_GPU_DEVICE_LOSS_PASS:' if name=='device_loss' else b'DOC11_GPU_EPOCH_AUTHORITY_PASS:'
             if marker not in output:raise ValueError('missing authority result: '+name)
+            validate_compute_retirement(log,name=='gpu_epoch_authority')
             if name=='gpu_epoch_authority' and any(m not in log for m in (b'DOC11_GPU_RETIRED: outcome=queue-complete',b'DOC11_GPU_RETIRED: outcome=device-lost',b'DOC11_GPU_BUFFER_POOL: action=reused',b'DOC11_GPU_DISPATCH: lanes=96 workgroups=2')):
                 raise ValueError('missing submitted-work retirement or reuse evidence')
             if name=='gpu_epoch_authority':validate_pool(log)

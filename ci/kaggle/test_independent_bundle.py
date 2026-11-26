@@ -2,7 +2,7 @@
 import io,json,tarfile,tempfile,unittest
 from pathlib import Path
 from independent_bundle import pack,unpack,digest
-from independent_micro_evidence import MICRO_GRAPHS,MICRO_EXECUTABLES,validate_micro_evidence
+from independent_micro_evidence import MICRO_GRAPHS,MICRO_EXECUTABLES,validate_micro_evidence,validate_destroy,DESTROY_QUEUE,DESTROY_CONFIRMED,ABANDON_QUEUE
 
 SHA='a'*40
 RUN='12345'
@@ -55,7 +55,7 @@ class PhysicalMicroEvidenceTests(unittest.TestCase):
         tmp=tempfile.TemporaryDirectory();self.addCleanup(tmp.cleanup);root=Path(tmp.name)
         self.actual=root/'actual';self.actual.mkdir();self.expected=root/'expected';self.expected.mkdir()
         for name in MICRO_EXECUTABLES:
-            (self.actual/(name+'.stderr')).write_bytes(b'DOC11_GPU_ADAPTER: type=2 backend=6 physical=1 description=test\nDOC11_GPU_DISPATCH: lanes=96 workgroups=2\nDOC11_REGIONS: live=0 peak=8\nDOC11_GPU_BUFFER_POOL: action=reused\nDOC11_GPU_RETIRED: outcome=queue-complete\nDOC11_GPU_RETIRED: outcome=device-lost\nDOC11_GPU_POOL_METRICS: event=created admitted=420 released=0 live=420 peak=420\nDOC11_GPU_POOL_METRICS: event=grown admitted=2320 released=20 live=2300 peak=2320\nDOC11_GPU_POOL_METRICS: event=reused admitted=2320 released=20 live=2300 peak=2320\nDOC11_GPU_POOL_METRICS: event=closed admitted=2320 released=2320 live=0 peak=2320\n')
+            (self.actual/(name+'.stderr')).write_bytes(b'DOC11_GPU_ADAPTER: type=2 backend=6 physical=1 description=test\nDOC11_GPU_DISPATCH: lanes=96 workgroups=2\nDOC11_REGIONS: live=0 peak=8\nDOC11_GPU_BUFFER_POOL: action=reused\nDOC11_WGPU_QUEUE_RETIRED: destroy=0\nDOC11_GPU_RETIRED: outcome=queue-complete\nDOC11_WGPU_QUEUE_RETIRED: destroy=1\nDOC11_GPU_LOST_CALLBACK: reason=2\nDOC11_WGPU_DESTROY_CONFIRMED: actual loss callback after queue retirement\nDOC11_GPU_RETIRED: outcome=device-lost\nDOC11_GPU_POOL_METRICS: event=created admitted=420 released=0 live=420 peak=420\nDOC11_GPU_POOL_METRICS: event=grown admitted=2320 released=20 live=2300 peak=2320\nDOC11_GPU_POOL_METRICS: event=reused admitted=2320 released=20 live=2300 peak=2320\nDOC11_GPU_POOL_METRICS: event=closed admitted=2320 released=2320 live=0 peak=2320\n')
             if name in MICRO_GRAPHS:
                 (self.expected/(name+'.expected')).write_bytes(name.encode())
                 (self.actual/(name+'.actual')).write_bytes(name.encode())
@@ -82,6 +82,23 @@ class PhysicalMicroEvidenceTests(unittest.TestCase):
         for old,new in ((b'live=2300',b'live=2301'),(b'peak=2320',b'peak=2300'),(b'event=grown',b'event=absent'),(b'event=reused',b'event=absent'),(b'event=closed',b'event=absent'),(b'released=2320 live=0',b'released=2319 live=1')):
             p.write_bytes(original.replace(old,new))
             with self.subTest(old=old),self.assertRaises(ValueError):self.validate()
+    def test_destroy_evidence(self):
+        for name in ('device_loss','gpu_epoch_authority'):
+            p=self.actual/(name+'.stderr');original=p.read_bytes()
+            for marker in (DESTROY_QUEUE,DESTROY_CONFIRMED,b'DOC11_GPU_LOST_CALLBACK: reason=2'):
+                p.write_bytes(original.replace(marker,b'absent'))
+                with self.subTest(name=name,marker=marker),self.assertRaises(ValueError):self.validate()
+            p.write_bytes(original.replace(DESTROY_QUEUE,b'placeholder').replace(DESTROY_CONFIRMED,DESTROY_QUEUE).replace(b'placeholder',DESTROY_CONFIRMED))
+            with self.subTest(name=name,order='reversed'),self.assertRaises(ValueError):self.validate()
+            p.write_bytes(original)
+        p=self.actual/'gpu_epoch_authority.stderr';original=p.read_bytes()
+        p.write_bytes(original.replace(ABANDON_QUEUE,b'absent'))
+        with self.assertRaises(ValueError):self.validate()
+    def test_mesh_destroy_order(self):
+        callback=b'DOC11_MESH_LOST_CALLBACK: reason=2'
+        for lines in ((DESTROY_QUEUE,callback,DESTROY_CONFIRMED),(callback,DESTROY_QUEUE,DESTROY_CONFIRMED)):
+            validate_destroy(b'\n'.join(lines),b'DOC11_MESH_LOST_CALLBACK')
+        with self.assertRaises(ValueError):validate_destroy(b'\n'.join((DESTROY_QUEUE,DESTROY_CONFIRMED,callback)),b'DOC11_MESH_LOST_CALLBACK')
     def test_missing_result(self):
         (self.actual/'device_loss.stdout').write_bytes(b'')
         with self.assertRaises(ValueError):self.validate()
