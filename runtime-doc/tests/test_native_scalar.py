@@ -31,8 +31,8 @@ def main():
         # Keep -O0 and fail closed; retain the command, time, and compiler output.
         from test_self_reproduction import run_cc
         run_cc(['cc','-std=gnu11','-O0','-ftrack-macro-expansion=0','-I',ROOT/'runtime',c,'-o',native],out,out,'native-scalar',timeout=600)
-    def compile_doc(target,source=src,region='scratch',imp='x86_out8',name='boot',reject=False,region2='',intrinsic='',allow_read=False,allow_write=False):
-        argv=[native,'--demand='+target,'--input-stdin','grant_region="'+region+'"','grant_region2="'+region2+'"','grant_import="'+imp+'"','grant_intrinsic="'+intrinsic+'"','allow_read='+str(allow_read).lower(),'allow_write='+str(allow_write).lower(),'export_name="'+name+'"']
+    def compile_doc(target,source=src,region='scratch',imp='x86_out8',name='boot',reject=False,region2='',intrinsic='',allow_read=False,allow_write=False,scalar1='',scalar2=''):
+        argv=[native,'--demand='+target,'--input-stdin','grant_region="'+region+'"','grant_region2="'+region2+'"','grant_import="'+imp+'"','grant_intrinsic="'+intrinsic+'"','allow_read='+str(allow_read).lower(),'allow_write='+str(allow_write).lower(),'grant_scalar1="'+scalar1+'"','grant_scalar2="'+scalar2+'"','export_name="'+name+'"']
         r=subprocess.run([str(x) for x in argv],input=source,capture_output=True,timeout=120)
         if reject:
             assert r.returncode and not r.stdout,(target,r.returncode,r.stdout[:100])
@@ -126,6 +126,34 @@ def main():
     run(['cc','-std=c11','-O1','-g','-fsanitize=address,undefined','-fno-sanitize-recover=all','-fno-pie','-no-pie','-I',out,out/'buffer.c',Path(__file__).with_name('native_buffer_host.c'),'-o',out/'buffer-host'])
     print(run([out/'buffer-host'],timeout=10).decode().strip(),flush=True)
     print('DOC11_NATIVE_BUFFER_PASS: original POSIX fixture and 20 compiler rejection checks',flush=True)
+    # Direct signed scalar imports, independently granted by exact symbol.
+    conditional=(fixture/'runtime-rust/examples/native_conditional.doc').read_bytes()
+    socket=(fixture/'runtime-rust/examples/native_socket.doc').read_bytes()
+    for name,source,g1,g2 in [('conditional',conditional,'acquire','release'),('socket',socket,'socket','close')]:
+        for target,suffix in [('code','c'),('header','h')]:
+            data=compile_doc(target,source,'','',name,scalar1=g1,scalar2=g2)
+            assert data==compile_doc(target,source,'','',name,scalar1=g1,scalar2=g2)
+            (out/(name+'.'+suffix)).write_bytes(data)
+    scalar_neg=[
+        (conditional,'','release'),(conditional,'acquire',''),(conditional,'acquire','acquire'),
+        (conditional.replace(b'acquire(i32)',b'acquire(i64)'),'acquire','release'),
+        (conditional.replace(b'acquire(argument)',b'acquire(argument,argument)'),'acquire','release'),
+        (conditional.replace(b'when enabled else absent',b'when argument else absent'),'acquire','release'),
+        (conditional.replace(b'when enabled else absent',b'when enabled else enabled'),'acquire','release'),
+        (conditional.replace(b'(acquired,acquired_ok,absent)',b'(acquired_ok,absent)'),'acquire','release'),
+        (conditional.replace(b'native import acquire(i32) -> i32',b'native import acquire(i32) -> i32\nnative import acquire(i32) -> i32'),'acquire','release'),
+        (conditional.replace(b'source argument: int = 7',b'source acquire: int = 7\nsource argument: int = 7'),'acquire','release'),
+        (socket,'socket','other'),
+        (socket.replace(b'socket(i32,i32,i32)',b'socket(i32,i32)'),'socket','close'),
+        (socket.replace(b'socket(domain,socket_type,protocol)',b'socket(domain,socket_type)'),'socket','close'),
+        (socket.replace(b'close(fd)',b'other(fd)'),'socket','close'),
+    ]
+    for source,g1,g2 in scalar_neg:
+        for target in ('code','header'):
+            compile_doc(target,source,'','','scalar_negative',reject=True,scalar1=g1,scalar2=g2)
+    run(['cc','-std=c11','-O1','-g','-fsanitize=address,undefined','-fno-sanitize-recover=all','-fno-pie','-no-pie','-I',out,out/'conditional.c',out/'socket.c',Path(__file__).with_name('native_scalar_calls_host.c'),'-o',out/'scalar-calls-host'])
+    print(run([out/'scalar-calls-host'],timeout=10).decode().strip(),flush=True)
+    print('DOC11_NATIVE_SCALAR_CALLS_PASS: original conditional and local socket fixtures, 28 compiler rejection checks',flush=True)
     # Renamed declarations and a changed graph prove this is not a fixed boot template.
     alt=src.replace(b'scratch',b'ram').replace(b'x86_out8',b'foreign_byte').replace(b'add(seed,1)',b'sub(seed,2)')
     ac=compile_doc('code',alt,'ram','foreign_byte','alternate'); assert b'__asm__("foreign_byte")' in ac and b'doc_sub(doc_v_seed' in ac and b'doc_export_alternate' in ac
