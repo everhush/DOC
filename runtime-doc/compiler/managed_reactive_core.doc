@@ -10,3 +10,13 @@ fn mrselect(d) = concat(cat4(text("if("),mrindex(text("dirty"),d),text("&&"),mri
 fn mrpiece(es,ds,ls,owners,i,k) = if(eq(grole(ds,get(owners,i)),2),if(eq(k,3),if(eq(ev(es,i),2),mrselect(get(owners,i)),text("")),if(eq(ev(es,i),6),if(eq(k,0),mrmark(get(ls,i),get(owners,i)),if(eq(k,1),mrdemand(get(ls,i),get(owners,i)),mrblock(get(ls,i),get(owners,i)))),text(""))),text(""))
 fn mrphase(k) = if(eq(k,0),text("};static void doc_mark(size_t id,unsigned char *dirty){"),if(eq(k,1),text("}static void doc_demand(unsigned char *need){"),if(eq(k,2),text("}static void doc_block(const unsigned char *dirty,unsigned char *blocked){"),if(eq(k,3),text("}static size_t doc_select(const unsigned char *dirty,const unsigned char *need,const unsigned char *blocked,size_t *queue){size_t count=0;"),text("return count;}int main(int argc,char **argv){return run_reactive(states,sizeof(states)/sizeof(states[0]),argc,argv);}")))))
 fn mrstep(s,es,ds,ls,owners,n) = if(eq(e_cursor(s),n),e_save(s,concat(mrphase(add(e_body(s),1)),nl()),0,add(e_body(s),1)),e_save(s,mrpiece(es,ds,ls,owners,if(eq(e_body(s),1),sub(sub(n,1),e_cursor(s)),e_cursor(s)),e_body(s)),add(e_cursor(s),1),e_body(s)))
+# Lower the runtime-sized family to an ordinary typed native lane function.
+# The host may schedule disjoint lane ranges without an interpreter or a
+# user-supplied placement hint; the original list is a settled premise.
+fn mr_family(es,ts,bs,ds,d) = if(eq(grole(ds,d),2),eq(gdyn(es,ts,bs,ds,d),34),false)
+fn mr_lane(es,ts,bs,ds,d) = concat(text("L_"),mword(es,ts,bs,ds,d))
+fn mr_family_head(es,ts,bs,ds,d) = concat(cat4(text("static V "),mslot(es,ts,bs,ds,d),text(";"),nl()),cat3(text("static V "),mr_lane(es,ts,bs,ds,d),text("(V doc_bound){return ")))
+fn mr_family_end(es,ts,bs,ds,ls,d) = concat(concat(text(";}"),nl()),concat(cat3(text("static V "),meval(es,ts,bs,ds,d),text("(void){return doc_map_family(")),cat4(mslot(es,ts,bs,ds,get(ls,add(gbody(ds,d),3))),text(","),mr_lane(es,ts,bs,ds,d),concat(text(");}"),nl()))))
+fn mr_family_piece(es,ts,bs,ds,ls,ns,d,i,k) = if(eq(k,1),mr_family_head(es,ts,bs,ds,d),if(eq(k,16),mr_family_end(es,ts,bs,ds,ls,d),if(if(lt(add(gbody(ds,d),6),i),lt(i,sub(gend(ds,d),1)),false),mbody(es,ts,bs,ds,ls,ns,d,i,k),text(""))))
+fn mr_family_event(s,es,ts,bs,ds,ls,ns,owners,i,d) = if(is_atom(es,i,3),mtxt(s,es,ts,bs,ds,owners,i,e_body(s),et(es,i)),e_save(s,mr_family_piece(es,ts,bs,ds,ls,ns,d,i,ev(es,i)),add(i,1),0))
+fn mr_mstep(s,es,ts,bs,ds,ls,ns,owners,n) = if(if(lt(e_cursor(s),n),mr_family(es,ts,bs,ds,get(owners,e_cursor(s))),false),mr_family_event(s,es,ts,bs,ds,ls,ns,owners,e_cursor(s),get(owners,e_cursor(s))),mstep(s,es,ts,bs,ds,ls,ns,owners,n))
