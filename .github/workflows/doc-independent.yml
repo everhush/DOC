@@ -223,12 +223,12 @@ jobs:
           sha256sum -c doc11-game-evidence/SHA256SUMS
           chmod +x doc11-self-evidence/stage2 doc11-game-evidence/scanner2
           sudo apt-get update
-          sudo apt-get install -y qemu-system-x86 gcc-14
+          sudo apt-get install -y qemu-system-x86 clang-18
           mkdir -p doc11-native-evidence
           git rev-parse HEAD > doc11-native-evidence/source-sha.txt
-          gcc-14 --version > doc11-native-evidence/cc-version.txt
-          dpkg-query -W gcc-14 > doc11-native-evidence/cc-package.txt
-          python3 -u runtime-doc/tests/test_native_scalar.py --stage2 doc11-self-evidence/stage2 --scanner doc11-game-evidence/scanner2 --evidence doc11-native-evidence --cc gcc-14 --boot | tee doc11-native-evidence/test.log
+          clang-18 --version > doc11-native-evidence/cc-version.txt
+          dpkg-query -W clang-18 > doc11-native-evidence/cc-package.txt
+          python3 -u runtime-doc/tests/test_native_scalar.py --stage2 doc11-self-evidence/stage2 --scanner doc11-game-evidence/scanner2 --evidence doc11-native-evidence --cc clang-18 --cc-flag=-fmacro-backtrace-limit=1 --boot | tee doc11-native-evidence/test.log
           sha256sum doc11-native-evidence/{native_scalar2,native_scalar2.c,compile-native-scalar.json,cc-version.txt,cc-package.txt,boot.c,boot.h,regions.c,regions.h,region-host,arena.c,arena.h,arena-host,intrinsics.c,intrinsics.h,external.c,external.h,intrinsic-host,buffer.c,buffer.h,buffer-host,conditional.c,conditional.h,socket.c,socket.h,scalar-calls-host,scope.c,scope.h,stream.c,stream.h,repeat_scope.c,repeat_scope.h,multi_carry.c,multi_carry.h,lifecycle-host,kernel64.elf,kernel.elf,host,alternate.c,alternate.o,boot.o,verify.o,entry.o,elf.txt,qemu-version.txt,device.txt,source-sha.txt,test.log} > doc11-native-evidence/SHA256SUMS
       - uses: actions/upload-artifact@v4
         if: always()
@@ -268,10 +268,10 @@ jobs:
           mkdir -p doc11-mesh-evidence
           git rev-parse HEAD > doc11-mesh-evidence/source-sha.txt
           sudo apt-get update
-          sudo apt-get install -y gcc-14
-          gcc-14 --version > doc11-mesh-evidence/cc-version.txt
-          dpkg-query -W gcc-14 > doc11-mesh-evidence/cc-package.txt
-          python3 runtime-doc/compiler/doc_build.py runtime-doc/compiler/mesh_stage.doc --scanner doc11-game-evidence/scanner2 --compiler doc11-self-evidence/stage2 --stream --cc gcc-14 --cc-flag=-ftrack-macro-expansion=0 --compile-timeout 900 --compile-evidence doc11-mesh-evidence/compile-mesh.json -o doc11-mesh-evidence/mesh_stage2 --emit-c doc11-mesh-evidence/mesh_stage2.c
+          sudo apt-get install -y clang-18
+          clang-18 --version > doc11-mesh-evidence/cc-version.txt
+          dpkg-query -W clang-18 > doc11-mesh-evidence/cc-package.txt
+          python3 runtime-doc/compiler/doc_build.py runtime-doc/compiler/mesh_stage.doc --scanner doc11-game-evidence/scanner2 --compiler doc11-self-evidence/stage2 --stream --cc clang-18 --cc-flag=-O0 --cc-flag=-fmacro-backtrace-limit=1 --compile-timeout 900 --compile-evidence doc11-mesh-evidence/compile-mesh.json -o doc11-mesh-evidence/mesh_stage2 --emit-c doc11-mesh-evidence/mesh_stage2.c
           python3 -u runtime-doc/tests/test_mesh_stage.py --compiler doc11-mesh-evidence/mesh_stage2 --evidence doc11-mesh-evidence | tee doc11-mesh-evidence/test.log
           cmp doc11-mesh-evidence/mesh_stage2.c doc11-mesh-evidence/compile-mesh.json.candidate.c
           sha256sum doc11-mesh-evidence/{mesh_stage2,mesh_stage2.c,compile-mesh.json,compile-mesh.json.candidate.c,cc-version.txt,cc-package.txt,source-sha.txt,mesh.wgsl,mesh-changed.wgsl} > doc11-mesh-evidence/SHA256SUMS
