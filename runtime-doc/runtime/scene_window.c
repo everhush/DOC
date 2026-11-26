@@ -12,10 +12,11 @@
 
 typedef struct {
     SceneWindow window;MeshRendererNative *renderer;uint32_t width,height;
-    unsigned char *current,*candidate;size_t current_n,candidate_n;int verify;
+    unsigned char *current,*candidate;size_t current_n,candidate_n;int verify;char candidate_title[1024];
 } SceneApp;
 static int stage_frame(const Epoch *e,void *ctx){
     SceneApp *a=ctx;MeshFrame frame;free(a->candidate);a->candidate=NULL;a->candidate_n=0;
+    if(!scene_report_title(e,a->candidate_title,sizeof(a->candidate_title)))return 0;
     if(!scene_frame_copy(e,scene_domains,a->width,a->height,&frame))return 0;
     size_t n=(size_t)frame.width*frame.height*4;unsigned char *p=malloc(n);
     int ok=p&&mesh_renderer_render(a->renderer,&frame,p,n);scene_frame_free(&frame);
@@ -27,7 +28,7 @@ static int publish_frame(SceneApp *a,SceneSession *s,int record){
     uint64_t rgb;if(!scene_window_present(&a->window,a->candidate,a->width,a->height,a->verify,&rgb))return 0;
     free(a->current);a->current=a->candidate;a->current_n=a->candidate_n;a->candidate=NULL;a->candidate_n=0;
     fprintf(stderr,"DOC11_WINDOW_FRAME: epoch=%" PRIu64 " width=%u height=%u rgba=%016" PRIx64 " rgb=%016" PRIx64 " kind=%s\n",s->published,a->width,a->height,digest_rgba(a->current,a->current_n),rgb,record?"commit":"resize");
-    if(record){observe(&s->e,s->e.n,1,(size_t)s->published);fprintf(stderr,"DOC11_WINDOW_PRESENTED: epoch=%" PRIu64 "\n",s->published);}
+    if(record){XStoreName(a->window.display,a->window.window,a->candidate_title);XSync(a->window.display,False);if(scene_x11_fault)return 0;observe(&s->e,s->e.n,1,(size_t)s->published);fprintf(stderr,"DOC11_WINDOW_PRESENTED: epoch=%" PRIu64 "\n",s->published);}
     return 1;
 }
 static uint64_t monotonic_ms(void){struct timespec t;if(clock_gettime(CLOCK_MONOTONIC,&t))return UINT64_MAX;return (uint64_t)t.tv_sec*1000+(uint64_t)t.tv_nsec/1000000;}

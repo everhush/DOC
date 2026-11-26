@@ -1,6 +1,7 @@
 #ifndef DOC_SCENE_FRAME_H
 #define DOC_SCENE_FRAME_H
 #include "mesh_packet.h"
+#include <inttypes.h>
 /* Copy a complete typed candidate into owned native render buffers. This is
  * only the same integer ABI admission as mesh_load, not a scene evaluator. */
 static void scene_frame_free(MeshFrame *f){free(f->vertices);free(f->indices);free(f->draws);*f=(MeshFrame){0};}
@@ -26,5 +27,21 @@ static int scene_frame_copy(const Epoch *e,const MeshDomain domains[20],uint32_t
     }
     return 1;
 fail:scene_frame_free(f);return 0;
+}
+/* Bounded title from the scene's declared observation names and admitted
+ * scalar values. No host-computed score, position or game state. */
+static int scene_report_title(const Epoch *e,char *title,size_t cap){
+    V spec;if(!title||cap<sizeof("DOC 3D scene")||!scene_value(e,"render_report",&spec)||spec.kind!=T||!spec.n||spec.n>4096)return 0;
+    memcpy(title,"DOC 3D scene",sizeof("DOC 3D scene"));size_t at=strlen(title);const char *p=spec.p,*end=p+spec.n;
+    while(p<end){
+        const char *comma=memchr(p,',',(size_t)(end-p));if(!comma)comma=end;
+        size_t n=(size_t)(comma-p),i=find_state(e,p,n);if(!n||n>80||i==e->n||!e->have[i]||e->dirty[i])return 0;
+        V v=*e->states[i].slot;int len=0;
+        if(v.kind==I)len=snprintf(title+at,cap-at," | %.*s=%" PRId64,(int)n,p,v.x);
+        else if(v.kind==B)len=snprintf(title+at,cap-at," | %.*s=%s",(int)n,p,v.x?"true":"false");
+        if(len<0||(size_t)len>=cap-at)return 0;at+=(size_t)len;
+        if(comma==end)break;p=comma+1;if(p==end)return 0;
+    }
+    return 1;
 }
 #endif

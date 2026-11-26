@@ -94,16 +94,21 @@ done:
 /* Native window adapter shares the actual render pipeline and retirement
  * paths with the offscreen proof. The caller supplies admitted typed frames. */
 struct MeshRendererNative {MeshDevice device;};
+/* One renderer per native process. Keep callback storage valid until process
+ * exit, even if the provider delivers a late loss callback during release.
+ * Retired contexts cannot reopen or retain any device handles. */
+static MeshRendererNative native_renderer;
+static int native_renderer_state;
 MeshRendererNative *mesh_renderer_open(const MeshBatch *plan){
-    if(!plan||!plan->shader||!plan->shader_len||plan->shader_len>65536)return NULL;
-    MeshRendererNative *r=calloc(1,sizeof(*r));if(!r)return NULL;
-    if(!device_open(&r->device,plan)){device_close(&r->device);free(r);return NULL;}return r;
+    if(native_renderer_state||!plan||!plan->shader||!plan->shader_len||plan->shader_len>65536)return NULL;
+    MeshRendererNative *r=&native_renderer;native_renderer_state=1;
+    if(!device_open(&r->device,plan)){device_close(&r->device);native_renderer_state=2;return NULL;}return r;
 }
 int mesh_renderer_render(MeshRendererNative *r,const MeshFrame *f,unsigned char *pixels,size_t size){
-    if(!r||!f||!pixels||!f->width||!f->height||f->width>4096||f->height>4096||size!=(size_t)f->width*f->height*4||!f->nv||f->nv>65536||!f->ni||f->ni>196608||!f->nd||f->nd>128||!f->vertices||!f->indices||!f->draws)return 0;
+    if(r!=&native_renderer||native_renderer_state!=1||!f||!pixels||!f->width||!f->height||f->width>4096||f->height>4096||size!=(size_t)f->width*f->height*4||!f->nv||f->nv>65536||!f->ni||f->ni>196608||!f->nd||f->nd>128||!f->vertices||!f->indices||!f->draws)return 0;
     return render(&r->device,f,pixels);
 }
-int mesh_renderer_close(MeshRendererNative *r){if(!r)return 1;device_close(&r->device);int ok=healthy(&r->device);free(r);return ok;}
+int mesh_renderer_close(MeshRendererNative *r){if(!r)return 1;if(r!=&native_renderer||native_renderer_state!=1)return 0;device_close(&r->device);native_renderer_state=2;return healthy(&r->device);}
 #ifndef DOC_MESH_LIBRARY
 int main(int argc,char **argv){
     int destroy=argc==2&&!strcmp(argv[1],"--test-device-loss");if(argc!=1&&!destroy)return 1;

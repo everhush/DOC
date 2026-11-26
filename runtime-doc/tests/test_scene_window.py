@@ -115,6 +115,9 @@ def main():
         proc=subprocess.Popen([str(x) for x in args+['--input-only']],cwd=out,env=env,stdout=std,stderr=err)
         try:
             win=wait_log(proc,log,rb'^DOC11_WINDOW_READY: window=(\d+)$').group(1).decode()
+            title=checked(['xdotool','getwindowname',win],env=env,capture_output=True).stdout
+            assert b'next_score=' in title
+            (out/'initial-title.txt').write_bytes(title)
             checked(['xdotool','windowsize',win,'800','600'],env=env)
             wait_log(proc,log,rb'^DOC11_WINDOW_RESIZE: 800x600$')
             checked(['xdotool','windowsize',win,'640','480'],env=env)
