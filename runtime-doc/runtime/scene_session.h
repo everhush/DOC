@@ -21,7 +21,7 @@ static int scene_carry_map(SceneSession *s,V spec){
         const char *comma=memchr(p,',',(size_t)(end-p));if(!comma)comma=end;
         const char *colon=memchr(p,':',(size_t)(comma-p));if(!colon||colon==p||colon+1==comma)return 0;
         size_t i=find_state(&s->e,p,(size_t)(colon-p)),j=find_state(&s->e,colon+1,(size_t)(comma-colon-1));
-        if(i==s->e.n||j==s->e.n||i==s->action||s->carry[i]!=s->e.n||!source_role(s->e.states[i].role)||s->e.states[i].kind!=s->e.states[j].kind)return 0;
+        if(i==s->action||!recurrence_carry_admitted(i<s->e.n&&source_role(s->e.states[i].role),j<s->e.n,i<s->e.n&&j<s->e.n&&s->e.states[i].kind==s->e.states[j].kind,i<s->e.n&&s->carry[i]==s->e.n))return 0;
         s->carry[i]=j;if(comma==end)break;p=comma+1;if(p==end)return 0;
     }
     return 1;
