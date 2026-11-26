@@ -58,6 +58,8 @@ int main(int argc,char **argv){
     }
     if(replay&&replay[at])goto done;
     if(save&&!checkpoint_save(&s.e,s.carry,s.published,save))goto done;
+    fprintf(stderr,"DOC11_WAYLAND_BUFFER_LIFETIME: frames=%" PRIu64 " releases=%" PRIu64 " slots=3\n",a.window.frames,a.window.releases);
+    if(a.window.frames>3&&a.window.releases<a.window.frames-3)goto done;
     ok=1;
 done:
     if(!ok)fprintf(stderr,"DOC11_WAYLAND_REJECT: no unvalidated candidate presentation\n");

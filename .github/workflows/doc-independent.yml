@@ -281,7 +281,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y mesa-vulkan-drivers libvulkan1 clang-18 libx11-dev xvfb xauth xdotool
+          sudo apt-get install -y mesa-vulkan-drivers libvulkan1 clang-18 libx11-dev xvfb xauth xdotool weston libwayland-dev wayland-protocols libxkbcommon-dev
           mkdir -p doc11-wgpu
           curl -fL --retry 3 https://github.com/gfx-rs/wgpu-native/releases/download/v27.0.4.1/wgpu-linux-x86_64-release.zip -o doc11-wgpu.zip
           echo '9385b8a9e4e6f0b00264757577511097104fedf6db7819aa3e34a106c3dc0a42  doc11-wgpu.zip' | sha256sum -c -
@@ -299,8 +299,12 @@ jobs:
           export XDG_RUNTIME_DIR="$(mktemp -d)"
           python3 -u runtime-doc/tests/test_mesh_render.py --compiler doc11-mesh-evidence/mesh_stage2 --game-output doc11-game-evidence/radar_chase_3d-workers-1.txt --scene-reference runtime-rust/target/release/doc-scene3d --wgpu-root doc11-wgpu --evidence doc11-mesh-evidence/render | tee doc11-mesh-evidence/render-test.log
           chmod +x doc11-game-evidence/gpu_plan2 doc11-game-evidence/radar_chase_3d
-          xvfb-run -a -s '-screen 0 1024x768x24' python3 -u runtime-doc/tests/test_scene_window.py --games doc11-game-evidence --render doc11-mesh-evidence/render --wgpu-root doc11-wgpu --evidence doc11-mesh-evidence/window | tee doc11-mesh-evidence/window-test.log
-          find doc11-mesh-evidence/window -type f -print0 | sort -z | xargs -0 sha256sum > doc11-mesh-evidence/window-SHA256SUMS
+          x11_status=0; wayland_status=0
+          xvfb-run -a -s '-screen 0 1024x768x24' python3 -u runtime-doc/tests/test_scene_window.py --games doc11-game-evidence --render doc11-mesh-evidence/render --wgpu-root doc11-wgpu --evidence doc11-mesh-evidence/window | tee doc11-mesh-evidence/window-test.log || x11_status=$?
+          xvfb-run -a -s '-screen 0 1024x768x24' python3 -u runtime-doc/tests/test_scene_wayland.py --games doc11-game-evidence --render doc11-mesh-evidence/render --wgpu-root doc11-wgpu --evidence doc11-mesh-evidence/wayland | tee doc11-mesh-evidence/wayland-test.log || wayland_status=$?
+          if test -d doc11-mesh-evidence/window; then find doc11-mesh-evidence/window -type f -print0 | sort -z | xargs -0 sha256sum > doc11-mesh-evidence/window-SHA256SUMS; fi
+          if test -d doc11-mesh-evidence/wayland; then find doc11-mesh-evidence/wayland -type f -print0 | sort -z | xargs -0 sha256sum > doc11-mesh-evidence/wayland-SHA256SUMS; fi
+          test "$x11_status" = 0 && test "$wayland_status" = 0
           cp runtime-rust/target/release/doc-scene3d doc11-mesh-evidence/
           sha256sum doc11-mesh-evidence/doc-scene3d doc11-mesh-evidence/render/{mesh-render,mesh.wgsl,mesh-mutated.wgsl,plan-meta.json} > doc11-mesh-evidence/physical-SHA256SUMS
           sha256sum doc11-mesh-evidence/render/{mesh-render,render-summary.json,mesh.wgsl,mesh-mutated.wgsl,initial.ppm,jump.ppm,final.ppm,mutated.ppm,reference-final.ppm} > doc11-mesh-evidence/render-SHA256SUMS
