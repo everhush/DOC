@@ -8,6 +8,7 @@
 #include <stdatomic.h>
 #include "gpu_generated.h"
 #include "gpu_pool_metrics.h"
+#include "webgpu_retirement.h"
 static WGPUInstance gpu_instance;
 static WGPUAdapter gpu_adapter;
 static WGPUDevice gpu_device;
@@ -26,12 +27,13 @@ static void gpu_pool_log(const char *event){
     fprintf(stderr,"DOC11_GPU_POOL_METRICS: event=%s admitted=%llu released=%llu live=%llu peak=%llu\n",event,(unsigned long long)m->admitted,(unsigned long long)m->released,(unsigned long long)m->live,(unsigned long long)m->peak);
 }
 static _Atomic int gpu_fault, gpu_device_lost;
+static int gpu_submission_retired;
 static int gpu_healthy(void){return !atomic_load(&gpu_fault);}
 static size_t gpu_dispatches;
 static uint64_t gpu_wall_ns(void){struct timespec t;if(clock_gettime(CLOCK_MONOTONIC,&t))return 0;return (uint64_t)t.tv_sec*UINT64_C(1000000000)+(uint64_t)t.tv_nsec;}
 static int gpu_mode; /* 0 CPU, 1 explicit GPU, 2 automatic */
 static void gpu_error(WGPUDevice const *d,WGPUErrorType t,WGPUStringView m,void *a,void *b){(void)d;(void)t;(void)a;(void)b;atomic_store(&gpu_fault,1);fprintf(stderr,"DOC11_GPU_ERROR: %.*s\n",(int)(m.data?(m.length==WGPU_STRLEN?strlen(m.data):m.length):0),m.data?m.data:"");}
-static void gpu_lost(WGPUDevice const *d,WGPUDeviceLostReason t,WGPUStringView m,void *a,void *b){(void)d;(void)t;(void)m;(void)a;(void)b;atomic_store(&gpu_fault,1);atomic_store(&gpu_device_lost,1);}
+static void gpu_lost(WGPUDevice const *d,WGPUDeviceLostReason t,WGPUStringView m,void *a,void *b){(void)d;(void)m;(void)a;(void)b;atomic_store(&gpu_fault,1);atomic_store(&gpu_device_lost,1);fprintf(stderr,"DOC11_GPU_LOST_CALLBACK: reason=%u\n",(unsigned)t);}
 typedef struct {_Atomic int done;WGPUAdapter adapter;WGPUDevice device;} GPURequest;
 static void got_adapter(WGPURequestAdapterStatus status,WGPUAdapter a,WGPUStringView m,void *ctx,void *b){(void)m;(void)b;GPURequest *r=ctx;if(status==WGPURequestAdapterStatus_Success)r->adapter=a;atomic_store(&r->done,1);}
 static void got_device(WGPURequestDeviceStatus status,WGPUDevice d,WGPUStringView m,void *ctx,void *b){(void)m;(void)b;GPURequest *r=ctx;if(status==WGPURequestDeviceStatus_Success)r->device=d;atomic_store(&r->done,1);}
@@ -52,21 +54,19 @@ static int gpu_open(size_t n){uint64_t begin=gpu_wall_ns();if(n!=sizeof(doc_gpu_
     WGPUShaderSourceWGSL source={.chain={.sType=WGPUSType_ShaderSourceWGSL},.code={doc_wgsl,WGPU_STRLEN}};WGPUShaderModule module=wgpuDeviceCreateShaderModule(gpu_device,&(WGPUShaderModuleDescriptor){.nextInChain=&source.chain});if(!module)return 0;gpu_pipeline=wgpuDeviceCreateComputePipeline(gpu_device,&(WGPUComputePipelineDescriptor){.compute={.module=module,.entryPoint={"main",WGPU_STRLEN}}});wgpuShaderModuleRelease(module);if(!gpu_pipeline)return 0;gpu_layout=wgpuComputePipelineGetBindGroupLayout(gpu_pipeline,0);int ok=gpu_layout&&!atomic_load(&gpu_fault);if(ok){uint64_t end=gpu_wall_ns();fprintf(stderr,"DOC11_GPU_OPEN_TIMING: wall_ns=%llu\n",(unsigned long long)(begin&&end>=begin?end-begin:0));}return ok;}
 static int gpu_eligible(Epoch *e,size_t id){int64_t bound=doc_gpu_bound[id];if(bound<0)return 0;const State *s=e->states+id;for(size_t j=0;j<s->ndeps;j++){size_t dep=s->deps[j];if(!e->have[dep]||e->dirty[dep])return 0;V v=*e->states[dep].slot;if(v.kind!=I&&v.kind!=B)return 0;if(v.x< -bound||v.x>bound||v.x<INT32_MIN||v.x>INT32_MAX)return 0;if(v.kind==B&&(v.x<0||v.x>1))return 0;}return 1;}
 static void gpu_mapped(WGPUMapAsyncStatus status,WGPUStringView m,void *ctx,void *b){(void)m;(void)b;atomic_store((_Atomic int*)ctx,status==WGPUMapAsyncStatus_Success?1:-1);}
-static void gpu_completed(WGPUQueueWorkDoneStatus status,void *ctx,void *b){(void)b;atomic_store((_Atomic int*)ctx,status==WGPUQueueWorkDoneStatus_Success?1:-1);}
-/* A successful map proves completion of the copied dispatch. If submission
- * happened but no successful map was obtained, wait for the actual queue or
- * the terminal device-loss acknowledgement before retiring host resources.
- * gpu_wait is bounded and fail-stops if the provider never acknowledges. */
+/* The pinned native provider delivers lost errors via actual operation
+ * failure. An error callback is not itself proof of queue retirement.
+ * An explicit destroy registers completion before invalidating the device. */
+static void gpu_destroy_verified(void){
+    doc_wgpu_destroy_and_retire(gpu_instance,gpu_device,gpu_queue,&gpu_device_lost);
+    gpu_submission_retired=1;
+}
 static void gpu_retire_failed_submission(void){
-    if(!atomic_load(&gpu_device_lost)){
-        _Atomic int done=0;
-        wgpuQueueOnSubmittedWorkDone(gpu_queue,(WGPUQueueWorkDoneCallbackInfo){.mode=WGPUCallbackMode_AllowSpontaneous,.callback=gpu_completed,.userdata1=&done});
-        gpu_wait(&done,1);
-        if(atomic_load(&done)==1&&!atomic_load(&gpu_device_lost)){fprintf(stderr,"DOC11_GPU_RETIRED: outcome=queue-complete\n");return;}
-        atomic_store(&gpu_fault,1);
-        if(!atomic_load(&gpu_device_lost)){wgpuDeviceDestroy(gpu_device);gpu_wait(&gpu_device_lost,0);}
+    if(!gpu_submission_retired){
+        doc_wgpu_retire_queue(gpu_instance,gpu_device,gpu_queue,0);
+        gpu_submission_retired=1;
     }
-    fprintf(stderr,"DOC11_GPU_RETIRED: outcome=device-lost\n");
+    fprintf(stderr,"DOC11_GPU_RETIRED: outcome=%s\n",atomic_load(&gpu_device_lost)?"device-lost":"queue-complete");
 }
 #ifdef DOC_GPU_TEST_SUBMIT_HOOK
 /* Only present in the separately built adverse-interleaving test executable. */
@@ -108,7 +108,7 @@ static int gpu_reserve(size_t states,size_t count){
 static int gpu_execute(Epoch *e,const size_t *ids,size_t count){uint64_t begin=gpu_wall_ns();const char *phase="preflight";int ok=0,mapped=0,submitted=0;uint32_t *in=NULL,*queue=NULL;WGPUBuffer input=NULL,selection=NULL,output=NULL,staging=NULL;WGPUBindGroup group=NULL;WGPUCommandEncoder encoder=NULL;WGPUComputePassEncoder pass=NULL;WGPUCommandBuffer command=NULL;if(!count)return 1;if(!gpu_device||atomic_load(&gpu_fault)||e->n>UINT32_MAX||count>e->n||count>UINT32_MAX)return 0;uint64_t in_bytes=(uint64_t)e->n*4,selection_bytes=(uint64_t)count*4,out_bytes=(uint64_t)count*8;if(in_bytes>gpu_limits.maxStorageBufferBindingSize||out_bytes>gpu_limits.maxStorageBufferBindingSize||in_bytes>gpu_limits.maxBufferSize||out_bytes>gpu_limits.maxBufferSize||(count+63)/64>gpu_limits.maxComputeWorkgroupsPerDimension)return 0;phase="host staging";in=calloc(e->n,sizeof(*in));queue=calloc(count,sizeof(*queue));if(!in||!queue)goto done;for(size_t i=0;i<count;i++){size_t id=ids[i];if(id>=e->n||!gpu_eligible(e,id)){fprintf(stderr,"DOC11_GPU_REJECT: invalid selection index=%zu id=%zu\n",i,id);goto done;}queue[i]=(uint32_t)id;const State *s=e->states+id;for(size_t j=0;j<s->ndeps;j++){size_t p=s->deps[j];in[p]=(uint32_t)(int32_t)e->states[p].slot->x;}}
     phase="buffer reserve";if(!gpu_reserve(e->n,count))goto done;input=gpu_cached_input;selection=gpu_cached_selection;output=gpu_cached_output;staging=gpu_cached_staging;
     phase="bind/encode";WGPUBindGroupEntry entries[]={{.binding=0,.buffer=input,.size=in_bytes},{.binding=1,.buffer=selection,.size=selection_bytes},{.binding=2,.buffer=output,.size=out_bytes}};group=wgpuDeviceCreateBindGroup(gpu_device,&(WGPUBindGroupDescriptor){.layout=gpu_layout,.entryCount=3,.entries=entries});encoder=wgpuDeviceCreateCommandEncoder(gpu_device,NULL);if(!group||!encoder||atomic_load(&gpu_fault))goto done;/* A previous dispatch marker must never validate missing new output. */wgpuCommandEncoderClearBuffer(encoder,output,0,out_bytes);if(!gpu_healthy())goto done;pass=wgpuCommandEncoderBeginComputePass(encoder,NULL);if(!pass)goto done;wgpuComputePassEncoderSetPipeline(pass,gpu_pipeline);wgpuComputePassEncoderSetBindGroup(pass,0,group,0,NULL);wgpuComputePassEncoderDispatchWorkgroups(pass,(uint32_t)((count+63)/64),1,1);wgpuComputePassEncoderEnd(pass);wgpuComputePassEncoderRelease(pass);pass=NULL;wgpuCommandEncoderCopyBufferToBuffer(encoder,output,0,staging,0,out_bytes);command=wgpuCommandEncoderFinish(encoder,NULL);if(!command||atomic_load(&gpu_fault))goto done;
-    phase="submit/map";wgpuQueueWriteBuffer(gpu_queue,input,0,in,(size_t)in_bytes);wgpuQueueWriteBuffer(gpu_queue,selection,0,queue,(size_t)selection_bytes);wgpuQueueSubmit(gpu_queue,1,&command);submitted=1;
+    phase="submit/map";wgpuQueueWriteBuffer(gpu_queue,input,0,in,(size_t)in_bytes);wgpuQueueWriteBuffer(gpu_queue,selection,0,queue,(size_t)selection_bytes);gpu_submission_retired=0;wgpuQueueSubmit(gpu_queue,1,&command);submitted=1;
 #ifdef DOC_GPU_TEST_SUBMIT_HOOK
     if(gpu_test_after_submit&&!gpu_test_after_submit(e))goto done;
 #endif

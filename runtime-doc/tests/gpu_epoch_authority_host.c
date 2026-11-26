@@ -15,7 +15,7 @@ static int hold_submission(Epoch *e){
 }
 static int abandon_submission(Epoch *e){(void)e;return 0;}
 static int destroy_submission(Epoch *e){
-    (void)e;wgpuDeviceDestroy(gpu_device);gpu_wait(&gpu_device_lost,0);
+    (void)e;gpu_destroy_verified();
     assert(!gpu_healthy());return 0;
 }
 typedef struct {Epoch *e;int64_t generation,x;size_t list_n;int64_t first,second;} Expected;
