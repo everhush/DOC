@@ -1,5 +1,5 @@
 #define _POSIX_C_SOURCE 200809L
-#include "mesh_packet.h"
+#include "mesh_render_api.h"
 #include <webgpu/wgpu.h>
 #include <stdatomic.h>
 #include <time.h>
@@ -91,6 +91,20 @@ done:
     if(read)wgpuBufferRelease(read);
     return ok&&healthy(g);
 }
+/* Native window adapter shares the actual render pipeline and retirement
+ * paths with the offscreen proof. The caller supplies admitted typed frames. */
+struct MeshRendererNative {MeshDevice device;};
+MeshRendererNative *mesh_renderer_open(const MeshBatch *plan){
+    if(!plan||!plan->shader||!plan->shader_len||plan->shader_len>65536)return NULL;
+    MeshRendererNative *r=calloc(1,sizeof(*r));if(!r)return NULL;
+    if(!device_open(&r->device,plan)){device_close(&r->device);free(r);return NULL;}return r;
+}
+int mesh_renderer_render(MeshRendererNative *r,const MeshFrame *f,unsigned char *pixels,size_t size){
+    if(!r||!f||!pixels||!f->width||!f->height||f->width>4096||f->height>4096||size!=(size_t)f->width*f->height*4||!f->nv||f->nv>65536||!f->ni||f->ni>196608||!f->nd||f->nd>128||!f->vertices||!f->indices||!f->draws)return 0;
+    return render(&r->device,f,pixels);
+}
+int mesh_renderer_close(MeshRendererNative *r){if(!r)return 1;device_close(&r->device);int ok=healthy(&r->device);free(r);return ok;}
+#ifndef DOC_MESH_LIBRARY
 int main(int argc,char **argv){
     int destroy=argc==2&&!strcmp(argv[1],"--test-device-loss");if(argc!=1&&!destroy)return 1;
     MeshBatch batch;if(!mesh_load(stdin,&batch)){fprintf(stderr,"DOC11_MESH_REJECT: invalid packet\n");return 1;}
@@ -100,3 +114,4 @@ int main(int argc,char **argv){
     if(ok){ok=fwrite(pixels,1,at,stdout)==at&&fflush(stdout)==0;if(ok)fprintf(stderr,"DOC11_MESH_RENDER: frames=%u bytes=%zu\n",batch.n,at);}
     free(pixels);mesh_free(&batch);return ok?0:1;
 }
+#endif
