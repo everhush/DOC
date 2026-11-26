@@ -1,0 +1,88 @@
+name: DOC targeted combined CPU and GPU family
+on:
+  push:
+    branches: [ci/wayland-smoke]
+    paths: ['.github/workflows/doc-cpu-family-smoke.yml']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  family:
+    if: ${{ github.repository_id == '1471748051' && github.ref_name == 'ci/wayland-smoke' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc11-stage2-games
+          path: doc11-game-evidence
+          run-id: 45834325970
+          github-token: ${{ github.token }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc11-self-reproduction
+          path: doc11-self-evidence
+          run-id: 45834325970
+          github-token: ${{ github.token }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc11-independent-bootstrap
+          path: doc11-evidence
+          run-id: 45834325970
+          github-token: ${{ github.token }}
+      - name: Verify inputs and install real WebGPU ABI
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD:runtime-rust)" = a95a38bc6e9300aae815f83b570db5f99d32f221
+          for dir in doc11-game-evidence doc11-self-evidence doc11-evidence; do
+            test "$(cat "$dir/source-sha.txt")" = 9a303f00eff122614f5c1e412c08362e6ea41a9e
+            sha256sum -c "$dir/SHA256SUMS"
+          done
+          sha256sum -c doc11-evidence/oracle-SHA256SUMS
+          chmod +x doc11-evidence/doc doc11-self-evidence/stage2 doc11-game-evidence/{scanner2,reactive2}
+          mkdir -p doc11-cpu-family-smoke doc11-wgpu
+          git rev-parse HEAD > doc11-cpu-family-smoke/source-sha.txt
+          cp doc11-game-evidence/source-sha.txt doc11-cpu-family-smoke/input-source-sha.txt
+          sudo apt-get update
+          sudo apt-get install -y clang-18 mesa-vulkan-drivers libvulkan1
+          curl -fL --retry 3 https://github.com/gfx-rs/wgpu-native/releases/download/v27.0.4.1/wgpu-linux-x86_64-release.zip -o doc11-wgpu.zip
+          echo '9385b8a9e4e6f0b00264757577511097104fedf6db7819aa3e34a106c3dc0a42  doc11-wgpu.zip' | sha256sum -c -
+          unzip -q doc11-wgpu.zip -d doc11-wgpu
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc11-family-smoke
+          path: doc11-family-smoke
+          run-id: 45847319905
+          github-token: ${{ github.token }}
+      - name: Verify prior native planner and rebuild candidate reactive compiler from Stage 2
+        run: |
+          set -euo pipefail
+          test "$(cat doc11-family-smoke/source-sha.txt)" = 03dc0929693c91dc124c48c145d475a2f772a821
+          test "$(cat doc11-family-smoke/input-source-sha.txt)" = 9a303f00eff122614f5c1e412c08362e6ea41a9e
+          sha256sum -c doc11-family-smoke/SHA256SUMS
+          chmod +x doc11-family-smoke/gpu_plan2
+          python3 -u runtime-doc/compiler/doc_build.py runtime-doc/compiler/managed_reactive.doc --scanner doc11-game-evidence/scanner2 --compiler doc11-self-evidence/stage2 --stream --cc clang-18 --cc-flag=-O0 --compile-timeout 300 --compile-evidence doc11-cpu-family-smoke/reactive-compile.json --emit-c doc11-cpu-family-smoke/reactive2.c -o doc11-cpu-family-smoke/reactive2
+      - name: Execute frozen CPU family and tagged data under sanitizers
+        run: |
+          set -euo pipefail
+          python3 -u runtime-doc/tests/test_cpu_family.py --reference doc11-evidence/doc --reactive doc11-cpu-family-smoke/reactive2 --evidence doc11-cpu-family-smoke/cpu-family | tee doc11-cpu-family-smoke/cpu-family-test.log
+          python3 -u runtime-doc/tests/test_cpu_family.py --reference doc11-evidence/doc --reactive doc11-cpu-family-smoke/reactive2 --evidence doc11-cpu-family-smoke/cpu-family-tsan --sanitizer thread | tee doc11-cpu-family-smoke/cpu-family-tsan.log
+          python3 -u runtime-doc/tests/test_nested_data.py --reference doc11-evidence/doc --managed doc11-self-evidence/stage2 --reactive doc11-cpu-family-smoke/reactive2 --evidence doc11-cpu-family-smoke/nested-data | tee doc11-cpu-family-smoke/nested-data-test.log
+      - name: Execute combined native CPU and actual software WebGPU family regressions
+        run: |
+          set -euo pipefail
+          export XDG_RUNTIME_DIR="$(mktemp -d)"
+          python3 -u runtime-doc/tests/test_gpu.py --reference doc11-evidence/doc --reactive doc11-cpu-family-smoke/reactive2 --gpu-plan doc11-family-smoke/gpu_plan2 --wgpu-root doc11-wgpu --stream --artifacts doc11-cpu-family-smoke/micro | tee doc11-cpu-family-smoke/test.log
+          python3 -m unittest discover -s ci/kaggle -p test_independent_bundle.py -v 2>&1 | tee doc11-cpu-family-smoke/physical-evidence-tests.log
+      - name: Preserve evidence on every exit
+        if: always()
+        run: |
+          if test -d doc11-cpu-family-smoke; then find doc11-cpu-family-smoke -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > doc11-cpu-family-smoke/SHA256SUMS; fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: doc11-cpu-family-smoke
+          path: doc11-cpu-family-smoke/

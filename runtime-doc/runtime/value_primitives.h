@@ -24,6 +24,7 @@
 /* Compiler executables have a separately bounded workspace for token triples
  * and type inference; never define this for compiled application code. */
 #define DOC_INPUT_LIMIT 65536u
+#define DOC_FAMILY_LIMIT 4096u
 #ifdef DOC_COMPILER_WORKSPACE
 #define LIMIT 131072u
 #define DOC_CAUSAL_LIMIT 262144u
@@ -126,7 +127,7 @@ static V v_utf8_text(V a){need(a,L);char *p=alloc_in(active,a.n);for(size_t i=0;
 /* Generated causal expressions use private alternating carry owners, not
  * references into a region that is being reset. No refcount or collector. */
 #define v_recur(seed,binder,pred,step) ({ Region *parent=active; V start=(seed); Region a,b,tmp;push(&a);push(&b);push(&tmp);Region *old=&a,*next=&b;V binder=own(old,start);size_t rounds=0;for(;;){if(truth(pred)){clear(&tmp);break;}if(rounds++>=DOC_CAUSAL_LIMIT)fail("causal step capacity");V result=(step);if(result.kind!=binder.kind)fail("causal type");V copy=own(next,result);clear(&tmp);clear(old);Region *swap=old;old=next;next=swap;binder=copy;}V out=own(parent,binder);pop(&tmp);pop(&b);pop(&a);out;})
-#define v_map_ints(seed,binder,expr) ({ V src=need((seed),L);int64_t *dst=alloc_in(active,src.n*sizeof(*dst));Region tmp;push(&tmp);for(size_t i=0;i<src.n;i++){V binder=vi(((const int64_t*)src.p)[i]);dst[i]=num(expr);clear(&tmp);}pop(&tmp);vv(L,src.n,dst);})
+#define v_map_ints(seed,binder,expr) ({ V src=need((seed),L);if(src.n>DOC_FAMILY_LIMIT)fail("family lane capacity");int64_t *dst=alloc_in(active,src.n*sizeof(*dst));Region tmp;push(&tmp);for(size_t i=0;i<src.n;i++){V binder=vi(((const int64_t*)src.p)[i]);dst[i]=num(expr);clear(&tmp);}pop(&tmp);vv(L,src.n,dst);})
 static const char *skip(const char *s){while(isspace((unsigned char)*s))s++;return s;}
 static int64_t parse_i(const char **s){const char *p=skip(*s);if(!isdigit((unsigned char)*p)&&*p!='-'&&*p!='+')fail("integer literal");errno=0;char *e;long long x=strtoll(p,&e,10);if(errno||p==e)fail("integer literal");*s=skip(e);return x;}
 static V input_value(int k,const char *s){s=skip(s);size_t n=strlen(s);while(n&&isspace((unsigned char)s[n-1]))n--;if(k==T){if(n>DOC_INPUT_LIMIT+2u)fail("text input capacity");if(n<2||s[0]!='"'||s[n-1]!='"')fail("quoted text source");for(size_t i=1;i+1<n;i++)if(s[i]==10||s[i]==13||s[i]==34||s[i]==92)fail("text literal control");return txt(s+1,n-2);}if(k==N){if(n>DOC_INPUT_LIMIT)fail("natural input capacity");return nat(s,n);}if(k==B){if(n==4&&!memcmp(s,"true",4))return vb(1);if(n==5&&!memcmp(s,"false",5))return vb(0);fail("bool literal");}if(k==I){int64_t x=parse_i(&s);if(*s)fail("integer trailing input");return vi(x);}if(k==M){if(n==4&&!memcmp(s,"none",4))return v_none();if(n<7||memcmp(s,"some(",5))fail("maybe literal");s+=5;int64_t x=parse_i(&s);if(*s!=')'||*skip(s+1))fail("maybe literal");return v_some(vi(x));}if(k!=L||*s++!='[')fail("list literal");int64_t *p=alloc_in(active,DOC_INPUT_LIMIT*sizeof(*p));size_t z=0;s=skip(s);if(*s!=']'){for(;;){if(z==DOC_INPUT_LIMIT)fail("list capacity");p[z++]=parse_i(&s);if(*s!=',')break;s++;}}if(*s!=']'||*skip(s+1))fail("list literal");return vv(L,z,p);}

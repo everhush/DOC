@@ -65,7 +65,7 @@ static int gpu_eligible(Epoch *e,size_t id){
         size_t dep=s->deps[j];if(dep>=e->n||!e->have[dep]||e->dirty[dep])return 0;
         V v=*e->states[dep].slot;
         if(family>=0&&dep==(size_t)family){
-            if(v.kind!=L||v.n>LIMIT||(v.n&&!v.p)||e->n>UINT32_MAX-v.n)return 0;
+            if(v.kind!=L||v.n>DOC_FAMILY_LIMIT||(v.n&&!v.p)||e->n>UINT32_MAX-v.n)return 0;
             uint64_t bytes=((uint64_t)e->n+v.n)*4,out=(uint64_t)v.n*8;
             if(bytes>gpu_limits.maxStorageBufferBindingSize||out>gpu_limits.maxStorageBufferBindingSize||bytes>gpu_limits.maxBufferSize||out>gpu_limits.maxBufferSize||(v.n+63)/64>gpu_limits.maxComputeWorkgroupsPerDimension)return 0;
             const int64_t *xs=v.p;for(size_t i=0;i<v.n;i++)if(!gpu_value_fits(xs[i],bound))return 0;found=1;
