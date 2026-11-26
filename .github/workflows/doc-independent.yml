@@ -166,8 +166,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y mesa-vulkan-drivers libvulkan1
           mkdir -p doc11-stage2-gpu-evidence doc11-wgpu
-          curl -fL --retry 3 https://github.com/gfx-rs/wgpu-native/releases/download/v24.0.3.1/wgpu-linux-x86_64-release.zip -o doc11-wgpu.zip
-          echo '86f3eb9f74d7f1ac82ee52d9b2ab15e366ef86a932759c750b7472652836ee59  doc11-wgpu.zip' | sha256sum -c -
+          curl -fL --retry 3 https://github.com/gfx-rs/wgpu-native/releases/download/v27.0.4.1/wgpu-linux-x86_64-release.zip -o doc11-wgpu.zip
+          echo '9385b8a9e4e6f0b00264757577511097104fedf6db7819aa3e34a106c3dc0a42  doc11-wgpu.zip' | sha256sum -c -
           unzip -q doc11-wgpu.zip -d doc11-wgpu
           sha256sum doc11-wgpu.zip > doc11-stage2-gpu-evidence/wgpu-sha256.txt
           cp doc11-wgpu/lib/libwgpu_native.so doc11-stage2-gpu-evidence/
@@ -221,9 +221,11 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y qemu-system-x86
           mkdir -p doc11-native-evidence
+          git rev-parse HEAD > doc11-native-evidence/source-sha.txt
+          cc --version > doc11-native-evidence/cc-version.txt
           python3 -u runtime-doc/tests/test_native_scalar.py --stage2 doc11-self-evidence/stage2 --scanner doc11-game-evidence/scanner2 --evidence doc11-native-evidence --boot | tee doc11-native-evidence/test.log
           git rev-parse HEAD > doc11-native-evidence/source-sha.txt
-          sha256sum doc11-native-evidence/{native_scalar2,native_scalar2.c,boot.c,boot.h,regions.c,regions.h,region-host,arena.c,arena.h,arena-host,intrinsics.c,intrinsics.h,external.c,external.h,intrinsic-host,buffer.c,buffer.h,buffer-host,kernel64.elf,kernel.elf,host,alternate.c,alternate.o,boot.o,verify.o,entry.o,elf.txt,qemu-version.txt,device.txt,source-sha.txt,test.log} > doc11-native-evidence/SHA256SUMS
+          sha256sum doc11-native-evidence/{native_scalar2,native_scalar2.c,compile-native-scalar.json,cc-version.txt,boot.c,boot.h,regions.c,regions.h,region-host,arena.c,arena.h,arena-host,intrinsics.c,intrinsics.h,external.c,external.h,intrinsic-host,buffer.c,buffer.h,buffer-host,kernel64.elf,kernel.elf,host,alternate.c,alternate.o,boot.o,verify.o,entry.o,elf.txt,qemu-version.txt,device.txt,source-sha.txt,test.log} > doc11-native-evidence/SHA256SUMS
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -272,8 +274,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y mesa-vulkan-drivers libvulkan1
           mkdir -p doc11-wgpu
-          curl -fL --retry 3 https://github.com/gfx-rs/wgpu-native/releases/download/v24.0.3.1/wgpu-linux-x86_64-release.zip -o doc11-wgpu.zip
-          echo '86f3eb9f74d7f1ac82ee52d9b2ab15e366ef86a932759c750b7472652836ee59  doc11-wgpu.zip' | sha256sum -c -
+          curl -fL --retry 3 https://github.com/gfx-rs/wgpu-native/releases/download/v27.0.4.1/wgpu-linux-x86_64-release.zip -o doc11-wgpu.zip
+          echo '9385b8a9e4e6f0b00264757577511097104fedf6db7819aa3e34a106c3dc0a42  doc11-wgpu.zip' | sha256sum -c -
           unzip -q doc11-wgpu.zip -d doc11-wgpu
           sha256sum doc11-wgpu.zip > doc11-mesh-evidence/wgpu-sha256.txt
           cargo generate-lockfile --manifest-path runtime-rust/Cargo.toml

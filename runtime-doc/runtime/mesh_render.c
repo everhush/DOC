@@ -3,6 +3,7 @@
 #include <webgpu/wgpu.h>
 #include <stdatomic.h>
 #include <time.h>
+#include "webgpu_retirement.h"
 /* Linux x86-64 platform adapter. All mesh and shader facts are supplied
  * by the admitted DOC compiler/frame transport, not evaluated here. */
 #if !defined(__BYTE_ORDER__) || __BYTE_ORDER__ != __ORDER_LITTLE_ENDIAN__
@@ -18,7 +19,7 @@ typedef struct {_Atomic int done;WGPUAdapter adapter;WGPUDevice device;} Request
 static void got_adapter(WGPURequestAdapterStatus s,WGPUAdapter a,WGPUStringView msg,void *ctx,void *unused){(void)msg;(void)unused;Request *r=ctx;if(s==WGPURequestAdapterStatus_Success)r->adapter=a;atomic_store(&r->done,1);}
 static void got_device(WGPURequestDeviceStatus s,WGPUDevice d,WGPUStringView msg,void *ctx,void *unused){(void)unused;Request *r=ctx;if(s==WGPURequestDeviceStatus_Success)r->device=d;else {size_t n=msg.data?(msg.length==WGPU_STRLEN?strlen(msg.data):msg.length):0;fprintf(stderr,"DOC11_MESH_DEVICE_REQUEST: status=%u message=%.*s\n",(unsigned)s,(int)(n>4096?4096:n),msg.data?msg.data:"");}atomic_store(&r->done,1);}
 static void device_error(WGPUDevice const *d,WGPUErrorType t,WGPUStringView msg,void *ctx,void *unused){(void)d;(void)t;(void)unused;MeshDevice *g=ctx;atomic_store(&g->fault,1);size_t n=msg.data?(msg.length==WGPU_STRLEN?strlen(msg.data):msg.length):0;fprintf(stderr,"DOC11_MESH_DEVICE_ERROR: %.*s\n",(int)(n>4096?4096:n),msg.data?msg.data:"");}
-static void device_lost(WGPUDevice const *d,WGPUDeviceLostReason t,WGPUStringView msg,void *ctx,void *unused){(void)d;(void)t;(void)msg;(void)unused;MeshDevice *g=ctx;atomic_store(&g->fault,1);atomic_store(&g->lost,1);}
+static void device_lost(WGPUDevice const *d,WGPUDeviceLostReason t,WGPUStringView msg,void *ctx,void *unused){(void)d;(void)msg;(void)unused;MeshDevice *g=ctx;atomic_store(&g->fault,1);atomic_store(&g->lost,1);fprintf(stderr,"DOC11_MESH_LOST_CALLBACK: reason=%u\n",(unsigned)t);}
 static void mapped(WGPUMapAsyncStatus s,WGPUStringView msg,void *ctx,void *unused){(void)msg;(void)unused;atomic_store((_Atomic int*)ctx,s==WGPUMapAsyncStatus_Success?1:-1);}
 static int healthy(MeshDevice *g){return !atomic_load(&g->fault);}
 static void wait_callback(MeshDevice *g,_Atomic int *done,int poll){struct timespec start,now,pause={0,1000000};if(clock_gettime(CLOCK_MONOTONIC,&start))_Exit(1);while(!atomic_load(done)){if(clock_gettime(CLOCK_MONOTONIC,&now)||now.tv_sec-start.tv_sec>=30){fprintf(stderr,"DOC11_MESH_TIMEOUT: callback not completed; no pixel publication\n");_Exit(1);}if(poll)wgpuDevicePoll(g->device,0,NULL);wgpuInstanceProcessEvents(g->instance);nanosleep(&pause,NULL);}}
@@ -55,7 +56,7 @@ static int render(MeshDevice *g,const MeshFrame *f,unsigned char *out){
     if(!healthy(g)||f->width>g->limits.maxTextureDimension2D||f->height>g->limits.maxTextureDimension2D){fprintf(stderr,"DOC11_MESH_REJECT: frame size or device fault\n");return 0;}
     uint64_t vn=(uint64_t)f->nv*48,in=(uint64_t)f->ni*4,row=((uint64_t)f->width*4+255)&~255ULL,readn=row*f->height;
     if(vn>g->limits.maxBufferSize||in>g->limits.maxBufferSize||readn>g->limits.maxBufferSize){fprintf(stderr,"DOC11_MESH_REJECT: buffer limits\n");return 0;}
-    WGPUBuffer vb=NULL,ib=NULL,read=NULL,uniforms[128]={0};WGPUBindGroup groups[128]={0};WGPUTexture color=NULL,depth=NULL;WGPUTextureView cv=NULL,dv=NULL;WGPUCommandEncoder encoder=NULL;WGPURenderPassEncoder pass=NULL;WGPUCommandBuffer commands=NULL;int ok=0,is_mapped=0;const char *phase="frame buffers";
+    WGPUBuffer vb=NULL,ib=NULL,read=NULL,uniforms[128]={0};WGPUBindGroup groups[128]={0};WGPUTexture color=NULL,depth=NULL;WGPUTextureView cv=NULL,dv=NULL;WGPUCommandEncoder encoder=NULL;WGPURenderPassEncoder pass=NULL;WGPUCommandBuffer commands=NULL;int ok=0,is_mapped=0,submitted=0;const char *phase="frame buffers";
     vb=buffer(g,vn,WGPUBufferUsage_Vertex|WGPUBufferUsage_CopyDst);ib=buffer(g,in,WGPUBufferUsage_Index|WGPUBufferUsage_CopyDst);read=buffer(g,readn,WGPUBufferUsage_MapRead|WGPUBufferUsage_CopyDst);if(!vb||!ib||!read||!healthy(g))goto done;
     wgpuQueueWriteBuffer(g->queue,vb,0,f->vertices,(size_t)vn);wgpuQueueWriteBuffer(g->queue,ib,0,f->indices,(size_t)in);
     phase="uniform bindings";for(size_t i=0;i<f->nd;i++){uniforms[i]=buffer(g,32,WGPUBufferUsage_Uniform|WGPUBufferUsage_CopyDst);if(!uniforms[i]||!healthy(g))goto done;wgpuQueueWriteBuffer(g->queue,uniforms[i],0,f->draws[i].params,32);WGPUBindGroupEntry entry={.binding=0,.buffer=uniforms[i],.size=32};groups[i]=wgpuDeviceCreateBindGroup(g->device,&(WGPUBindGroupDescriptor){.layout=g->layout,.entryCount=1,.entries=&entry});if(!groups[i]||!healthy(g))goto done;}
@@ -69,13 +70,14 @@ static int render(MeshDevice *g,const MeshFrame *f,unsigned char *out){
     wgpuRenderPassEncoderEnd(pass);wgpuRenderPassEncoderRelease(pass);pass=NULL;
     phase="copy/finish";WGPUTexelCopyTextureInfo source={.texture=color,.aspect=WGPUTextureAspect_All};WGPUTexelCopyBufferInfo dest={.buffer=read,.layout={.bytesPerRow=(uint32_t)row,.rowsPerImage=f->height}};
     wgpuCommandEncoderCopyTextureToBuffer(encoder,&source,&dest,&size);commands=wgpuCommandEncoderFinish(encoder,NULL);if(!commands||!healthy(g))goto done;
-    phase="submit/map";wgpuQueueSubmit(g->queue,1,&commands);_Atomic int map=0;wgpuBufferMapAsync(read,WGPUMapMode_Read,0,(size_t)readn,(WGPUBufferMapCallbackInfo){.mode=WGPUCallbackMode_AllowSpontaneous,.callback=mapped,.userdata1=&map});wait_callback(g,&map,1);if(atomic_load(&map)!=1)goto done;is_mapped=1;if(!healthy(g))goto done;
+    phase="submit/map";wgpuQueueSubmit(g->queue,1,&commands);submitted=1;_Atomic int map=0;wgpuBufferMapAsync(read,WGPUMapMode_Read,0,(size_t)readn,(WGPUBufferMapCallbackInfo){.mode=WGPUCallbackMode_AllowSpontaneous,.callback=mapped,.userdata1=&map});wait_callback(g,&map,1);if(atomic_load(&map)!=1)goto done;is_mapped=1;if(!healthy(g))goto done;
     phase="mapped pixels";const unsigned char *pixels=wgpuBufferGetConstMappedRange(read,0,(size_t)readn);if(!pixels)goto done;
     for(size_t y=0;y<f->height;y++)memcpy(out+y*f->width*4,pixels+y*row,(size_t)f->width*4);
     ok=1;
 done:
     wgpuDevicePoll(g->device,0,NULL);wgpuInstanceProcessEvents(g->instance);if(!ok||!healthy(g))fprintf(stderr,"DOC11_MESH_REJECT: phase=%s fault=%d vertices=%u indices=%u draws=%u\n",phase,atomic_load(&g->fault),(unsigned)f->nv,(unsigned)f->ni,(unsigned)f->nd);
     if(is_mapped)wgpuBufferUnmap(read);
+    else if(submitted)doc_wgpu_retire_queue(g->instance,g->device,g->queue,0);
     if(commands)wgpuCommandBufferRelease(commands);
     if(pass)wgpuRenderPassEncoderRelease(pass);
     if(encoder)wgpuCommandEncoderRelease(encoder);
@@ -93,8 +95,8 @@ int main(int argc,char **argv){
     int destroy=argc==2&&!strcmp(argv[1],"--test-device-loss");if(argc!=1&&!destroy)return 1;
     MeshBatch batch;if(!mesh_load(stdin,&batch)){fprintf(stderr,"DOC11_MESH_REJECT: invalid packet\n");return 1;}
     unsigned char *pixels=malloc(batch.pixel_bytes);MeshDevice g={0};int ok=pixels&&device_open(&g,&batch);size_t at=0;
-    for(size_t i=0;ok&&i<batch.n;i++){ok=render(&g,batch.frames+i,pixels+at);if(!ok)fprintf(stderr,"DOC11_MESH_REJECT: frame=%zu\n",i);at+=(size_t)batch.frames[i].width*batch.frames[i].height*4;if(ok&&destroy){wgpuDeviceDestroy(g.device);wait_callback(&g,&g.lost,0);ok=0;fprintf(stderr,"DOC11_MESH_DEVICE_LOSS: no pixel publication\n");}}
-    ok=ok&&healthy(&g)&&at==batch.pixel_bytes;device_close(&g);
+    for(size_t i=0;ok&&i<batch.n;i++){ok=render(&g,batch.frames+i,pixels+at);if(!ok)fprintf(stderr,"DOC11_MESH_REJECT: frame=%zu\n",i);at+=(size_t)batch.frames[i].width*batch.frames[i].height*4;if(ok&&destroy){doc_wgpu_destroy_and_retire(g.instance,g.device,g.queue,&g.lost);ok=0;fprintf(stderr,"DOC11_MESH_DEVICE_LOSS: no pixel publication\n");}}
+    ok=ok&&healthy(&g)&&at==batch.pixel_bytes;device_close(&g);ok=ok&&healthy(&g);
     if(ok){ok=fwrite(pixels,1,at,stdout)==at&&fflush(stdout)==0;if(ok)fprintf(stderr,"DOC11_MESH_RENDER: frames=%u bytes=%zu\n",batch.n,at);}
     free(pixels);mesh_free(&batch);return ok?0:1;
 }

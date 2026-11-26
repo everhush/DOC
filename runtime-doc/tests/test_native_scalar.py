@@ -27,7 +27,10 @@ def main():
         from doc_build import bundle, emit
         code=emit([a.stage2.resolve()],bundle([a.scanner.resolve()],ROOT/'compiler/native_scalar.doc',stream=True),stream=True)
         c=out/'native_scalar2.c'; c.write_bytes(code); native=out/'native_scalar2'
-        run(['cc','-std=gnu11','-O0','-I',ROOT/'runtime',c,'-o',native],timeout=300)
+        # The macro diagnostic backtrace is not part of emitted C semantics.
+        # Keep -O0 and fail closed; retain the command, time, and compiler output.
+        from test_self_reproduction import run_cc
+        run_cc(['cc','-std=gnu11','-O0','-ftrack-macro-expansion=0','-I',ROOT/'runtime',c,'-o',native],out,out,'native-scalar',timeout=600)
     def compile_doc(target,source=src,region='scratch',imp='x86_out8',name='boot',reject=False,region2='',intrinsic='',allow_read=False,allow_write=False):
         argv=[native,'--demand='+target,'--input-stdin','grant_region="'+region+'"','grant_region2="'+region2+'"','grant_import="'+imp+'"','grant_intrinsic="'+intrinsic+'"','allow_read='+str(allow_read).lower(),'allow_write='+str(allow_write).lower(),'export_name="'+name+'"']
         r=subprocess.run([str(x) for x in argv],input=source,capture_output=True,timeout=120)
