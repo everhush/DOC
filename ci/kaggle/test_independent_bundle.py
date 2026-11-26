@@ -59,6 +59,13 @@ class PhysicalMicroEvidenceTests(unittest.TestCase):
             if name in MICRO_GRAPHS:
                 (self.expected/(name+'.expected')).write_bytes(name.encode())
                 (self.actual/(name+'.actual')).write_bytes(name.encode())
+                if name=='family':
+                    p=self.actual/(name+'.stderr')
+                    p.write_bytes(p.read_bytes()+b''.join(b'DOC11_GPU_FAMILY: state=3 lanes='+n+b'\nDOC11_GPU_FRONTIER: cpu=1 gpu=1 concurrent=1\n' for n in (b'128',b'256',b'128')))
+                    adapter=b'DOC11_GPU_ADAPTER: type=2 backend=6 physical=1 description=test\nDOC11_REGIONS: live=0 peak=8\n'
+                    for label,data in [('family-overflow',b'family'),('family-injected',b'epoch: 0\nepoch: 1\n'),('family-strict',b'ys: [6,7,8]\n'),('family-empty',b'ys: []\n'),('family-rejected',b'')]:
+                        (self.actual/(label+'.stdout')).write_bytes(data)
+                        (self.actual/(label+'.stderr')).write_bytes(adapter+(b'DOC11_GPU_INJECTED_FAILURE: dispatch=2\n' if label=='family-injected' else b''))
             elif name=='gpu_graph_generation':
                 adapter=b'DOC11_GPU_ADAPTER: type=2 backend=6 physical=1 description=test\n'
                 dispatch=b'DOC11_GPU_DISPATCH: lanes=2 workgroups=1\n'
@@ -80,6 +87,14 @@ class PhysicalMicroEvidenceTests(unittest.TestCase):
         for changed in (original.replace(b'physical=1',b'physical=0',1),original.replace(b'live=0',b'live=1',1),original.replace(b'event=closed',b'event=absent',1),original.replace(b'DOC11_GPU_DISPATCH:',b'absent'),original.replace(b'DOC11_GPU_INJECTED_FAILURE:',b'absent')):
             p.write_bytes(changed)
             with self.assertRaises(ValueError):self.validate()
+    def test_family_evidence(self):
+        p=self.actual/'family.stderr';original=p.read_bytes()
+        for changed in (original.replace(b'lanes=256',b'lanes=128'),original.replace(b'concurrent=1',b'concurrent=0',1)):
+            p.write_bytes(changed)
+            with self.assertRaises(ValueError):self.validate()
+        p.write_bytes(original)
+        (self.actual/'family-injected.stdout').write_bytes(b'epoch: 2\n')
+        with self.assertRaises(ValueError):self.validate()
     def test_output_parity(self):
         (self.actual/'wide.actual').write_bytes(b'different')
         with self.assertRaises(ValueError):self.validate()

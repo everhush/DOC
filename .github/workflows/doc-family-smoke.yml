@@ -1,0 +1,74 @@
+name: DOC targeted runtime-sized GPU family
+on:
+  push:
+    branches: [ci/wayland-smoke]
+    paths: ['.github/workflows/doc-family-smoke.yml']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  family:
+    if: ${{ github.repository_id == '1471748051' && github.ref_name == 'ci/wayland-smoke' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc11-stage2-games
+          path: doc11-game-evidence
+          run-id: 45834325970
+          github-token: ${{ github.token }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc11-self-reproduction
+          path: doc11-self-evidence
+          run-id: 45834325970
+          github-token: ${{ github.token }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc11-independent-bootstrap
+          path: doc11-evidence
+          run-id: 45834325970
+          github-token: ${{ github.token }}
+      - name: Verify inputs and install real WebGPU ABI
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD:runtime-rust)" = a95a38bc6e9300aae815f83b570db5f99d32f221
+          for dir in doc11-game-evidence doc11-self-evidence doc11-evidence; do
+            test "$(cat "$dir/source-sha.txt")" = 9a303f00eff122614f5c1e412c08362e6ea41a9e
+            sha256sum -c "$dir/SHA256SUMS"
+          done
+          sha256sum -c doc11-evidence/oracle-SHA256SUMS
+          chmod +x doc11-evidence/doc doc11-self-evidence/stage2 doc11-game-evidence/{scanner2,reactive2}
+          mkdir -p doc11-family-smoke doc11-wgpu
+          git rev-parse HEAD > doc11-family-smoke/source-sha.txt
+          cp doc11-game-evidence/source-sha.txt doc11-family-smoke/input-source-sha.txt
+          sudo apt-get update
+          sudo apt-get install -y clang-18 mesa-vulkan-drivers libvulkan1
+          curl -fL --retry 3 https://github.com/gfx-rs/wgpu-native/releases/download/v27.0.4.1/wgpu-linux-x86_64-release.zip -o doc11-wgpu.zip
+          echo '9385b8a9e4e6f0b00264757577511097104fedf6db7819aa3e34a106c3dc0a42  doc11-wgpu.zip' | sha256sum -c -
+          unzip -q doc11-wgpu.zip -d doc11-wgpu
+      - name: Rebuild candidate planner using native self-hosted Stage 2
+        run: |
+          set -euo pipefail
+          python3 -u runtime-doc/compiler/doc_build.py runtime-doc/compiler/gpu_plan.doc --scanner doc11-game-evidence/scanner2 --compiler doc11-self-evidence/stage2 --stream --cc clang-18 --cc-flag=-O0 --compile-timeout 300 --compile-evidence doc11-family-smoke/planner-compile.json --emit-c doc11-family-smoke/gpu_plan2.c -o doc11-family-smoke/gpu_plan2
+          doc11-family-smoke/gpu_plan2 --demand=families --input-stdin < runtime-rust/examples/dependency_family.doc | tee doc11-family-smoke/families.txt
+          grep -Fx 'families: [-1,-1,-1,0,-1,-1]' doc11-family-smoke/families.txt
+      - name: Execute actual software adapter, scalar regression, families and offline physical evidence tests
+        run: |
+          set -euo pipefail
+          export XDG_RUNTIME_DIR="$(mktemp -d)"
+          python3 -u runtime-doc/tests/test_gpu.py --reference doc11-evidence/doc --reactive doc11-game-evidence/reactive2 --gpu-plan doc11-family-smoke/gpu_plan2 --wgpu-root doc11-wgpu --stream --artifacts doc11-family-smoke/micro | tee doc11-family-smoke/test.log
+          python3 -m unittest discover -s ci/kaggle -p test_independent_bundle.py -v 2>&1 | tee doc11-family-smoke/physical-evidence-tests.log
+      - name: Preserve evidence on every exit
+        if: always()
+        run: |
+          if test -d doc11-family-smoke; then find doc11-family-smoke -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > doc11-family-smoke/SHA256SUMS; fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: doc11-family-smoke
+          path: doc11-family-smoke/
