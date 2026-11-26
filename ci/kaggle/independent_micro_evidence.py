@@ -1,7 +1,7 @@
 """Validate returned physical micrograph evidence independently of notebook summary."""
 import re
 MICRO_GRAPHS=('scalar','arithmetic','wide','mixed')
-MICRO_EXECUTABLES=(*MICRO_GRAPHS,'device_loss','gpu_epoch_authority')
+MICRO_EXECUTABLES=(*MICRO_GRAPHS,'device_loss','gpu_epoch_authority','gpu_graph_generation')
 ADAPTER=re.compile(rb'(?m)^DOC11_GPU_ADAPTER: [^\n]* physical=1 ')
 
 POOL=re.compile(rb'(?m)^DOC11_GPU_POOL_METRICS: event=(created|grown|reused|closed) admitted=(\d+) released=(\d+) live=(\d+) peak=(\d+)$')
@@ -66,10 +66,16 @@ def validate_compute_retirement(log,submitted):
 def validate_micro_evidence(root,expected):
     for name in MICRO_EXECUTABLES:
         log=(root/(name+'.stderr')).read_bytes()
-        if not ADAPTER.search(log):raise ValueError('nonphysical or missing micro adapter: '+name)
+        adapters=[line for line in log.splitlines() if line.startswith(b'DOC11_GPU_ADAPTER:')]
+        if not adapters or not all(ADAPTER.search(line) for line in adapters):raise ValueError('nonphysical or missing micro adapter: '+name)
         if name in MICRO_GRAPHS:
             if (root/(name+'.actual')).read_bytes()!=(expected/(name+'.expected')).read_bytes():raise ValueError('physical micro parity: '+name)
             if b'DOC11_GPU_DISPATCH:' not in log or b'DOC11_REGIONS: live=0 ' not in log:raise ValueError('missing dispatch/lifetime evidence: '+name)
+        elif name=='gpu_graph_generation':
+            output=(root/(name+'.stdout')).read_bytes()
+            closed=[tuple(map(int,row[1:])) for row in POOL.findall(log) if row[0]==b'closed']
+            if b'DOC11_GPU_GRAPH_GENERATION_PASS:' not in output or len(adapters)!=4 or log.count(b'DOC11_GPU_DISPATCH:')<6 or len(closed)!=4 or not all(a==r and l==0 and 0<p<=a for a,r,l,p in closed) or b'DOC11_GPU_INJECTED_FAILURE: dispatch=1' not in log:
+                raise ValueError('missing graph replacement, dispatch or retired pool evidence')
         else:
             output=(root/(name+'.stdout')).read_bytes()
             marker=b'DOC11_GPU_DEVICE_LOSS_PASS:' if name=='device_loss' else b'DOC11_GPU_EPOCH_AUTHORITY_PASS:'

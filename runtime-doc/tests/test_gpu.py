@@ -3,7 +3,7 @@
 import argparse,os,subprocess,tempfile,sys,shutil
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parent.parent/'compiler'))
-from doc_build import build_bundled,emit
+from doc_build import build_bundled,emit,gpu_artifacts
 
 def run(cmd,cwd,physical=False,extra=None):
  env={**os.environ,'DOC_REGION_METRICS':'1','DOC_WORKERS':'4','DOC_GPU_ALLOW_SOFTWARE':'1'}
@@ -15,6 +15,40 @@ def check(cmd,cwd,prefix=None,physical=False):
  if prefix is not None:
   assert r.stdout.startswith(prefix) and r.stdout.endswith(b'\n'),r.stdout[:500];return r.stdout[len(prefix):-1]
  return r.stdout
+
+def graph_generation(a,root,comp,plan,headers,wgpu):
+ if a.prebuilt:
+  exe=a.prebuilt.resolve()/'gpu_graph_generation'
+ else:
+  variants={'old':b'source amount:int=2\nderive total:int(amount)=add(amount,1)\n', 'new':b'source amount:int=99\nsource extra:int=4\nderive total:int(amount)=mul(amount,2)\nderive combined:int(total,extra)=add(total,extra)\n'}
+  flags=['cc','-std=gnu11','-O1','-pthread','-I',headers]
+  objects=[]
+  for name,source in variants.items():
+   part=root/('graph_'+name);part.mkdir()
+   shader,header=gpu_artifacts([plan],source,stream=a.stream)
+   code=emit([comp],source,True,stream=a.stream)
+   (part/'gpu_generated.h').write_bytes(header)
+   wrapper=('#define main '+name+'_unused_main\n').encode()+code+('\n#undef main\n#define DOC_VARIANT_SYMBOL '+name+'_variant\n#define DOC_VARIANT_BACKEND 1\n#include "graph_variant_adapter.h"\n').encode()
+   (part/'variant.c').write_bytes(wrapper)
+   obj=part/'variant.o'
+   check([*flags,'-DDOC_ENABLE_GPU','-I',part,'-I',wgpu/'include','-c',part/'variant.c','-o',obj],root)
+   objects.append(obj)
+   if a.artifacts:
+    (a.artifacts/('graph_'+name+'.doc')).write_bytes(source)
+    (a.artifacts/('graph_'+name+'.wgsl')).write_bytes(shader)
+    (a.artifacts/('graph_'+name+'.c')).write_bytes(wrapper)
+  exe=root/'gpu_graph_generation'
+  check([*flags,Path(__file__).resolve().parent/'gpu_graph_generation_host.c',*objects,'-L',wgpu/'lib','-Wl,-rpath,'+str(wgpu/'lib'),'-lwgpu_native','-o',exe],root)
+  if a.artifacts:shutil.copy2(exe,a.artifacts/'gpu_graph_generation')
+ result=run([exe],root,a.physical)
+ if a.artifacts:
+  (a.artifacts/'gpu_graph_generation.stdout').write_bytes(result.stdout)
+  (a.artifacts/'gpu_graph_generation.stderr').write_bytes(result.stderr)
+ assert result.returncode==0 and b'DOC11_GPU_GRAPH_GENERATION_PASS:' in result.stdout,(result.stdout,result.stderr)
+ assert result.stderr.count(b'DOC11_GPU_DISPATCH:')>=6 and result.stderr.count(b'DOC11_GPU_POOL_METRICS: event=closed')==4 and b'DOC11_GPU_INJECTED_FAILURE: dispatch=1' in result.stderr,result.stderr
+ adapters=[line for line in result.stderr.splitlines() if line.startswith(b'DOC11_GPU_ADAPTER:')]
+ assert len(adapters)==4 and (not a.physical or all(b'physical=1 ' in line for line in adapters)),result.stderr
+ print(result.stdout.decode().strip(),result.stderr.decode(),flush=True)
 
 def main():
  p=argparse.ArgumentParser();p.add_argument('--prebuilt',type=Path);p.add_argument('--artifacts',type=Path);p.add_argument('--reference',type=Path);p.add_argument('--reactive',type=Path);p.add_argument('--gpu-plan',type=Path);p.add_argument('--wgpu-root',required=True,type=Path);p.add_argument('--headers',type=Path,default=Path(__file__).resolve().parent.parent/'runtime');p.add_argument('--physical',action='store_true');p.add_argument('--stream',action='store_true');a=p.parse_args();ref=a.reference.resolve() if a.reference else None;comp=a.reactive.resolve() if a.reactive else None;plan=a.gpu_plan.resolve() if a.gpu_plan else None;headers=a.headers.resolve();wgpu=a.wgpu_root.resolve();checks=0
@@ -94,5 +128,6 @@ def main():
    if name=='arithmetic':
     bad=run([exe,'--backend=gpu','--next','a=40000'],root,a.physical);assert bad.returncode and b'epoch: 1' not in bad.stdout and b'epoch: 0' in bad.stdout and b'DOC_GPU_UNSUPPORTED' in bad.stderr,bad
    print(name,actual.stderr.decode(),flush=True);checks+=1
+  graph_generation(a,root,comp,plan,headers,wgpu)
  print(f'DOC11_WEBGPU_PASS: {checks} native actual-device comparisons; generated typed WGSL, signed extrema, nested dependency barriers, strict rejection, mixed CPU/GPU; physical_required={a.physical}')
 if __name__=='__main__':main()

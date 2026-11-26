@@ -61,7 +61,7 @@ def main():
         result=json.loads(reports[0].read_text())
         if result!={'sha':sha,'run_id':run_id,'bundle_sha256':checksum,'hardware':True,'result':'pass'}:raise ValueError('invalid hardware report')
         base=reports[0].parent
-        for name,markers in {'micro.log':['DOC11_WEBGPU_PASS:','DOC11_GPU_DEVICE_LOSS_PASS:','DOC11_GPU_EPOCH_AUTHORITY_PASS:','physical_required=True'],'games.log':['DOC11_GAME_GPU_PASS: radar_chase ','DOC11_GAME_GPU_PASS: radar_chase_3d ','physical_required=True'],'mesh.log':['DOC11_MESH_RENDER_PASS:','physical_required=True']}.items():
+        for name,markers in {'micro.log':['DOC11_WEBGPU_PASS:','DOC11_GPU_DEVICE_LOSS_PASS:','DOC11_GPU_EPOCH_AUTHORITY_PASS:','DOC11_GPU_GRAPH_GENERATION_PASS:','physical_required=True'],'games.log':['DOC11_GAME_GPU_PASS: radar_chase ','DOC11_GAME_GPU_PASS: radar_chase_3d ','physical_required=True'],'mesh.log':['DOC11_MESH_RENDER_PASS:','physical_required=True']}.items():
             log=(base/name).read_text()
             if any(marker not in log for marker in markers):raise ValueError('missing raw device evidence '+name)
         validate_micro_evidence(base/'micro',Path('doc11-stage2-gpu-evidence/micro'))
