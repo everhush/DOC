@@ -153,6 +153,11 @@ def build_bundled(compiler, data, output, headers, reactive=False, emit_c=None, 
                   compile_timeout=240, compile_evidence=None, cc_flags=()):
     """Compile one admitted byte snapshot through native DOC C/WGSL stages."""
     output=Path(output).absolute();headers=Path(headers).resolve()
+    if compile_timeout<=0:raise ValueError('C compile timeout must be positive')
+    if compile_evidence is not None:
+        destinations=[output,emit_c,emit_wgsl,emit_gpu_header,compile_evidence,str(compile_evidence)+'.candidate.c']
+        paths=[Path(p).resolve() for p in destinations if p is not None]
+        if len(set(paths))!=len(paths):raise ValueError('compile evidence aliases a build output')
     if (gpu_plan is None)!=(wgpu_root is None) or gpu_plan is not None and not reactive:
         raise ValueError('GPU build requires reactive compiler, GPU planner and WebGPU ABI root')
     if gpu_plan is None and (emit_wgsl is not None or emit_gpu_header is not None):
