@@ -54,6 +54,17 @@ def validate(stdout,stderr,expected,oracle,interactive=False):
         assert b'DOC11_WAYLAND_FOCUS' in stderr and re.search(rb'wl_keyboard@\d+\.key\(',stderr)
     return len(frames)
 
+def compositor_pixel(exe,win,digest,env):
+    # The nested compositor may deliver frame callback before the X11
+    # output backend's repaint has reached its actual drawable.
+    end=time.monotonic()+8
+    last=None
+    while time.monotonic()<end:
+        last=checked([exe,win],env=env,capture_output=True,text=True).stdout.strip()
+        if last==digest:return last
+        time.sleep(.05)
+    raise AssertionError(('nested compositor output digest',last,digest))
+
 def main():
     p=argparse.ArgumentParser();p.add_argument('--games',type=Path,required=True);p.add_argument('--render',type=Path,required=True);p.add_argument('--wgpu-root',type=Path,required=True);p.add_argument('--evidence',type=Path,required=True);p.add_argument('--cc',default='clang-18');a=p.parse_args()
     repo=Path(__file__).resolve().parents[2];runtime=repo/'runtime-doc/runtime'
@@ -71,6 +82,8 @@ def main():
     flags=checked(['pkg-config','--cflags','--libs','wayland-client','xkbcommon'],capture_output=True,text=True).stdout.split()
     versions=checked(['pkg-config','--modversion','wayland-client','xkbcommon'],capture_output=True).stdout
     (out/'versions.txt').write_bytes(checked(['weston','--version'],capture_output=True).stdout+versions)
+    capture_exe=out/'wayland-output-readback'
+    compile_c([a.cc,'-std=gnu11','-O2',repo/'runtime-doc/tests/wayland_output_readback.c','-lX11','-o',capture_exe],timeout=120,evidence=out/'compile-readback.json')
     exe=out/'doc-scene-wayland'
     compile_c([a.cc,'-std=gnu11','-O1','-pthread','-DDOC_ENABLE_GPU','-DDOC_MESH_LIBRARY','-DDOC_SOURCE_SHA256="'+schema+'"','-I',runtime,'-I',out,'-I',wgpu/'include',runtime/'scene_wayland.c',runtime/'mesh_render.c',out/'xdg-shell-protocol.c','-L',wgpu/'lib','-Wl,-rpath,'+str(wgpu/'lib'),'-lwgpu_native','-lm',*flags,'-o',exe],timeout=300,evidence=out/'compile-wayland.json')
     direct=checked(['readelf','-d',exe],capture_output=True).stdout;(out/'direct-linkage.txt').write_bytes(direct)
@@ -90,20 +103,29 @@ def main():
             proc=subprocess.Popen([str(x) for x in args+['--input-only']],cwd=out,env=env,stdout=std,stderr=err)
             try:
                 wait_log(proc,log,rb'^DOC11_WAYLAND_READY$')
-                wins=checked(['xdotool','search','--onlyvisible','--name','Weston'],capture_output=True,text=True).stdout.split()
-                assert len(wins)==1,wins
-                win=wins[0]
+                # Weston 13's X11 output has no guaranteed window title.
+                # Its backend records the exact drawable ID and dimensions.
+                match=re.search(rb'x11 output 640x480, window id (\d+)',(out/'x11-weston.log').read_bytes())
+                assert match,'Weston did not identify the native output'
+                win=match[1].decode()
+                geometry=checked(['xdotool','getwindowgeometry',win],capture_output=True).stdout
+                assert b'640x480' in geometry
+                (out/'x11-output-geometry.txt').write_bytes(geometry)
                 checked(['xdotool','windowfocus','--sync',win])
-                checked(['xdotool','mousemove','--window',win,'320','240','click','1'])
                 wait_log(proc,log,rb'^DOC11_WAYLAND_FOCUS$')
+                checked(['xdotool','mousemove','1000','750'])
+                readbacks=[compositor_pixel(capture_exe,win,oracle[0][2],os.environ)]
                 for ep,key in enumerate(REPLAY,1):
                     checked(['xdotool','key','space' if key=='j' else key])
                     wait_log(proc,log,rb'^DOC11_WAYLAND_PRESENTED: epoch='+str(ep).encode()+rb'$')
+                    readbacks.append(compositor_pixel(capture_exe,win,oracle[ep][2],os.environ))
                 checked(['xdotool','key','Escape'])
                 assert proc.wait(timeout=30)==0
             finally:
                 if proc.poll() is None:proc.kill();proc.wait()
         interactive=validate(typed.read_bytes(),log.read_bytes(),expected,oracle,True)
-    (out/'wayland-summary.json').write_text(json.dumps(dict(native_wayland=True,xwayland=False,headless_frames=frames,keyboard_frames=interactive,compositor='Weston',actual_frame_callbacks=True,bounded_buffer_release=True,physical_gpu=False,compositor_scanout_readback=False,generated_c_sha256=hashlib.sha256((out/'scene_generated.c').read_bytes()).hexdigest(),schema=schema),indent=2)+'\n')
-    print(f'DOC11_NATIVE_WAYLAND_PASS: {frames} headless and {interactive} real keyboard-triggered native Wayland frames, exact typed/GPU-pixel parity, compositor callbacks and buffer retirement; not XWayland or physical scanout')
+        assert readbacks==[x[2] for x in oracle]
+        (out/'nested-compositor-rgba.json').write_text(json.dumps(readbacks,indent=2)+'\n')
+    (out/'wayland-summary.json').write_text(json.dumps(dict(native_wayland=True,xwayland=False,headless_frames=frames,keyboard_frames=interactive,compositor='Weston',actual_frame_callbacks=True,bounded_buffer_release=True,physical_gpu=False,nested_compositor_output_readback=True,physical_scanout_readback=False,generated_c_sha256=hashlib.sha256((out/'scene_generated.c').read_bytes()).hexdigest(),schema=schema),indent=2)+'\n')
+    print(f'DOC11_NATIVE_WAYLAND_PASS: {frames} headless and {interactive} real keyboard-triggered native Wayland frames, exact typed/GPU-pixel parity, compositor callbacks, buffer retirement and nested compositor RGB readback; not XWayland or physical scanout')
 if __name__=='__main__':main()
