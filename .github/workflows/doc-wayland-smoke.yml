@@ -2,7 +2,7 @@ name: DOC targeted Wayland validation
 on:
   push:
     branches: [ci/wayland-smoke]
-    paths: ['.github/workflows/doc-wayland-smoke.yml', 'runtime-doc/runtime/scene_wayland.*', 'runtime-doc/tests/test_scene_wayland.py']
+    paths: ['.github/workflows/doc-wayland-smoke.yml', 'runtime-doc/runtime/scene_wayland.*', 'runtime-doc/tests/test_scene_wayland.py', 'runtime-doc/tests/wayland_output_readback.c']
 permissions:
   contents: read
   actions: read
@@ -49,7 +49,7 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y clang-18 mesa-vulkan-drivers libvulkan1 weston libwayland-dev wayland-protocols libxkbcommon-dev xvfb xauth xdotool
+          sudo apt-get install -y clang-18 mesa-vulkan-drivers libvulkan1 weston libwayland-dev wayland-protocols libxkbcommon-dev libx11-dev xvfb xauth xdotool
           mkdir -p doc11-wgpu
           curl -fL --retry 3 https://github.com/gfx-rs/wgpu-native/releases/download/v27.0.4.1/wgpu-linux-x86_64-release.zip -o doc11-wgpu.zip
           echo '9385b8a9e4e6f0b00264757577511097104fedf6db7819aa3e34a106c3dc0a42  doc11-wgpu.zip' | sha256sum -c -
