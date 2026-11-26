@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Actual native WebGPU dispatch, mixed frontier and epoch failure gates."""
-import argparse,os,subprocess,tempfile,sys,shutil
+import argparse,os,subprocess,tempfile,sys,shutil,re
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parent.parent/'compiler'))
 from doc_build import build_bundled,emit,gpu_artifacts
@@ -58,13 +58,19 @@ def main():
  arithmetic='source a:int=2\nsource b:int=-3\nderive x:int(a,b)=mul(a,b)\nderive y:int(a,b)=add(a,b)\nderive z:bool(x,y)=lt(x,y)\n'
  wide='source x:int=2\n'+''.join(f'derive g{i}:bool(x)=eq(x,{i})\n' for i in range(96))
  mixed='source x:int=2\nsource xs:ints=[1,2]\n'+''.join(f'derive g{i}:bool(x)=eq(x,{i})\n' for i in range(96))+''.join(f'derive c{i}:ints(xs)=append(xs,{i})\n' for i in range(32))
+ family_path=Path(__file__).resolve().parents[2]/'runtime-rust/examples/dependency_family.doc'
+ family=family_path.read_text() if not a.prebuilt else ''
+ family_args=[]
+ for n,b in [(128,5),(0,5),(256,6),(3,7),(128,8)]:
+  if family_args:family_args.append('--next')
+  family_args.extend(['xs=['+','.join(map(str,range(n)))+']','bias='+str(b)])
  with tempfile.TemporaryDirectory() as tmp:
   root=Path(tmp);src=root/'test.doc';c=root/'generated.c';exe=root/'app';gh=root/'gpu_generated.h'
   if not a.prebuilt:
    metric_exe=root/'pool_metrics'
    check(['cc','-std=c11','-O2','-Wall','-Wextra','-Werror','-I',headers,Path(__file__).resolve().parent/'gpu_pool_metrics_test.c','-o',metric_exe],root)
    print(check([metric_exe],root).decode().strip(),flush=True)
-  for name,program,args,mode in [('scalar',scalar,['--next','a=0'],'gpu'),('arithmetic',arithmetic,['--next','a=4'],'gpu'),('wide',wide,['--next','x=3'],'gpu'),('mixed',mixed,['--next','x=3','xs=[4]'],'auto')]:
+  for name,program,args,mode in [('scalar',scalar,['--next','a=0'],'gpu'),('arithmetic',arithmetic,['--next','a=4'],'gpu'),('wide',wide,['--next','x=3'],'gpu'),('mixed',mixed,['--next','x=3','xs=[4]'],'auto'),('family',family,family_args,'auto')]:
    src.write_text(program);snapshot=program.encode()
    if a.prebuilt:
     exe=a.prebuilt.resolve()/name;expected=(a.prebuilt.resolve()/(name+'.expected')).read_bytes()
@@ -125,6 +131,24 @@ def main():
     if a.physical:assert b'physical=1' in retired.stderr
     print(retired.stdout.decode().strip(),retired.stderr.decode(),flush=True)
     assert b'DOC11_GPU_FRONTIER: cpu=32 gpu=96' in actual.stderr,actual.stderr;bad=run([exe,'--backend=gpu'],root,a.physical);assert bad.returncode and not bad.stdout and b'DOC_GPU_UNSUPPORTED' in bad.stderr,bad
+   if name=='family':
+    assert re.findall(rb'DOC11_GPU_FAMILY: state=3 lanes=(\d+)',actual.stderr)==[b'128',b'256',b'128'],actual.stderr
+    assert len(re.findall(rb'DOC11_GPU_FRONTIER: cpu=1 gpu=1 concurrent=1',actual.stderr))==3,actual.stderr
+    assert b'DOC11_GPU_BUFFER_POOL: action=grown' in actual.stderr and b'DOC11_GPU_BUFFER_POOL: action=reused' in actual.stderr,actual.stderr
+    bad=run([exe,'--backend=auto',*args,'--next','xs=[9223372036854775807]','flag=true'],root,a.physical)
+    assert bad.returncode and bad.stdout==expected and b'DOC11_REGIONS: live=0 ' in bad.stderr,bad
+    injected=run([exe,'--backend=auto',*args],root,a.physical,{'DOC_GPU_TEST_FAIL_DISPATCH':'2'})
+    assert injected.returncode and b'epoch: 1\n' in injected.stdout and b'epoch: 2\n' not in injected.stdout and b'DOC11_GPU_INJECTED_FAILURE: dispatch=2' in injected.stderr and b'DOC11_REGIONS: live=0 ' in injected.stderr,injected
+    strict=run([exe,'--backend=gpu','--demand=ys','xs=[1,2,3]','bias=5'],root,a.physical)
+    assert strict.returncode==0 and strict.stdout==b'ys: [6,7,8]\n' and b'DOC11_GPU_FAMILY: state=3 lanes=3' in strict.stderr,strict
+    empty=run([exe,'--backend=gpu','--demand=ys','xs=[]'],root,a.physical)
+    assert empty.returncode==0 and empty.stdout==b'ys: []\n' and b'DOC11_GPU_DISPATCH:' not in empty.stderr,empty
+    rejected=run([exe,'--backend=gpu','--demand=ys','xs=[9223372036854775807]'],root,a.physical)
+    assert rejected.returncode and not rejected.stdout and b'DOC_GPU_UNSUPPORTED' in rejected.stderr,rejected
+    if a.artifacts:
+     for label,record in [('family-overflow',bad),('family-injected',injected),('family-strict',strict),('family-empty',empty),('family-rejected',rejected)]:
+      (a.artifacts/(label+'.stdout')).write_bytes(record.stdout);(a.artifacts/(label+'.stderr')).write_bytes(record.stderr)
+    print('DOC11_GPU_FAMILY_PASS: 512 actual lanes, 3 mixed frontiers, resizing, zero extent, strict admission, checked rollback',flush=True)
    if name=='arithmetic':
     bad=run([exe,'--backend=gpu','--next','a=40000'],root,a.physical);assert bad.returncode and b'epoch: 1' not in bad.stdout and b'epoch: 0' in bad.stdout and b'DOC_GPU_UNSUPPORTED' in bad.stderr,bad
    print(name,actual.stderr.decode(),flush=True);checks+=1

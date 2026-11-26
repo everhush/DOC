@@ -115,6 +115,9 @@ def gpu_artifacts(planner, data, stream=False):
     bounds=ast.literal_eval(invoke(planner,data,'bounds',stream=stream).decode('ascii'))
     if not isinstance(bounds,list) or not bounds or any(type(x) is not int or not -1<=x<=2147483648 for x in bounds):
         raise ValueError('invalid compiler GPU bounds')
+    families=ast.literal_eval(invoke(planner,data,'families',stream=stream).decode('ascii'))
+    if not isinstance(families,list) or len(families)!=len(bounds) or any(type(x) is not int or not -1<=x<len(bounds) or (x>=0 and (x==i or bounds[i]<0)) for i,x in enumerate(families)):
+        raise ValueError('invalid compiler GPU family plan')
     shader=invoke(planner,data,'shader',stream=stream)
     if not shader or any(c not in (9,10,13) and not 32<=c<=126 for c in shader):
         raise ValueError('invalid generated WGSL bytes')
@@ -125,6 +128,7 @@ def gpu_artifacts(planner, data, stream=False):
     if shader.count(b'0xd0c11a5eu')!=1 or not shader.endswith(b'if(matched){out[idx*2u]=value;out[idx*2u+1u]=0xd0c11a5eu;}}'):
         raise ValueError('GPU plan/kernel publication contract mismatch')
     header=('static const int64_t doc_gpu_bound[]={'+','.join(map(str,bounds))+'};\n'
+            'static const int32_t doc_gpu_family[]={'+','.join(map(str,families))+'};\n'
             'static const char doc_wgsl[]='+json.dumps(shader.decode('ascii'))+';\n').encode('ascii')
     return shader,header
 

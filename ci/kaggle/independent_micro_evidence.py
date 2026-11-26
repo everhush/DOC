@@ -1,6 +1,6 @@
 """Validate returned physical micrograph evidence independently of notebook summary."""
 import re
-MICRO_GRAPHS=('scalar','arithmetic','wide','mixed')
+MICRO_GRAPHS=('scalar','arithmetic','wide','mixed','family')
 MICRO_EXECUTABLES=(*MICRO_GRAPHS,'device_loss','gpu_epoch_authority','gpu_graph_generation')
 ADAPTER=re.compile(rb'(?m)^DOC11_GPU_ADAPTER: [^\n]* physical=1 ')
 
@@ -71,6 +71,15 @@ def validate_micro_evidence(root,expected):
         if name in MICRO_GRAPHS:
             if (root/(name+'.actual')).read_bytes()!=(expected/(name+'.expected')).read_bytes():raise ValueError('physical micro parity: '+name)
             if b'DOC11_GPU_DISPATCH:' not in log or b'DOC11_REGIONS: live=0 ' not in log:raise ValueError('missing dispatch/lifetime evidence: '+name)
+            if name=='family':
+                if re.findall(rb'DOC11_GPU_FAMILY: state=3 lanes=(\d+)',log)!=[b'128',b'256',b'128'] or len(re.findall(rb'DOC11_GPU_FRONTIER: cpu=1 gpu=1 concurrent=1',log))!=3:
+                    raise ValueError('missing physical runtime-sized family evidence')
+                validate_pool(log)
+                for label in ('family-overflow','family-injected','family-strict','family-empty','family-rejected'):
+                    detail=(root/(label+'.stderr')).read_bytes()
+                    if not ADAPTER.search(detail) or b'DOC11_REGIONS: live=0 ' not in detail:raise ValueError('missing physical family adverse evidence: '+label)
+                if (root/'family-overflow.stdout').read_bytes()!=(expected/'family.expected').read_bytes() or b'DOC11_GPU_INJECTED_FAILURE: dispatch=2' not in (root/'family-injected.stderr').read_bytes() or b'epoch: 2\n' in (root/'family-injected.stdout').read_bytes() or (root/'family-strict.stdout').read_bytes()!=b'ys: [6,7,8]\n' or (root/'family-empty.stdout').read_bytes()!=b'ys: []\n' or (root/'family-rejected.stdout').read_bytes():
+                    raise ValueError('physical family rollback/admission mismatch')
         elif name=='gpu_graph_generation':
             output=(root/(name+'.stdout')).read_bytes()
             closed=[tuple(map(int,row[1:])) for row in POOL.findall(log) if row[0]==b'closed']
