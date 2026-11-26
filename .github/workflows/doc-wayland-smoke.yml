@@ -40,7 +40,7 @@ jobs:
           sha256sum -c doc11-game-evidence/SHA256SUMS
           sha256sum -c doc11-mesh-evidence/SHA256SUMS
           sha256sum -c doc11-mesh-evidence/render-SHA256SUMS
-          chmod +x doc11-game-evidence/{scanner2,gpu_plan2}
+          chmod +x doc11-game-evidence/{scanner2,gpu_plan2,radar_chase_3d}
           mkdir -p doc11-wayland-smoke
           git rev-parse HEAD > doc11-wayland-smoke/source-sha.txt
           cp doc11-game-evidence/source-sha.txt doc11-wayland-smoke/input-source-sha.txt
