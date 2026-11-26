@@ -14,6 +14,7 @@ typedef struct PlacedExecution {
 } PlacedExecution;
 static void placed_profile_free(PlacedExecution *p){
     if(p->owner)_Exit(1);
+    if(!p->transport.roles&&!p->n)return;
     placed_free(&p->transport);free(p->receipts);free(p->original);free(p->lost);free(p->closure);*p=(PlacedExecution){0};
 }
 static int placed_profile_init(PlacedExecution *p,const State *states,size_t n){
@@ -45,6 +46,7 @@ static int placed_profile_join(PlacedExecution *p){
  * A committed source generation must have an acknowledged durable record. */
 static int placed_profile_remove(PlacedExecution *p,int resource,int fail_stop){
     if(!p->transport.roles||(p->owner&&p->owner->in_flight)||resource<0||resource>=PLACE_MAX_RESOURCES||!p->transport.resources[resource].active)return 0;
+    if(p->transport.resources[resource].failed&&!fail_stop)return 0;
     if(fail_stop&&p->owner&&p->owner->committed&&p->durable_epoch!=p->owner->committed)return 0;
     memset(p->closure,0,p->n);
     if(fail_stop)for(size_t i=0;i<p->n;i++)if(p->states[i].role==2&&p->transport.roles[2*i].resource==resource)p->closure[i]=1;
@@ -71,13 +73,15 @@ static void placed_finish_epoch(Epoch *e,int success){
     if(success)memset(p->lost,0,p->n);
 }
 static int placed_evaluate(Epoch *e,size_t id){
+    if(id>=e->n)return 0;
     PlacedExecution *p=e->placed;const State *s=e->states+id;size_t role=2*id+1;
-    if(id>=e->n||s->role!=2||!s->name)return 0;
+    if(s->role!=2||!s->name)return 0;
     PlaceRole token=p->transport.roles[role];if(!placed_current(&p->transport,role,token.resource,token.generation))return 0;
     memset(p->receipts,0,e->n*sizeof(*p->receipts));int ok=1;
     for(size_t i=0;i<s->ndeps&&ok;i++){
         size_t dep=s->deps[i];if(dep>=id||!e->have[dep]||e->dirty[dep]||epoch_cancelled(e)){ok=0;break;}
         V old=*e->states[dep].slot,copy;PlaceReceipt *receipt=p->receipts+dep;
+        if(old.kind!=e->states[dep].kind){ok=0;break;}
         int rc=placed_transfer(&p->transport,e->attempt,dep,id,old,receipt,&copy);
         if(rc<0){ok=0;break;}
         if(!rc){p->original[dep]=old;*e->states[dep].slot=copy;}
