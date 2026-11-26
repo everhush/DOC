@@ -121,10 +121,11 @@ jobs:
           test "$(cat doc11-self-evidence/source-sha.txt)" = "$(git rev-parse HEAD)"
           sha256sum -c doc11-self-evidence/SHA256SUMS
           mkdir -p doc11-game-evidence
+          git rev-parse HEAD > doc11-game-evidence/source-sha.txt
           python3 -u runtime-doc/tests/test_stage2_games.py --stage2 doc11-self-evidence/stage2 --scanner doc11-evidence/module_scan --reference doc11-evidence/doc --evidence doc11-game-evidence | tee doc11-game-evidence/test.log
           python3 runtime-doc/tests/test_placement_policy.py --managed doc11-self-evidence/stage2 | tee doc11-game-evidence/placement-policy-test.log
           python3 runtime-doc/tests/test_build_evidence.py --compiler doc11-self-evidence/stage2 | tee doc11-game-evidence/build-evidence-test.log
-          python3 runtime-doc/tests/test_placed_transport.py --managed doc11-self-evidence/stage2 --reactive doc11-game-evidence/reactive2 | tee doc11-game-evidence/placed-transport-test.log
+          python3 runtime-doc/tests/test_placed_transport.py --managed doc11-self-evidence/stage2 --reactive doc11-game-evidence/reactive2 --reference doc11-evidence/doc --evidence doc11-game-evidence/placed | tee doc11-game-evidence/placed-transport-test.log
           python3 runtime-doc/tests/test_allocation_failure.py --reactive doc11-game-evidence/reactive2 | tee doc11-game-evidence/allocation-failure-test.log
           python3 runtime-doc/tests/test_graph_generation.py --managed doc11-self-evidence/stage2 --reactive doc11-game-evidence/reactive2 | tee doc11-game-evidence/graph-generation-test.log
           python3 runtime-doc/tests/test_epoch_authority.py --managed doc11-self-evidence/stage2 --reactive doc11-game-evidence/reactive2 --sanitizer thread | tee doc11-game-evidence/epoch-authority-tsan.log
@@ -135,8 +136,7 @@ jobs:
           python3 -u runtime-doc/tests/benchmark_native_games.py --engine engine --evidence doc11-game-evidence --reference doc11-evidence/doc --assets doc11-bench-assets --out doc11-game-evidence/cpu-benchmark --source-sha "$(git rev-parse HEAD)" --provenance exact-ci | tee doc11-game-evidence/cpu-benchmark.log
           python3 -u runtime-doc/tests/test_mesh_packet.py --reference doc11-evidence/doc --engine engine | tee doc11-game-evidence/mesh-packet-test.log
           python3 -u runtime-doc/tests/test_game_effects.py --games doc11-game-evidence --reference doc11-evidence/doc --managed doc11-self-evidence/stage2 --evidence doc11-game-evidence/game-effects | tee doc11-game-evidence/game-effects-test.log
-          git rev-parse HEAD > doc11-game-evidence/source-sha.txt
-          sha256sum doc11-game-evidence/{scanner2,reactive2,gpu_plan2,radar_chase,radar_chase_3d}{,.c} doc11-game-evidence/radar_chase_3d-workers-1.txt doc11-game-evidence/{radar_chase,radar_chase_3d}-reference.txt > doc11-game-evidence/SHA256SUMS
+          find doc11-game-evidence -type f ! -name SHA256SUMS -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > doc11-game-evidence/SHA256SUMS
       - uses: actions/upload-artifact@v4
         if: always()
         with:
