@@ -1,0 +1,6 @@
+fn rec_prepare(open,unused,initial,prior) = if(open,if(unused,if(initial,if(prior,false,true),prior),false),false)
+fn rec_initial(pass,role) = if(eq(pass,0),eq(role,5),eq(role,1))
+fn rec_carry(source,target,same,unbound) = if(source,if(target,if(same,unbound,false),false),false)
+fn rec_fact(source,free,positive,within,unique,typed) = if(source,if(free,if(positive,if(within,if(unique,typed,false),false),false),false),false)
+fn rec_pick(carry,fact) = if(carry,if(fact,-1,1),if(fact,2,0))
+fn rec_stop(halt,value,cap) = if(halt,if(value,1,if(cap,-1,0)),if(cap,1,0))
