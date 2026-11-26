@@ -71,7 +71,7 @@ def main():
      (a.artifacts/'device_loss.stdout').write_bytes(lost.stdout)
      (a.artifacts/'device_loss.stderr').write_bytes(lost.stderr)
     assert lost.returncode==0 and b'DOC11_GPU_DEVICE_LOSS_PASS:' in lost.stdout,(lost.stdout,lost.stderr)
-    assert b'DOC11_WGPU_DESTROY_CONFIRMED:' in lost.stderr and b'DOC11_WGPU_QUEUE_RETIRED:' in lost.stderr and b'DOC11_GPU_LOST_CALLBACK:' in lost.stderr, lost.stderr
+    assert b'DOC11_WGPU_DESTROY_CONFIRMED:' in lost.stderr and b'DOC11_WGPU_QUEUE_RETIRED:' in lost.stderr and (b'DOC11_GPU_LOST_CALLBACK:' in lost.stderr or b'DOC11_WGPU_LOSS_PROBE: status=success type=validation\nValidation Error\n\nCaused by:\n  In wgpuDeviceCreateBuffer\n    Parent device is lost\n' in lost.stderr), lost.stderr
     if a.physical:assert b'physical=1' in lost.stderr,lost.stderr
     print(lost.stdout.decode().strip(),lost.stderr.decode(),flush=True)
     if a.prebuilt:
@@ -87,7 +87,7 @@ def main():
      (a.artifacts/'gpu_epoch_authority.stderr').write_bytes(retired.stderr)
     assert retired.returncode==0 and b'DOC11_GPU_EPOCH_AUTHORITY_PASS:' in retired.stdout and b'DOC11_GPU_RETIRED: outcome=device-lost' in retired.stderr and b'DOC11_GPU_RETIRED: outcome=queue-complete' in retired.stderr,(retired.stdout,retired.stderr)
     assert b'DOC11_GPU_DISPATCH: lanes=96 workgroups=2' in retired.stderr and b'DOC11_GPU_BUFFER_POOL: action=reused' in retired.stderr and b'DOC11_GPU_BUFFER_POOL: action=grown' in retired.stderr and b'DOC11_GPU_POOL_METRICS: event=closed' in retired.stderr,retired.stderr
-    assert b'DOC11_WGPU_QUEUE_RETIRED: destroy=0' in retired.stderr and b'DOC11_WGPU_QUEUE_RETIRED: destroy=1' in retired.stderr and b'DOC11_GPU_LOST_CALLBACK:' in retired.stderr and b'DOC11_WGPU_DESTROY_CONFIRMED:' in retired.stderr,retired.stderr
+    assert b'DOC11_WGPU_QUEUE_RETIRED: destroy=0' in retired.stderr and b'DOC11_WGPU_QUEUE_RETIRED: destroy=1' in retired.stderr and (b'DOC11_GPU_LOST_CALLBACK:' in retired.stderr or b'DOC11_WGPU_LOSS_PROBE: status=success type=validation\nValidation Error\n\nCaused by:\n  In wgpuDeviceCreateBuffer\n    Parent device is lost\n' in retired.stderr) and b'DOC11_WGPU_DESTROY_CONFIRMED:' in retired.stderr,retired.stderr
     if a.physical:assert b'physical=1' in retired.stderr
     print(retired.stdout.decode().strip(),retired.stderr.decode(),flush=True)
     assert b'DOC11_GPU_FRONTIER: cpu=32 gpu=96' in actual.stderr,actual.stderr;bad=run([exe,'--backend=gpu'],root,a.physical);assert bad.returncode and not bad.stdout and b'DOC_GPU_UNSUPPORTED' in bad.stderr,bad

@@ -58,7 +58,7 @@ static void gpu_mapped(WGPUMapAsyncStatus status,WGPUStringView m,void *ctx,void
  * failure. An error callback is not itself proof of queue retirement.
  * An explicit destroy registers completion before invalidating the device. */
 static void gpu_destroy_verified(void){
-    doc_wgpu_destroy_and_retire(gpu_instance,gpu_device,gpu_queue,&gpu_device_lost);
+    doc_wgpu_destroy_and_retire(gpu_instance,gpu_device,gpu_queue,&gpu_device_lost,&gpu_fault);
     gpu_submission_retired=1;
 }
 static void gpu_retire_failed_submission(void){

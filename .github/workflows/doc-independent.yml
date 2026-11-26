@@ -177,6 +177,8 @@ jobs:
         run: |
           set -euo pipefail
           export XDG_RUNTIME_DIR="$(mktemp -d)"
+          cc -std=c11 -O1 -Wall -Wextra -Werror -fsanitize=address,undefined -fno-pie -no-pie -I runtime-doc/runtime runtime-doc/tests/webgpu_loss_evidence_test.c -o doc11-stage2-gpu-evidence/loss-evidence-test
+          doc11-stage2-gpu-evidence/loss-evidence-test | tee doc11-stage2-gpu-evidence/loss-evidence-test.log
           python3 -u runtime-doc/tests/test_gpu.py --reference doc11-evidence/doc --reactive doc11-game-evidence/reactive2 --gpu-plan doc11-game-evidence/gpu_plan2 --wgpu-root doc11-wgpu --stream --artifacts doc11-stage2-gpu-evidence/micro | tee doc11-stage2-gpu-evidence/test.log
           chmod +x doc11-game-evidence/{scanner2,radar_chase,radar_chase_3d}
           python3 -u runtime-doc/tests/test_stage2_game_gpu.py --games doc11-game-evidence --wgpu-root doc11-wgpu --evidence doc11-stage2-gpu-evidence/games | tee doc11-stage2-gpu-evidence/game-gpu-test.log

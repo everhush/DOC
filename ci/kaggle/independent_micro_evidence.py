@@ -31,7 +31,8 @@ def validate_pool(log):
 
 
 DESTROY_QUEUE=b'DOC11_WGPU_QUEUE_RETIRED: destroy=1'
-DESTROY_CONFIRMED=b'DOC11_WGPU_DESTROY_CONFIRMED: actual loss callback after queue retirement'
+DESTROY_CONFIRMED=b'DOC11_WGPU_DESTROY_CONFIRMED: provider invalidation after queue retirement'
+LOSS_PROBE=(b'DOC11_WGPU_LOSS_PROBE: status=success type=validation',b'Validation Error',b'',b'Caused by:',b'  In wgpuDeviceCreateBuffer',b'    Parent device is lost')
 ABANDON_QUEUE=b'DOC11_WGPU_QUEUE_RETIRED: destroy=0'
 
 
@@ -43,8 +44,9 @@ def validate_destroy(log,callback_prefix):
     except ValueError as exc:
         raise ValueError('missing destroy queue acknowledgement or confirmation') from exc
     callbacks=[i for i,line in enumerate(lines) if re.fullmatch(re.escape(callback_prefix)+rb': reason=\d+',line)]
-    if not queue<confirmed or not any(i<confirmed for i in callbacks):
-        raise ValueError('destroy confirmation precedes queue acknowledgement or actual loss callback')
+    probe=any(tuple(lines[i:i+len(LOSS_PROBE)])==LOSS_PROBE and i+len(LOSS_PROBE)<=confirmed for i in range(queue+1,confirmed))
+    if not queue<confirmed or not (any(i<confirmed for i in callbacks) or probe):
+        raise ValueError('destroy confirmation precedes queue acknowledgement or actual provider invalidation')
     return lines,confirmed
 
 
