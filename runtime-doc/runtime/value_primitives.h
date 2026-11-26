@@ -21,7 +21,16 @@
 #include <setjmp.h>
 #include <stdatomic.h>
 #endif
-#define LIMIT 65536u
+/* Compiler executables have a separately bounded workspace for token triples
+ * and type inference; never define this for compiled application code. */
+#define DOC_INPUT_LIMIT 65536u
+#ifdef DOC_COMPILER_WORKSPACE
+#define LIMIT 131072u
+#define DOC_CAUSAL_LIMIT 262144u
+#else
+#define LIMIT DOC_INPUT_LIMIT
+#define DOC_CAUSAL_LIMIT DOC_INPUT_LIMIT
+#endif
 #define REGION_LIMIT (64u*1024u*1024u)
 typedef struct Block {struct Block *next; max_align_t alignment; unsigned char data[];} Block;
 typedef struct Region {Block *head; size_t bytes; struct Region *parent;} Region;
@@ -116,11 +125,11 @@ static V v_utf8_bytes(V a){need(a,T);int64_t *p=alloc_in(active,a.n*sizeof(*p));
 static V v_utf8_text(V a){need(a,L);char *p=alloc_in(active,a.n);for(size_t i=0;i<a.n;i++){int64_t x=((const int64_t*)a.p)[i];if(x<0||x>255)fail("byte range");p[i]=(char)x;}return txt(p,a.n);}
 /* Generated causal expressions use private alternating carry owners, not
  * references into a region that is being reset. No refcount or collector. */
-#define v_recur(seed,binder,pred,step) ({ Region *parent=active; V start=(seed); Region a,b,tmp;push(&a);push(&b);push(&tmp);Region *old=&a,*next=&b;V binder=own(old,start);size_t rounds=0;for(;;){if(truth(pred)){clear(&tmp);break;}if(rounds++>=LIMIT)fail("causal step capacity");V result=(step);if(result.kind!=binder.kind)fail("causal type");V copy=own(next,result);clear(&tmp);clear(old);Region *swap=old;old=next;next=swap;binder=copy;}V out=own(parent,binder);pop(&tmp);pop(&b);pop(&a);out;})
+#define v_recur(seed,binder,pred,step) ({ Region *parent=active; V start=(seed); Region a,b,tmp;push(&a);push(&b);push(&tmp);Region *old=&a,*next=&b;V binder=own(old,start);size_t rounds=0;for(;;){if(truth(pred)){clear(&tmp);break;}if(rounds++>=DOC_CAUSAL_LIMIT)fail("causal step capacity");V result=(step);if(result.kind!=binder.kind)fail("causal type");V copy=own(next,result);clear(&tmp);clear(old);Region *swap=old;old=next;next=swap;binder=copy;}V out=own(parent,binder);pop(&tmp);pop(&b);pop(&a);out;})
 #define v_map_ints(seed,binder,expr) ({ V src=need((seed),L);int64_t *dst=alloc_in(active,src.n*sizeof(*dst));Region tmp;push(&tmp);for(size_t i=0;i<src.n;i++){V binder=vi(((const int64_t*)src.p)[i]);dst[i]=num(expr);clear(&tmp);}pop(&tmp);vv(L,src.n,dst);})
 static const char *skip(const char *s){while(isspace((unsigned char)*s))s++;return s;}
 static int64_t parse_i(const char **s){const char *p=skip(*s);if(!isdigit((unsigned char)*p)&&*p!='-'&&*p!='+')fail("integer literal");errno=0;char *e;long long x=strtoll(p,&e,10);if(errno||p==e)fail("integer literal");*s=skip(e);return x;}
-static V input_value(int k,const char *s){s=skip(s);size_t n=strlen(s);while(n&&isspace((unsigned char)s[n-1]))n--;if(k==T){if(n<2||s[0]!='"'||s[n-1]!='"')fail("quoted text source");for(size_t i=1;i+1<n;i++)if(s[i]==10||s[i]==13||s[i]==34||s[i]==92)fail("text literal control");return txt(s+1,n-2);}if(k==N)return nat(s,n);if(k==B){if(n==4&&!memcmp(s,"true",4))return vb(1);if(n==5&&!memcmp(s,"false",5))return vb(0);fail("bool literal");}if(k==I){int64_t x=parse_i(&s);if(*s)fail("integer trailing input");return vi(x);}if(k==M){if(n==4&&!memcmp(s,"none",4))return v_none();if(n<7||memcmp(s,"some(",5))fail("maybe literal");s+=5;int64_t x=parse_i(&s);if(*s!=')'||*skip(s+1))fail("maybe literal");return v_some(vi(x));}if(k!=L||*s++!='[')fail("list literal");int64_t *p=alloc_in(active,LIMIT*sizeof(*p));size_t z=0;s=skip(s);if(*s!=']'){for(;;){if(z==LIMIT)fail("list capacity");p[z++]=parse_i(&s);if(*s!=',')break;s++;}}if(*s!=']'||*skip(s+1))fail("list literal");return vv(L,z,p);}
+static V input_value(int k,const char *s){s=skip(s);size_t n=strlen(s);while(n&&isspace((unsigned char)s[n-1]))n--;if(k==T){if(n>DOC_INPUT_LIMIT+2u)fail("text input capacity");if(n<2||s[0]!='"'||s[n-1]!='"')fail("quoted text source");for(size_t i=1;i+1<n;i++)if(s[i]==10||s[i]==13||s[i]==34||s[i]==92)fail("text literal control");return txt(s+1,n-2);}if(k==N){if(n>DOC_INPUT_LIMIT)fail("natural input capacity");return nat(s,n);}if(k==B){if(n==4&&!memcmp(s,"true",4))return vb(1);if(n==5&&!memcmp(s,"false",5))return vb(0);fail("bool literal");}if(k==I){int64_t x=parse_i(&s);if(*s)fail("integer trailing input");return vi(x);}if(k==M){if(n==4&&!memcmp(s,"none",4))return v_none();if(n<7||memcmp(s,"some(",5))fail("maybe literal");s+=5;int64_t x=parse_i(&s);if(*s!=')'||*skip(s+1))fail("maybe literal");return v_some(vi(x));}if(k!=L||*s++!='[')fail("list literal");int64_t *p=alloc_in(active,DOC_INPUT_LIMIT*sizeof(*p));size_t z=0;s=skip(s);if(*s!=']'){for(;;){if(z==DOC_INPUT_LIMIT)fail("list capacity");p[z++]=parse_i(&s);if(*s!=',')break;s++;}}if(*s!=']'||*skip(s+1))fail("list literal");return vv(L,z,p);}
 /* Explicit startup-only read, using the host-granted root directory.
  * Every child component is descriptor-relative and no-follow. */
 static const char *asset_root=".";
@@ -134,7 +143,7 @@ typedef struct {const char *name;int kind,role;V *slot;V (*eval)(void);const siz
 /* Explicit byte-input transport for compiled compiler tools. It bypasses
  * the OS argv-size limit, not language admission or the bounded value model.
  * The source must be an ordinary ints fact named input; no hidden file read. */
-static V stdin_bytes(void){int64_t *p=alloc_in(active,LIMIT*sizeof(*p));size_t n=0;for(;;){int c=fgetc(stdin);if(c==EOF){if(ferror(stdin))fail("input stream read");break;}if(n==LIMIT)fail("input stream capacity");p[n++]=c;}return vv(L,n,p);}
+static V stdin_bytes(void){int64_t *p=alloc_in(active,DOC_INPUT_LIMIT*sizeof(*p));size_t n=0;for(;;){int c=fgetc(stdin);if(c==EOF){if(ferror(stdin))fail("input stream read");break;}if(n==DOC_INPUT_LIMIT)fail("input stream capacity");p[n++]=c;}return vv(L,n,p);}
 static int run_graph(const State *states,size_t n,int argc,char **argv){
     Region retained;push(&retained);unsigned char *required=alloc_in(active,n),*supplied=alloc_in(active,n);if(n){memset(required,0,n);memset(supplied,0,n);}size_t target=n;int has_target=0;int start=1;if(argc>1&&!strncmp(argv[1],"--asset-root=",13)){asset_root=argv[1]+13;start++;}
     for(size_t i=0;i<n;i++)if(states[i].role==5){Region tmp;push(&tmp);V v=states[i].eval();if(v.kind!=states[i].kind)fail("asset kind");*states[i].slot=own(&retained,v);pop(&tmp);}

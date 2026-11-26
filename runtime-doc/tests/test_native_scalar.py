@@ -31,8 +31,8 @@ def main():
         # Keep -O0 and fail closed; retain the command, time, and compiler output.
         from test_self_reproduction import run_cc
         run_cc(['cc','-std=gnu11','-O0','-ftrack-macro-expansion=0','-I',ROOT/'runtime',c,'-o',native],out,out,'native-scalar',timeout=600)
-    def compile_doc(target,source=src,region='scratch',imp='x86_out8',name='boot',reject=False,region2='',intrinsic='',allow_read=False,allow_write=False,scalar1='',scalar2=''):
-        argv=[native,'--demand='+target,'--input-stdin','grant_region="'+region+'"','grant_region2="'+region2+'"','grant_import="'+imp+'"','grant_intrinsic="'+intrinsic+'"','allow_read='+str(allow_read).lower(),'allow_write='+str(allow_write).lower(),'grant_scalar1="'+scalar1+'"','grant_scalar2="'+scalar2+'"','export_name="'+name+'"']
+    def compile_doc(target,source=src,region='scratch',imp='x86_out8',name='boot',reject=False,region2='',intrinsic='',allow_read=False,allow_write=False,scalar1='',scalar2='',cleanup=''):
+        argv=[native,'--demand='+target,'--input-stdin','grant_region="'+region+'"','grant_region2="'+region2+'"','grant_import="'+imp+'"','grant_intrinsic="'+intrinsic+'"','allow_read='+str(allow_read).lower(),'allow_write='+str(allow_write).lower(),'grant_scalar1="'+scalar1+'"','grant_scalar2="'+scalar2+'"','grant_cleanup="'+cleanup+'"','export_name="'+name+'"']
         r=subprocess.run([str(x) for x in argv],input=source,capture_output=True,timeout=120)
         if reject:
             assert r.returncode and not r.stdout,(target,r.returncode,r.stdout[:100])
@@ -154,6 +154,69 @@ def main():
     run(['cc','-std=c11','-O1','-g','-fsanitize=address,undefined','-fno-sanitize-recover=all','-fno-pie','-no-pie','-I',out,out/'conditional.c',out/'socket.c',Path(__file__).with_name('native_scalar_calls_host.c'),'-o',out/'scalar-calls-host'])
     print(run([out/'scalar-calls-host'],timeout=10).decode().strip(),flush=True)
     print('DOC11_NATIVE_SCALAR_CALLS_PASS: original conditional and local socket fixtures, 28 compiler rejection checks',flush=True)
+    # Native lifecycle directives are compiled by the DOC-authored stage,
+    # including actual cleanup on all generated epoch exits and bounded carry.
+    scoped=(fixture/'runtime-rust/examples/native_scoped.doc').read_bytes()
+    stream=(fixture/'runtime-rust/examples/native_stream.doc').read_bytes()
+    repeat=b'''native import acquire(i32) -> i32
+native cleanup owned = release_handle
+native repeat until halt carry step=next
+source step: int = 0
+source stop: int = 3
+source fail: int = -1
+native call owned: int (step) = acquire(step)
+derive next: int (step,owned) = add(step,1)
+derive checked: int (next,fail) = quot(1,sub(fail,next))
+derive halt: bool (next,stop,checked) = le(stop,next)
+'''
+    multi=b'''native repeat until halt carry left=right_next,right=left_next,step=next
+source left: int = 11
+source right: int = 22
+source step: int = 0
+source stop: int = 2
+derive left_next: int (left) = add(left,0)
+derive right_next: int (right) = add(right,0)
+derive next: int (step) = add(step,1)
+derive halt: bool (next,stop) = le(stop,next)
+'''
+    scope_grants=dict(scalar1='acquire',cleanup='release_handle')
+    stream_grants=dict(allow_read=True,allow_write=True)
+    for name,source,region,grants in [('scope',scoped,'',scope_grants),('stream',stream,'buffer',stream_grants),('repeat_scope',repeat,'',scope_grants),('multi_carry',multi,'',{})]:
+        for target,suffix in [('code','c'),('header','h')]:
+            data=compile_doc(target,source,region,'',name,**grants)
+            assert data==compile_doc(target,source,region,'',name,**grants)
+            (out/(name+'.'+suffix)).write_bytes(data)
+    life_neg=[
+        (scoped,'',dict(scalar1='acquire')),
+        (scoped,'',dict(scalar1='acquire',cleanup='wrong')),
+        (scoped.replace(b'native cleanup second = release_handle',b'native cleanup first = release_handle'),'',scope_grants),
+        (scoped.replace(b'native cleanup second',b'native cleanup absent'),'',scope_grants),
+        (scoped.replace(b'native cleanup second',b'native cleanup quotient'),'',scope_grants),
+        (scoped.replace(b'native cleanup second',b'native cleanup argument'),'',scope_grants),
+        (scoped.replace(b'release_handle',b'acquire'),'',dict(scalar1='acquire',cleanup='acquire')),
+        (scoped.replace(b'release_handle',b'__bad'),'',dict(scalar1='acquire',cleanup='__bad')),
+        (scoped.replace(b'release_handle',b'divisor'),'',dict(scalar1='acquire',cleanup='divisor')),
+        (repeat.replace(b'until halt',b'until next'),'',scope_grants),
+        (repeat.replace(b'until halt',b'until absent'),'',scope_grants),
+        (repeat.replace(b'source stop: int = 3',b'source stop: bool = true').replace(b'until halt',b'until stop').replace(b'le(stop,next)',b'stop'),'',scope_grants),
+        (repeat.replace(b'step=next',b'step=absent'),'',scope_grants),
+        (repeat.replace(b'step=next',b'checked=next'),'',scope_grants),
+        (repeat.replace(b'step=next',b'step=stop'),'',scope_grants),
+        (repeat.replace(b'step=next',b'step=halt'),'',scope_grants),
+        (repeat.replace(b'step=next',b'step=owned'),'',scope_grants),
+        (repeat.replace(b'step=next',b'step=next,step=checked'),'',scope_grants),
+        (repeat.replace(b' carry step=next',b' carry'),'',scope_grants),
+        (repeat.replace(b'step=next',b'step=next,'),'',scope_grants),
+        (repeat.replace(b'source step:',b'native repeat until halt carry step=next\nsource step:'),'',scope_grants),
+        (stream,'buffer',dict(allow_read=True)),
+        (multi.replace(b'right=left_next',b'right=left'),'',{}),
+    ]
+    for source,region,grants in life_neg:
+        for target in ('code','header'):
+            compile_doc(target,source,region,'','lifecycle_negative',reject=True,**grants)
+    run(['cc','-std=c11','-O1','-g','-fsanitize=address,undefined','-fno-sanitize-recover=all','-fno-pie','-no-pie','-I',out,out/'scope.c',out/'stream.c',out/'repeat_scope.c',out/'multi_carry.c',Path(__file__).with_name('native_lifecycle_host.c'),'-o',out/'lifecycle-host'])
+    print(run([out/'lifecycle-host'],timeout=20).decode().strip(),flush=True)
+    print('DOC11_NATIVE_LIFECYCLE_ADMISSION_PASS: 46 code/header rejection checks',flush=True)
     # Renamed declarations and a changed graph prove this is not a fixed boot template.
     alt=src.replace(b'scratch',b'ram').replace(b'x86_out8',b'foreign_byte').replace(b'add(seed,1)',b'sub(seed,2)')
     ac=compile_doc('code',alt,'ram','foreign_byte','alternate'); assert b'__asm__("foreign_byte")' in ac and b'doc_sub(doc_v_seed' in ac and b'doc_export_alternate' in ac

@@ -54,10 +54,11 @@ def main():
         cwd=pathlib.Path(tmp);c=cwd/'compiler.c';stage2=cwd/'stage2';stage3=cwd/'stage3'
         one=emit(stage1,src,cwd,'stage1');c.write_text(one);(evidence/'stage2.c').write_text(one)
         flags=['cc','-std=gnu11','-O1','-g0','-s','-I',ROOT/'runtime',c,'-o']
-        run_cc([*flags,stage2],cwd,evidence,'stage2');assert stage2.stat().st_size>0
+        compiler_flags=[*flags[:2],'-DDOC_COMPILER_WORKSPACE',*flags[2:]]
+        run_cc([*compiler_flags,stage2],cwd,evidence,'stage2');assert stage2.stat().st_size>0
         (evidence/'stage2').write_bytes(stage2.read_bytes())
         two=emit(stage2,src,cwd,'stage2',stream=True);(evidence/'stage3.c').write_text(two);assert one==two,'self-generated C differs'
-        c.write_text(two);run_cc([*flags,stage3],cwd,evidence,'stage3');(evidence/'stage3').write_bytes(stage3.read_bytes());assert stage2.read_bytes()==stage3.read_bytes(),'native binary differs'
+        c.write_text(two);run_cc([*compiler_flags,stage3],cwd,evidence,'stage3');(evidence/'stage3').write_bytes(stage3.read_bytes());assert stage2.read_bytes()==stage3.read_bytes(),'native binary differs'
         sample='fn twice(x)=add(x,x)\nsource a:int=9\nderive b:int(a)=twice(a)\nsource xs:ints=[1,2,3]\nderive ys:ints(xs)=map_ints(xs,x,mul(x,2))\n'
         sample_one=emit(stage1,sample,cwd,'sample-stage1');sample_two=emit(stage2,sample,cwd,'sample-stage2',stream=True);assert sample_one==sample_two
         assert sample_two==emit(stage2,sample,cwd,'sample-stage2-argv')
