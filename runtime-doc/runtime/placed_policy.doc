@@ -1,0 +1,5 @@
+fn placed_slot(role,count) = if(lt(0,count),rem(role,count),-1)
+fn placed_advance(old_resource,new_resource,generation) = if(eq(old_resource,new_resource),generation,if(lt(generation,9223372036854775807),add(generation,1),-1))
+fn placed_token(expected_role,expected_resource,expected_generation,role,resource,generation) = if(le(0,expected_resource),if(eq(expected_role,role),if(eq(expected_resource,resource),eq(expected_generation,generation),false),false),false)
+fn placed_epoch(expected,received) = eq(expected,received)
+fn placed_receipt(seen,old_kind,old_value,kind,value) = if(seen,if(eq(old_kind,kind),if(eq(old_value,value),1,-1),-1),0)

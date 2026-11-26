@@ -1,0 +1,5 @@
+#define F_placed_slot(P_role,P_count) (v_if(v_lt(vi(0x0000000000000000LL),P_count),v_rem(P_role,P_count),vi((-1LL - 0x0000000000000000LL))))
+#define F_placed_advance(P_old_resource,P_new_resource,P_generation) (v_if(v_eq(P_old_resource,P_new_resource),P_generation,v_if(v_lt(P_generation,vi(0x7fffffffffffffffLL)),v_add(P_generation,vi(0x0000000000000001LL)),vi((-1LL - 0x0000000000000000LL)))))
+#define F_placed_token(P_expected_role,P_expected_resource,P_expected_generation,P_role,P_resource,P_generation) (v_if(v_le(vi(0x0000000000000000LL),P_expected_resource),v_if(v_eq(P_expected_role,P_role),v_if(v_eq(P_expected_resource,P_resource),v_eq(P_expected_generation,P_generation),vb(0)),vb(0)),vb(0)))
+#define F_placed_epoch(P_expected,P_received) (v_eq(P_expected,P_received))
+#define F_placed_receipt(P_seen,P_old_kind,P_old_value,P_kind,P_value) (v_if(P_seen,v_if(v_eq(P_old_kind,P_kind),v_if(v_eq(P_old_value,P_value),vi(0x0000000000000001LL),vi((-1LL - 0x0000000000000000LL))),vi((-1LL - 0x0000000000000000LL))),vi(0x0000000000000000LL)))

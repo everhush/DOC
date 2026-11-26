@@ -124,6 +124,7 @@ jobs:
           python3 -u runtime-doc/tests/test_stage2_games.py --stage2 doc11-self-evidence/stage2 --scanner doc11-evidence/module_scan --reference doc11-evidence/doc --evidence doc11-game-evidence | tee doc11-game-evidence/test.log
           python3 runtime-doc/tests/test_placement_policy.py --managed doc11-self-evidence/stage2 | tee doc11-game-evidence/placement-policy-test.log
           python3 runtime-doc/tests/test_build_evidence.py --compiler doc11-self-evidence/stage2 | tee doc11-game-evidence/build-evidence-test.log
+          python3 runtime-doc/tests/test_placed_transport.py --managed doc11-self-evidence/stage2 | tee doc11-game-evidence/placed-transport-test.log
           python3 runtime-doc/tests/test_allocation_failure.py --reactive doc11-game-evidence/reactive2 | tee doc11-game-evidence/allocation-failure-test.log
           python3 runtime-doc/tests/test_graph_generation.py --managed doc11-self-evidence/stage2 --reactive doc11-game-evidence/reactive2 | tee doc11-game-evidence/graph-generation-test.log
           python3 runtime-doc/tests/test_epoch_authority.py --managed doc11-self-evidence/stage2 --reactive doc11-game-evidence/reactive2 --sanitizer thread | tee doc11-game-evidence/epoch-authority-tsan.log
