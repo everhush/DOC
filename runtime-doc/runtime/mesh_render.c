@@ -95,7 +95,7 @@ int main(int argc,char **argv){
     int destroy=argc==2&&!strcmp(argv[1],"--test-device-loss");if(argc!=1&&!destroy)return 1;
     MeshBatch batch;if(!mesh_load(stdin,&batch)){fprintf(stderr,"DOC11_MESH_REJECT: invalid packet\n");return 1;}
     unsigned char *pixels=malloc(batch.pixel_bytes);MeshDevice g={0};int ok=pixels&&device_open(&g,&batch);size_t at=0;
-    for(size_t i=0;ok&&i<batch.n;i++){ok=render(&g,batch.frames+i,pixels+at);if(!ok)fprintf(stderr,"DOC11_MESH_REJECT: frame=%zu\n",i);at+=(size_t)batch.frames[i].width*batch.frames[i].height*4;if(ok&&destroy){doc_wgpu_destroy_and_retire(g.instance,g.device,g.queue,&g.lost);ok=0;fprintf(stderr,"DOC11_MESH_DEVICE_LOSS: no pixel publication\n");}}
+    for(size_t i=0;ok&&i<batch.n;i++){ok=render(&g,batch.frames+i,pixels+at);if(!ok)fprintf(stderr,"DOC11_MESH_REJECT: frame=%zu\n",i);at+=(size_t)batch.frames[i].width*batch.frames[i].height*4;if(ok&&destroy){doc_wgpu_destroy_and_retire(g.instance,g.device,g.queue,&g.lost,&g.fault);ok=0;fprintf(stderr,"DOC11_MESH_DEVICE_LOSS: no pixel publication\n");}}
     ok=ok&&healthy(&g)&&at==batch.pixel_bytes;device_close(&g);ok=ok&&healthy(&g);
     if(ok){ok=fwrite(pixels,1,at,stdout)==at&&fflush(stdout)==0;if(ok)fprintf(stderr,"DOC11_MESH_RENDER: frames=%u bytes=%zu\n",batch.n,at);}
     free(pixels);mesh_free(&batch);return ok?0:1;
