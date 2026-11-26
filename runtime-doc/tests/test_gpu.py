@@ -71,7 +71,7 @@ def main():
      (a.artifacts/'device_loss.stdout').write_bytes(lost.stdout)
      (a.artifacts/'device_loss.stderr').write_bytes(lost.stderr)
     assert lost.returncode==0 and b'DOC11_GPU_DEVICE_LOSS_PASS:' in lost.stdout,(lost.stdout,lost.stderr)
-     assert b'DOC11_WGPU_DESTROY_CONFIRMED:' in lost.stderr and b'DOC11_WGPU_QUEUE_RETIRED:' in lost.stderr and b'DOC11_GPU_LOST_CALLBACK:' in lost.stderr, lost.stderr
+    assert b'DOC11_WGPU_DESTROY_CONFIRMED:' in lost.stderr and b'DOC11_WGPU_QUEUE_RETIRED:' in lost.stderr and b'DOC11_GPU_LOST_CALLBACK:' in lost.stderr, lost.stderr
     if a.physical:assert b'physical=1' in lost.stderr,lost.stderr
     print(lost.stdout.decode().strip(),lost.stderr.decode(),flush=True)
     if a.prebuilt:
