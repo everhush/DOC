@@ -26,3 +26,5 @@ Batch 2026-11-26: completed 45820438889 at 0f9b409: bootstrap, byte-identical St
 Batch 2026-11-26: 45834325970 terminal: bootstrap, self-reproduction, Stage2 games/placement, native ABI incl actual QEMU AB, software WebGPU passed. Mesh/offscreen passed; X11 test final targeted Escape release races already destroyed successful window, fix with focus + XTEST. Consolidate previously validated native Wayland headless/keyboard/resize/compositor readback/effects and new DOC recurrence authority with exact-source gates. Frozen Rust unchanged. Require all lanes including physical GPU.
 
 2026-11-26: Final foundation parity candidate — self-hosted GPU dependency-family support, actual software 512-lane and rollback regression, frozen nested-data ASan/UBSan regression. No frozen Rust changes; full exact-source CPU/software/physical acceptance required.
+
+2026-11-26: Complete bounded runtime-sized CPU family parity with DOC-generated native lane callbacks, affinity-capped worker ranges, 4096-lane capacity and sanitizer rollback gates. Consolidate with verified GPU family and tagged-data coverage.

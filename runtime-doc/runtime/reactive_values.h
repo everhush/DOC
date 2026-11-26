@@ -62,9 +62,44 @@ static void publish_private(Epoch *e,size_t i){Cell *c=e->cell+i;V *slot=e->stat
 #include "placed_epoch.h"
 #endif
 static size_t worker_count(size_t tasks){if(!truth(F_place_parallel(vi((int64_t)tasks))))return 1;cpu_set_t mask;size_t hw=1;if(sched_getaffinity(0,sizeof(mask),&mask)==0){int n=CPU_COUNT(&mask);if(n>0)hw=(size_t)n;}else if(errno==EINVAL){for(size_t bits=2u*CPU_SETSIZE;bits<=SIZE_MAX/2;bits*=2){cpu_set_t *large=CPU_ALLOC(bits);if(!large)break;size_t bytes=CPU_ALLOC_SIZE(bits);int rc=sched_getaffinity(0,bytes,large),error=errno;int n=rc==0?CPU_COUNT_S(bytes,large):0;CPU_FREE(large);if(!rc){if(n>0)hw=(size_t)n;break;}if(error!=EINVAL)break;}}const char *raw=getenv("DOC_WORKERS");if(raw&&*raw&&*raw!='-'){char *end;errno=0;unsigned long long v=strtoull(raw,&end,10);if(!errno&&!*end&&v&&v<hw)hw=(size_t)v;}return (size_t)num(F_place_workers(vi((int64_t)tasks),vi((int64_t)hw)));}
-typedef struct {Epoch *e;const size_t *queue;size_t lo,hi;} Job;
-static void *work(void *opaque){Job *j=opaque;for(size_t k=j->lo;k<j->hi&&!epoch_cancelled(j->e);k++){size_t i=j->queue[k];evaluate(j->e,i,NULL);}return NULL;}
-static int execute_cpu(Epoch *e,const size_t *queue,size_t tasks){if(!tasks)return 1;size_t n=worker_count(tasks),started=0;Job *jobs=calloc(n,sizeof(Job));pthread_t *threads=calloc(n,sizeof(pthread_t));if(!jobs||!threads){free(jobs);free(threads);return 0;}for(size_t i=0;i<n;i++){jobs[i]=(Job){e,queue,tasks*i/n,tasks*(i+1)/n};}for(size_t i=1;i<n;i++){if(pthread_create(threads+i,NULL,work,jobs+i))break;started++;}work(jobs);for(size_t i=started+1;i<n;i++)work(jobs+i);for(size_t i=1;i<=started;i++){if(pthread_join(threads[i],NULL)){fprintf(stderr,"DOC: platform join failure; process stops without publication\n");_Exit(1);}}free(jobs);free(threads);e->launched+=started;if(started)e->parallel_frontiers++;if(started)fprintf(stderr,"DOC11_MANAGED_PARALLEL: lanes=%zu workers=%zu\n",tasks,started+1);for(size_t k=0;k<tasks;k++){Cell *c=e->cell+queue[k];if(c->failed){fprintf(stderr,"DOC: %s\n",c->error?c->error:"candidate failure");return 0;}}return 1;}
+/* Family lanes are direct compiler-emitted native functions. The caller
+ * owns the result region; workers write disjoint indices and own scratch.
+ * Nested CPU pools are suppressed when a parent frontier has workers. */
+static _Thread_local Epoch *family_epoch;
+static _Thread_local int family_outer_parallel;
+typedef V (*FamilyLane)(V);
+typedef struct {Epoch *epoch;const int64_t *input;int64_t *output;FamilyLane lane;size_t lo,hi;int ok;} FamilyJob;
+static void *family_work(void *opaque){
+    FamilyJob *j=opaque;Region *outer=active;jmp_buf *outer_failure=failure_target;const char *outer_message=failure_message;
+    active=NULL;jmp_buf jump;failure_target=&jump;failure_message=NULL;j->ok=0;
+    if(!setjmp(jump)){
+        Region tmp;push(&tmp);
+        for(size_t k=j->lo;k<j->hi&&!epoch_cancelled(j->epoch);k++){
+            j->output[k]=num(j->lane(vi(j->input[k])));clear(&tmp);
+        }
+        pop(&tmp);j->ok=!epoch_cancelled(j->epoch);
+    }
+    active=outer;failure_target=outer_failure;failure_message=outer_message;return NULL;
+}
+static V doc_map_family(V seed,FamilyLane lane){
+    V src=need(seed,L);if(!family_epoch||!lane||src.n>DOC_FAMILY_LIMIT)fail("family lane capacity or context");
+    if(!src.n)return vv(L,0,NULL);
+    int64_t *dst=alloc_in(active,src.n*sizeof(*dst));
+    size_t n=family_outer_parallel?1:worker_count(src.n),started=0;
+    FamilyJob *jobs=calloc(n,sizeof(*jobs));pthread_t *threads=calloc(n,sizeof(*threads));
+    if(!jobs||!threads){free(jobs);free(threads);fail("family worker allocation");}
+    for(size_t i=0;i<n;i++)jobs[i]=(FamilyJob){family_epoch,src.p,dst,lane,src.n*i/n,src.n*(i+1)/n,0};
+    for(size_t i=1;i<n;i++){if(pthread_create(threads+i,NULL,family_work,jobs+i))break;started++;}
+    family_work(jobs);for(size_t i=started+1;i<n;i++)family_work(jobs+i);
+    for(size_t i=1;i<=started;i++)if(pthread_join(threads[i],NULL))_Exit(1);
+    int ok=1;for(size_t i=0;i<n;i++)if(!jobs[i].ok)ok=0;
+    free(jobs);free(threads);if(!ok)fail("family candidate failed");
+    fprintf(stderr,"DOC11_CPU_FAMILY: lanes=%zu workers=%zu\n",src.n,started+1);
+    return vv(L,src.n,dst);
+}
+typedef struct {Epoch *e;const size_t *queue;size_t lo,hi;int outer_parallel;} Job;
+static void *work(void *opaque){Job *j=opaque;Epoch *old=family_epoch;int parallel=family_outer_parallel;family_epoch=j->e;family_outer_parallel=j->outer_parallel;for(size_t k=j->lo;k<j->hi&&!epoch_cancelled(j->e);k++){size_t i=j->queue[k];evaluate(j->e,i,NULL);}family_epoch=old;family_outer_parallel=parallel;return NULL;}
+static int execute_cpu(Epoch *e,const size_t *queue,size_t tasks){if(!tasks)return 1;size_t n=worker_count(tasks),started=0;Job *jobs=calloc(n,sizeof(Job));pthread_t *threads=calloc(n,sizeof(pthread_t));if(!jobs||!threads){free(jobs);free(threads);return 0;}for(size_t i=0;i<n;i++){jobs[i]=(Job){e,queue,tasks*i/n,tasks*(i+1)/n,n>1};}for(size_t i=1;i<n;i++){if(pthread_create(threads+i,NULL,work,jobs+i))break;started++;}work(jobs);for(size_t i=started+1;i<n;i++)work(jobs+i);for(size_t i=1;i<=started;i++){if(pthread_join(threads[i],NULL)){fprintf(stderr,"DOC: platform join failure; process stops without publication\n");_Exit(1);}}free(jobs);free(threads);e->launched+=started;if(started)e->parallel_frontiers++;if(started)fprintf(stderr,"DOC11_MANAGED_PARALLEL: lanes=%zu workers=%zu\n",tasks,started+1);for(size_t k=0;k<tasks;k++){Cell *c=e->cell+queue[k];if(c->failed){fprintf(stderr,"DOC: %s\n",c->error?c->error:"candidate failure");return 0;}}return 1;}
 typedef struct {Epoch *e;const size_t *queue;size_t count;int ok;} CpuFrontier;
 static void *cpu_frontier(void *opaque){CpuFrontier *f=opaque;f->ok=execute_cpu(f->e,f->queue,f->count);return NULL;}
 static int execute_frontier(Epoch *e,size_t tasks){if(epoch_cancelled(e))return 0;
