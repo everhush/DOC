@@ -125,7 +125,11 @@ def main():
             for ep,key in enumerate(REPLAY,1):
                 checked(['xdotool','key','--window',win,'space' if key=='j' else key],env=env)
                 wait_log(proc,log,rb'^DOC11_WINDOW_PRESENTED: epoch='+str(ep).encode()+rb'$')
-            checked(['xdotool','key','--window',win,'Escape'],env=env)
+            # Focus the actual window, then use XTEST keyboard events. Sending
+            # a targeted X_SendEvent key release races the window's destruction
+            # after Escape keydown (BadWindow despite successful game exit).
+            checked(['xdotool','windowfocus','--sync',win],env=env)
+            checked(['xdotool','key','Escape'],env=env)
             assert proc.wait(timeout=30)==0
         finally:
             if proc.poll() is None:proc.kill();proc.wait()
