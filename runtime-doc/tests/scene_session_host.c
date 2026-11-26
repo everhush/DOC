@@ -6,7 +6,8 @@
 #include <assert.h>
 static MeshDomain domains[20];
 static int project(const Epoch *e,void *ctx){
-    (void)ctx;MeshFrame f;
+    (void)ctx;MeshFrame f;char title[1024];
+    assert(scene_report_title(e,title,sizeof(title))&&strstr(title,"next_score=")&&!scene_report_title(e,title,16));
     if(!scene_frame_copy(e,domains,640,480,&f))return 0;
     assert(f.nv&&f.ni&&f.nd);scene_frame_free(&f);return 1;
 }
