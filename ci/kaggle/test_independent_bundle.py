@@ -59,6 +59,12 @@ class PhysicalMicroEvidenceTests(unittest.TestCase):
             if name in MICRO_GRAPHS:
                 (self.expected/(name+'.expected')).write_bytes(name.encode())
                 (self.actual/(name+'.actual')).write_bytes(name.encode())
+            elif name=='gpu_graph_generation':
+                adapter=b'DOC11_GPU_ADAPTER: type=2 backend=6 physical=1 description=test\n'
+                dispatch=b'DOC11_GPU_DISPATCH: lanes=2 workgroups=1\n'
+                closed=b'DOC11_GPU_POOL_METRICS: event=closed admitted=100 released=100 live=0 peak=100\n'
+                (self.actual/(name+'.stderr')).write_bytes((adapter+dispatch*2+closed)*4+b'DOC11_GPU_INJECTED_FAILURE: dispatch=1\n')
+                (self.actual/(name+'.stdout')).write_bytes(b'DOC11_GPU_GRAPH_GENERATION_PASS:')
             else:
                 marker=b'DOC11_GPU_DEVICE_LOSS_PASS:' if name=='device_loss' else b'DOC11_GPU_EPOCH_AUTHORITY_PASS:'
                 (self.actual/(name+'.stdout')).write_bytes(marker)
@@ -69,6 +75,11 @@ class PhysicalMicroEvidenceTests(unittest.TestCase):
         with self.assertRaises(ValueError):self.validate()
         p.unlink()
         with self.assertRaises(FileNotFoundError):self.validate()
+    def test_gpu_graph_generation_evidence(self):
+        p=self.actual/'gpu_graph_generation.stderr';original=p.read_bytes()
+        for changed in (original.replace(b'physical=1',b'physical=0',1),original.replace(b'live=0',b'live=1',1),original.replace(b'event=closed',b'event=absent',1),original.replace(b'DOC11_GPU_DISPATCH:',b'absent'),original.replace(b'DOC11_GPU_INJECTED_FAILURE:',b'absent')):
+            p.write_bytes(changed)
+            with self.assertRaises(ValueError):self.validate()
     def test_output_parity(self):
         (self.actual/'wide.actual').write_bytes(b'different')
         with self.assertRaises(ValueError):self.validate()

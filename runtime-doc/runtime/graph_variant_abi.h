@@ -14,5 +14,8 @@ typedef struct {
     int (*update)(void *,int,char **);
     int (*read)(void *,GraphVisit,void *);
     size_t (*live)(void);
+    /* Writer-quiescent diagnostics, never a reader ownership mechanism. */
+    uint64_t (*device_live)(void);
+    size_t (*dispatches)(void);
 } GraphVariant;
 #endif
