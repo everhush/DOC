@@ -1,0 +1,78 @@
+name: DOC targeted consolidated desktop and recurrence validation
+on:
+  push:
+    branches: [ci/wayland-smoke]
+    paths: ['.github/workflows/doc-desktop-smoke.yml']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  desktop:
+    if: ${{ github.repository_id == '1471748051' && github.ref_name == 'ci/wayland-smoke' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc11-stage2-games
+          path: doc11-game-evidence
+          run-id: 45834325970
+          github-token: ${{ github.token }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc11-self-reproduction
+          path: doc11-self-evidence
+          run-id: 45834325970
+          github-token: ${{ github.token }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc11-stage2-mesh-plan
+          path: doc11-mesh-evidence
+          run-id: 45834325970
+          github-token: ${{ github.token }}
+      - name: Verify previous input artifacts and frozen tree (diagnostic, not exact-source closure)
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD:runtime-rust)" = a95a38bc6e9300aae815f83b570db5f99d32f221
+          for dir in doc11-game-evidence doc11-self-evidence doc11-mesh-evidence; do
+            test "$(cat "$dir/source-sha.txt")" = 9a303f00eff122614f5c1e412c08362e6ea41a9e
+            sha256sum -c "$dir/SHA256SUMS"
+          done
+          # Prior mesh job stopped after rendering succeeded but before the final manifest.
+          # These three hashes are independently measured from the verified archive.
+          echo '1b8f7cfa6537d9bf56b0e561472c5f48569910f1be20f0224d9048911226e34c  doc11-mesh-evidence/render/mesh.wgsl' | sha256sum -c -
+          echo '62aa275a9a27a53d829673c426f614f8a5c2327e7df2e023a1860f64f3f4b5d7  doc11-mesh-evidence/render/plan-meta.json' | sha256sum -c -
+          echo '2e3619533a97d55e32d626b6708d8ac1fe9730cabb268b97451f36c1d631fc67  doc11-mesh-evidence/render/render-summary.json' | sha256sum -c -
+          chmod +x doc11-self-evidence/stage2 doc11-game-evidence/{scanner2,reactive2,gpu_plan2,radar_chase_3d}
+          mkdir -p doc11-desktop-smoke
+          git rev-parse HEAD > doc11-desktop-smoke/source-sha.txt
+          cp doc11-game-evidence/source-sha.txt doc11-desktop-smoke/input-source-sha.txt
+      - name: Install actual compositor and pinned WebGPU
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y clang-18 mesa-vulkan-drivers libvulkan1 weston libwayland-dev wayland-protocols libxkbcommon-dev libx11-dev xvfb xauth xdotool
+          mkdir -p doc11-wgpu
+          curl -fL --retry 3 https://github.com/gfx-rs/wgpu-native/releases/download/v27.0.4.1/wgpu-linux-x86_64-release.zip -o doc11-wgpu.zip
+          echo '9385b8a9e4e6f0b00264757577511097104fedf6db7819aa3e34a106c3dc0a42  doc11-wgpu.zip' | sha256sum -c -
+          unzip -q doc11-wgpu.zip -d doc11-wgpu
+      - name: Run updated DOC authority and both real desktop gates
+        run: |
+          set -euo pipefail
+          python3 -u runtime-doc/tests/test_recurrence_policy.py --managed doc11-self-evidence/stage2 --reactive doc11-game-evidence/reactive2 | tee doc11-desktop-smoke/recurrence.log
+          x11_status=0; wayland_status=0
+          xvfb-run -a -s '-screen 0 1024x768x24' python3 -u runtime-doc/tests/test_scene_window.py --games doc11-game-evidence --render doc11-mesh-evidence/render --wgpu-root doc11-wgpu --evidence doc11-desktop-smoke/x11 | tee doc11-desktop-smoke/x11.log || x11_status=$?
+          xvfb-run -a -s '-screen 0 1024x768x24' python3 -u runtime-doc/tests/test_scene_wayland.py --games doc11-game-evidence --render doc11-mesh-evidence/render --wgpu-root doc11-wgpu --evidence doc11-desktop-smoke/wayland | tee doc11-desktop-smoke/wayland.log || wayland_status=$?
+          test "$x11_status" = 0 && test "$wayland_status" = 0
+      - name: Preserve evidence on every exit
+        if: always()
+        run: |
+          if test -d doc11-desktop-smoke; then find doc11-desktop-smoke -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > doc11-desktop-smoke/SHA256SUMS; fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: doc11-desktop-smoke
+          path: doc11-desktop-smoke/
