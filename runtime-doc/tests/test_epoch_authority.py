@@ -51,8 +51,18 @@ int main(void){
     for(int i=0;i<32;i++){assert(epoch_begin(&e));assert(batch(&e,1,a,&target));assert(epoch_finish(&e,1));}
     release();for(int i=0;i<DOC_GRAPH_READER_SLOTS;i++)assert(!pthread_join(readers[i],NULL));assert(!e.reader_slots&&atomic_load(&live_bytes)==baseline);
     Read recovered={&e,37,4,5,0};assert(epoch_read(&e,e.n,inspect,&recovered));assert(!e.reader_slots);
+    // The commit authority, not a trusting caller, certifies stabilization.
+    assert(!batch(&e,0,NULL,&target));assert(epoch_begin(&e));assert(!epoch_finish(&e,1));
+    assert(epoch_read(&e,e.n,inspect,&recovered));
+    char *partial[]={"xs=[7,8]","unknown=1"};
+    assert(epoch_begin(&e));assert(!batch(&e,2,partial,&target));assert(!batch(&e,1,a,&target));assert(!epoch_finish(&e,1));
+    assert(epoch_read(&e,e.n,inspect,&recovered));assert(atomic_load(&live_bytes)==baseline);
+    assert(epoch_begin(&e));assert(batch(&e,1,a,&target));assert(!batch(&e,1,a,&target));assert(!epoch_finish(&e,1));
+    assert(epoch_read(&e,e.n,inspect,&recovered));assert(atomic_load(&live_bytes)==baseline);
+    assert(epoch_begin(&e));assert(batch(&e,1,a,&target));assert(epoch_finish(&e,1));
+    Read final={&e,41,4,5,0};assert(epoch_read(&e,e.n,inspect,&final));assert(atomic_load(&live_bytes)==baseline);
     e.attempt=INT64_MAX;assert(!epoch_begin(&e));assert(!epoch_cancel(&e,INT64_MAX));epoch_free(&e);assert(atomic_load(&live_bytes)==0);
-    puts("DOC11_EPOCH_AUTHORITY_PASS: scoped snapshot survives replacement; private state hidden; cancellation during frontier and before commit; stale tokens rejected; cutoff, bounded direct snapshot admission, 32 commits while readers stall, allocation-failure recovery and live=0");return 0;
+    puts("DOC11_EPOCH_AUTHORITY_PASS: scoped snapshot survives replacement; private state hidden; cancellation during frontier and before commit; stale tokens rejected; cutoff, bounded direct snapshot admission, 32 commits while readers stall, allocation-failure recovery, incomplete and poisoned attempts cannot publish, and live=0");return 0;
 }
 '''
 

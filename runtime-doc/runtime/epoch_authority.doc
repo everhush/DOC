@@ -1,4 +1,4 @@
 fn life_begin(open,attempt) = if(open,false,lt(attempt,9223372036854775807))
 fn life_cancel(open,attempt,request) = if(open,eq(attempt,request),false)
-fn life_commit(open,success,cancelled) = if(open,if(success,if(cancelled,false,true),false),false)
+fn life_commit(open,settled,success,cancelled) = if(open,if(settled,if(success,if(cancelled,false,true),false),false),false)
 fn life_visible(have,dirty) = if(have,if(dirty,false,true),false)
