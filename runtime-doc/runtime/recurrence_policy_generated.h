@@ -1,0 +1,6 @@
+#define F_rec_prepare(P_open,P_unused,P_initial,P_prior) (v_if(P_open,v_if(P_unused,v_if(P_initial,v_if(P_prior,vb(0),vb(1)),P_prior),vb(0)),vb(0)))
+#define F_rec_initial(P_pass,P_role) (v_if(v_eq(P_pass,vi(0x0000000000000000LL)),v_eq(P_role,vi(0x0000000000000005LL)),v_eq(P_role,vi(0x0000000000000001LL))))
+#define F_rec_carry(P_source,P_target,P_same,P_unbound) (v_if(P_source,v_if(P_target,v_if(P_same,P_unbound,vb(0)),vb(0)),vb(0)))
+#define F_rec_fact(P_source,P_free,P_positive,P_within,P_unique,P_typed) (v_if(P_source,v_if(P_free,v_if(P_positive,v_if(P_within,v_if(P_unique,P_typed,vb(0)),vb(0)),vb(0)),vb(0)),vb(0)))
+#define F_rec_pick(P_carry,P_fact) (v_if(P_carry,v_if(P_fact,vi((-1LL - 0x0000000000000000LL)),vi(0x0000000000000001LL)),v_if(P_fact,vi(0x0000000000000002LL),vi(0x0000000000000000LL))))
+#define F_rec_stop(P_halt,P_value,P_cap) (v_if(P_halt,v_if(P_value,vi(0x0000000000000001LL),v_if(P_cap,vi((-1LL - 0x0000000000000000LL)),vi(0x0000000000000000LL))),v_if(P_cap,vi(0x0000000000000001LL),vi(0x0000000000000000LL))))
