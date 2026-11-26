@@ -15,7 +15,7 @@ def run(argv, *, expected=0, **kw):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument('--stage2',type=Path); p.add_argument('--scanner',type=Path)
+    p.add_argument('--stage2',type=Path); p.add_argument('--scanner',type=Path); p.add_argument('--cc',default='cc')
     p.add_argument('--native',type=Path); p.add_argument('--evidence',required=True,type=Path)
     p.add_argument('--boot',action='store_true'); p.add_argument('--fixture-root',type=Path,default=REPO)
     a=p.parse_args(); out=a.evidence.resolve(); out.mkdir(parents=True,exist_ok=True)
@@ -30,7 +30,7 @@ def main():
         # The macro diagnostic backtrace is not part of emitted C semantics.
         # Keep -O0 and fail closed; retain the command, time, and compiler output.
         from test_self_reproduction import run_cc
-        run_cc(['cc','-std=gnu11','-O0','-ftrack-macro-expansion=0','-I',ROOT/'runtime',c,'-o',native],out,out,'native-scalar',timeout=600)
+        run_cc([a.cc,'-std=gnu11','-O0','-ftrack-macro-expansion=0','-I',ROOT/'runtime',c,'-o',native],out,out,'native-scalar',timeout=900)
     def compile_doc(target,source=src,region='scratch',imp='x86_out8',name='boot',reject=False,region2='',intrinsic='',allow_read=False,allow_write=False,scalar1='',scalar2='',cleanup=''):
         argv=[native,'--demand='+target,'--input-stdin','grant_region="'+region+'"','grant_region2="'+region2+'"','grant_import="'+imp+'"','grant_intrinsic="'+intrinsic+'"','allow_read='+str(allow_read).lower(),'allow_write='+str(allow_write).lower(),'grant_scalar1="'+scalar1+'"','grant_scalar2="'+scalar2+'"','grant_cleanup="'+cleanup+'"','export_name="'+name+'"']
         r=subprocess.run([str(x) for x in argv],input=source,capture_output=True,timeout=120)
