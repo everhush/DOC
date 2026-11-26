@@ -226,7 +226,7 @@ jobs:
           git rev-parse HEAD > doc11-native-evidence/source-sha.txt
           cc --version > doc11-native-evidence/cc-version.txt
           python3 -u runtime-doc/tests/test_native_scalar.py --stage2 doc11-self-evidence/stage2 --scanner doc11-game-evidence/scanner2 --evidence doc11-native-evidence --boot | tee doc11-native-evidence/test.log
-          sha256sum doc11-native-evidence/{native_scalar2,native_scalar2.c,compile-native-scalar.json,cc-version.txt,boot.c,boot.h,regions.c,regions.h,region-host,arena.c,arena.h,arena-host,intrinsics.c,intrinsics.h,external.c,external.h,intrinsic-host,buffer.c,buffer.h,buffer-host,conditional.c,conditional.h,socket.c,socket.h,scalar-calls-host,kernel64.elf,kernel.elf,host,alternate.c,alternate.o,boot.o,verify.o,entry.o,elf.txt,qemu-version.txt,device.txt,source-sha.txt,test.log} > doc11-native-evidence/SHA256SUMS
+          sha256sum doc11-native-evidence/{native_scalar2,native_scalar2.c,compile-native-scalar.json,cc-version.txt,boot.c,boot.h,regions.c,regions.h,region-host,arena.c,arena.h,arena-host,intrinsics.c,intrinsics.h,external.c,external.h,intrinsic-host,buffer.c,buffer.h,buffer-host,conditional.c,conditional.h,socket.c,socket.h,scalar-calls-host,scope.c,scope.h,stream.c,stream.h,repeat_scope.c,repeat_scope.h,multi_carry.c,multi_carry.h,lifecycle-host,kernel64.elf,kernel.elf,host,alternate.c,alternate.o,boot.o,verify.o,entry.o,elf.txt,qemu-version.txt,device.txt,source-sha.txt,test.log} > doc11-native-evidence/SHA256SUMS
       - uses: actions/upload-artifact@v4
         if: always()
         with:
