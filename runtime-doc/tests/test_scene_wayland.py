@@ -54,13 +54,14 @@ def validate(stdout,stderr,expected,oracle,interactive=False):
         assert b'DOC11_WAYLAND_FOCUS' in stderr and re.search(rb'wl_keyboard@\d+\.key\(',stderr)
     return len(frames)
 
-def compositor_pixel(exe,win,digest,env):
+def compositor_pixel(exe,win,digest,env,width=640,height=480):
     # The nested compositor may deliver frame callback before the X11
     # output backend's repaint has reached its actual drawable.
     end=time.monotonic()+8
     last=None
     while time.monotonic()<end:
-        last=checked([exe,win],env=env,capture_output=True,text=True).stdout.strip()
+        result=subprocess.run([str(exe),win,str(width),str(height)],env=env,capture_output=True,text=True,timeout=5)
+        last=result.stdout.strip() if result.returncode==0 else result.stderr[-1000:]
         if last==digest:return last
         time.sleep(.05)
     raise AssertionError(('nested compositor output digest',last,digest))
@@ -90,9 +91,33 @@ def main():
     assert b'libwayland-client.so' in direct and b'libxkbcommon.so' in direct and b'libwgpu_native.so' in direct and b'libX11.so' not in direct and b'libdoc' not in direct
     expected=(games/'radar_chase_3d-reference.txt').read_bytes();oracle=json.loads((render/'render-summary.json').read_text())['oracle'];assert len(oracle)==len(REPLAY)+1
     args=[exe,'--asset-root='+str(assets),'--output-root='+str(out),'--backend=auto']
+    # No Wayland server even though the test harness has a real Xvfb DISPLAY:
+    # the native executable must fail closed, not silently open an X window.
+    with tempfile.TemporaryDirectory(prefix='doc-no-wl-') as td:
+        env=dict(os.environ,XDG_RUNTIME_DIR=td,WAYLAND_DISPLAY='nonexistent')
+        env.pop('WAYLAND_SOCKET',None)
+        missing=subprocess.run([str(x) for x in args+['--replay=.']],env=env,cwd=out,capture_output=True,timeout=30)
+        assert missing.returncode and not missing.stdout and b'DOC11_WAYLAND_REJECT:' in missing.stderr
+        (out/'missing-server.stderr').write_bytes(missing.stderr)
+    (out/'wayland-wav').mkdir();(out/'cli-wav').mkdir()
     with compositor(out,'headless') as env:
-        stdout,stderr=capture(args+['--replay='+REPLAY],out,'headless',env)
+        stdout,stderr=capture(args+['--replay='+REPLAY,'--save=wayland.chk','--audio-dir=wayland-wav'],out,'headless',env)
         frames=validate(stdout,stderr,expected,oracle)
+        carries=re.search(rb'^render_carries: (.+)$',expected,re.M).group(1).decode().split(',')
+        actions=dict(x.split(':') for x in re.search(rb'^render_actions: (.+)$',expected,re.M).group(1).decode().split(','))
+        cli=[games/'radar_chase_3d','--asset-root='+str(assets),'--output-root='+str(out),'--backend=cpu']
+        carryargs=[x.replace(':','=') for x in carries]
+        stdout,_=capture(cli+['--through='+str(len(REPLAY)),*carryargs,*[f'--fact={i}:action={actions[k]}' for i,k in enumerate(REPLAY,1)],'--save=cli.chk','--audio-dir=cli-wav'],out,'cli',env)
+        assert stdout==expected and (out/'wayland.chk').read_bytes()==(out/'cli.chk').read_bytes()
+        wav={x.name:x.read_bytes() for x in (out/'wayland-wav').glob('*.wav')}
+        assert wav and wav=={x.name:x.read_bytes() for x in (out/'cli-wav').glob('*.wav')}
+        stdout,_=capture(args+['--load=wayland.chk','--replay=.'],out,'restore',env)
+        compare,_=capture(cli+['--through=1',*carryargs,'--fact=1:action='+actions['.'],'--load=cli.chk'],out,'restore-cli',env)
+        assert stdout==compare
+        bad=bytearray((out/'wayland.chk').read_bytes());bad[-1]^=1;(out/'bad.chk').write_bytes(bad)
+        rejected=subprocess.run([str(x) for x in args+['--load=bad.chk','--replay=.']],env=env,cwd=out,capture_output=True,timeout=60)
+        (out/'rejected-checkpoint.stderr').write_bytes(rejected.stderr)
+        assert rejected.returncode and not rejected.stdout and b'DOC11_WAYLAND_PRESENTED:' not in rejected.stderr
     # Weston uses its X11 backend only as a virtual output/input device. The
     # game has DISPLAY removed, no direct X11 linkage and native wl_keyboard
     # events; this is not a game running as an XWayland client.
@@ -115,6 +140,14 @@ def main():
                 wait_log(proc,log,rb'^DOC11_WAYLAND_FOCUS$')
                 checked(['xdotool','mousemove','1000','750'])
                 readbacks=[compositor_pixel(capture_exe,win,oracle[0][2],os.environ)]
+                checked(['xdotool','windowsize',win,'800','600'])
+                resized=wait_log(proc,log,rb'^DOC11_WAYLAND_FRAME: epoch=0 width=800 height=600 rgba=([0-9a-f]{16}) callback=\d+ kind=resize$').group(1).decode()
+                compositor_pixel(capture_exe,win,resized,os.environ,800,600)
+                checked(['xdotool','windowsize',win,'640','480'])
+                restored=wait_log(proc,log,rb'^DOC11_WAYLAND_FRAME: epoch=0 width=640 height=480 rgba=([0-9a-f]{16}) callback=\d+ kind=resize$').group(1).decode()
+                assert restored==oracle[0][2]
+                compositor_pixel(capture_exe,win,restored,os.environ)
+                (out/'resize-readback.json').write_text(json.dumps({'800x600':resized,'640x480':restored},indent=2)+'\n')
                 for ep,key in enumerate(REPLAY,1):
                     checked(['xdotool','key','space' if key=='j' else key])
                     wait_log(proc,log,rb'^DOC11_WAYLAND_PRESENTED: epoch='+str(ep).encode()+rb'$')
@@ -126,6 +159,6 @@ def main():
         interactive=validate(typed.read_bytes(),log.read_bytes(),expected,oracle,True)
         assert readbacks==[x[2] for x in oracle]
         (out/'nested-compositor-rgba.json').write_text(json.dumps(readbacks,indent=2)+'\n')
-    (out/'wayland-summary.json').write_text(json.dumps(dict(native_wayland=True,xwayland=False,headless_frames=frames,keyboard_frames=interactive,compositor='Weston',actual_frame_callbacks=True,bounded_buffer_release=True,physical_gpu=False,nested_compositor_output_readback=True,physical_scanout_readback=False,generated_c_sha256=hashlib.sha256((out/'scene_generated.c').read_bytes()).hexdigest(),schema=schema),indent=2)+'\n')
-    print(f'DOC11_NATIVE_WAYLAND_PASS: {frames} headless and {interactive} real keyboard-triggered native Wayland frames, exact typed/GPU-pixel parity, compositor callbacks, buffer retirement and nested compositor RGB readback; not XWayland or physical scanout')
+    (out/'wayland-summary.json').write_text(json.dumps(dict(native_wayland=True,xwayland=False,headless_frames=frames,keyboard_frames=interactive,compositor='Weston',actual_frame_callbacks=True,bounded_buffer_release=True,physical_gpu=False,nested_compositor_output_readback=True,resize_without_epoch=True,checkpoint_equal=True,restored_typed_equal=True,audio_equal=True,no_server_rejected=True,physical_scanout_readback=False,generated_c_sha256=hashlib.sha256((out/'scene_generated.c').read_bytes()).hexdigest(),schema=schema),indent=2)+'\n')
+    print(f'DOC11_NATIVE_WAYLAND_PASS: {frames} headless and {interactive} real keyboard-triggered native Wayland frames, exact typed/GPU-pixel parity, compositor callbacks, buffer retirement, nested compositor RGB readback, resize, checkpoint/restore, WAV and missing-server rejection; not XWayland or physical scanout')
 if __name__=='__main__':main()

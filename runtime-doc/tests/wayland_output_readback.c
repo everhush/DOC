@@ -9,15 +9,16 @@
 #include <stdlib.h>
 #include <errno.h>
 static int shift(unsigned long mask,unsigned *s){if(!mask)return 0;*s=0;while(!(mask&1)){mask>>=1;(*s)++;}return mask==255;}
+static int dimension(const char *s){char *end;errno=0;long n=strtol(s,&end,10);return errno||!*s||*end||n<1||n>4096?0:(int)n;}
 int main(int argc,char **argv){
-    if(argc!=2)return 1;errno=0;char *end;unsigned long id=strtoul(argv[1],&end,10);if(errno||!*argv[1]||*end||!id)return 1;
+    if(argc!=4)return 1;int width=dimension(argv[2]),height=dimension(argv[3]);if(!width||!height||(uint64_t)width*height*4>64u*1024u*1024u)return 1;errno=0;char *end;unsigned long id=strtoul(argv[1],&end,10);if(errno||!*argv[1]||*end||!id)return 1;
     Display *d=XOpenDisplay(NULL);if(!d)return 1;
     Window w=(Window)id;XWindowAttributes a;int ok=0;XImage *img=NULL;
-    if(!XGetWindowAttributes(d,w,&a)||a.width!=640||a.height!=480||a.map_state!=IsViewable||a.visual->class!=TrueColor)goto done;
+    if(!XGetWindowAttributes(d,w,&a)||a.width!=width||a.height!=height||a.map_state!=IsViewable||a.visual->class!=TrueColor)goto done;
     unsigned r,g,b;if(!shift(a.visual->red_mask,&r)||!shift(a.visual->green_mask,&g)||!shift(a.visual->blue_mask,&b))goto done;
-    img=XGetImage(d,w,0,0,640,480,AllPlanes,ZPixmap);if(!img)goto done;
+    img=XGetImage(d,w,0,0,(unsigned)width,(unsigned)height,AllPlanes,ZPixmap);if(!img)goto done;
     uint64_t digest=UINT64_C(0xcbf29ce484222325);
-    for(int y=0;y<480;y++)for(int x=0;x<640;x++){
+    for(int y=0;y<height;y++)for(int x=0;x<width;x++){
         unsigned long p=XGetPixel(img,x,y);
         unsigned char rgba[4]={(unsigned char)(p>>r),(unsigned char)(p>>g),(unsigned char)(p>>b),255};
         for(int k=0;k<4;k++)digest=(digest^rgba[k])*UINT64_C(0x100000001b3);
