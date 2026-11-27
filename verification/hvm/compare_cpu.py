@@ -76,20 +76,6 @@ def pluspair(a,b):
   z = al+bl
   return (z%65536,ah+bh+(z / 65536))
 
-def fold(d,i,e,f):
-  switch d:
-    case 0:
-      v = f(i,e)
-      return (v%65536,v / 65536)
-    case _:
-      return pluspair(fold(d-1,i,e,f),fold(d-1,i+(1 << (d-1)),e,f))
-
-def tree(d,i,e,f) -> Any:
-  switch d:
-    case 0:
-      return f(i,e)
-    case _:
-      return (tree(d-1,i,e,f),tree(d-1,i+(1 << (d-1)),e,f))
 """
 
 # 32-bit LCG using two 16-bit limbs. Products needed for carry are computed
@@ -153,6 +139,19 @@ def sort_source(d,e):
         c=(c*(m+1))%(1<<32)
         m=(m*m)%(1<<32)
     chunks.append(f'def main():\n  return sort({d},0,g{d}({2026+e},0))\n')
+    return '\n'.join(chunks)
+
+def family_source(w,d,e,full):
+    # A statically specialized balanced binary tree preserves the same
+    # independent leaf computation without recursively infinite tuple types.
+    first=f'{w}val(i,e)'
+    if not full:first=f'(v%65536,v / 65536)'
+    chunks=[BEND, f'def g0(i,e):\n  return {first}\n' if full else f'def g0(i,e):\n  v = {w}val(i,e)\n  return {first}\n']
+    for k in range(1,d+1):
+        args=f'g{k-1}(i,e),g{k-1}(i+{1<<(k-1)},e)'
+        body=f'({args})' if full else f'pluspair({args})'
+        chunks.append(f'def g{k}(i,e):\n  return {body}\n')
+    chunks.append(f'def main():\n  return g{d}(0,{e})\n')
     return '\n'.join(chunks)
 
 def oracle(w,n,e):
@@ -228,8 +227,7 @@ def main():
                 if w=='sort':
                     src=sort_source(d,e)
                 else:
-                    call='tree' if full else 'fold'
-                    src=BEND+f'\ndef main():\n  return {call}({d},0,{e},{w}val)\n'
+                    src=family_source(w,d,e,full)
                 source=case/'main.bend';source.write_text(src)
                 rc,c,err,build_ns=run(affinity+['bend','gen-c',source],case/'bend',timeout=180)
                 if rc or not c: failures.append([w,n,e,'HVM codegen',rc]); continue

@@ -2,7 +2,7 @@
 """Build exact HVM2 CUDA sources without a GPU; private comparison only."""
 import json,subprocess,sys
 from pathlib import Path
-from compare_cpu import BEND,sort_source,sha
+from compare_cpu import family_source,sort_source,sha
 def main():
     out=Path('doc9-hvm-cuda');out.mkdir()
     assert '2.0.22' in subprocess.check_output(['hvm','--version'],text=True)
@@ -14,7 +14,7 @@ def main():
             d=n.bit_length()-1
             for e in range(5 if w=='stress' else 2):
                 full=(n<=65536 and w!='reduce') or w=='sort'
-                src=sort_source(d,e) if w=='sort' else BEND+f'\ndef main():\n  return {"tree" if full else "fold"}({d},0,{e},{w}val)\n'
+                src=sort_source(d,e) if w=='sort' else family_source(w,d,e,full)
                 stem=f'{w}-{n}-{e}'
                 p=out/(stem+'.bend');p.write_text(src)
                 r=subprocess.run(['bend','gen-cu',p],capture_output=True,timeout=180)
