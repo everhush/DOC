@@ -1,0 +1,54 @@
+name: DOC9 GPU poll latency diagnostic
+on:
+  push:
+    branches: [master]
+    paths: ['ci/gpu-latency-request.txt']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: doc9-gpu-latency
+  cancel-in-progress: false
+jobs:
+  software:
+    if: ${{ github.repository_id == '1471748051' && github.ref_name == 'master' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc11-stage2-games
+          run-id: 45967388390
+          github-token: ${{ github.token }}
+          path: doc11-game-evidence
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc11-stage2-webgpu
+          run-id: 45967388390
+          github-token: ${{ github.token }}
+          path: doc11-stage2-gpu-evidence
+      - name: Install pinned software WebGPU dependency
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y mesa-vulkan-drivers libvulkan1
+          curl -fL --retry 3 https://github.com/gfx-rs/wgpu-native/releases/download/v27.0.4.1/wgpu-linux-x86_64-release.zip -o doc11-wgpu.zip
+          echo '9385b8a9e4e6f0b00264757577511097104fedf6db7819aa3e34a106c3dc0a42  doc11-wgpu.zip' | sha256sum -c -
+          unzip -q doc11-wgpu.zip -d doc11-wgpu
+          sha256sum -c doc11-game-evidence/SHA256SUMS
+          test "$(cat doc11-game-evidence/source-sha.txt)" = 431ce65c11e580c76b58cef885fd8f2ed3af1f71
+          test "$(cat doc11-stage2-gpu-evidence/source-sha.txt)" = 431ce65c11e580c76b58cef885fd8f2ed3af1f71
+      - name: Preserve exact pinned headers for independent reproducibility
+        uses: actions/upload-artifact@v4
+        with:
+          name: doc9-pinned-wgpu-headers
+          path: doc11-wgpu/include/
+      - name: Execute unchanged typed replays across both poll policies
+        run: |
+          python3 -u runtime-doc/tests/benchmark_gpu_poll.py --games doc11-game-evidence --gpu doc11-stage2-gpu-evidence --wgpu doc11-wgpu --out doc9-poll-evidence
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: doc9-gpu-poll-results
+          path: doc9-poll-evidence/
