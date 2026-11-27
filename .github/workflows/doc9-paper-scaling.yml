@@ -37,7 +37,7 @@ jobs:
           chmod +x doc11-game-evidence/reactive2
           python3 -u runtime-doc/tests/benchmark_paper_scaling.py --reactive doc11-game-evidence/reactive2 --out doc9-paper-evidence --build-only
           cd doc9-paper-evidence
-          sha256sum paper-original prime40-current prime40-full-capacity-diagnostic pure40-current pure40-full-capacity-diagnostic pure128-current pure128-full-capacity-diagnostic > binaries-SHA256SUMS
+          sha256sum paper-original prime40-current prime40-full-capacity-diagnostic pure40-current pure40-full-capacity-diagnostic > binaries-SHA256SUMS
       - name: Preserve exact compiled benchmarks for independent local replay
         uses: actions/upload-artifact@v4
         with:

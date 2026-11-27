@@ -74,7 +74,14 @@ def build(reactive,headers,out):
     (out/'baseline-policy.h').write_text(original)
     (out/'diagnostic-policy.h').write_bytes(policy.read_bytes())
     manifest={'base':BASE,'historical':HIST,'reactive_sha256':digest(reactive),'compiler':command([cc,'--version']).stdout.decode(),'cxx':command([cxx,'--version']).stdout.decode(),'cases':{}}
-    for n,pure in [(40,False),(40,True),(128,True)]:
+    shutil.copy2(Path(__file__).resolve(),out/'benchmark_paper_scaling.py')
+    check=out/'paper-reference-check.cpp'
+    check.write_text('#include "workload_generator.hpp"\n#include <iostream>\nint main(){doc::bench::ReductionConfig c;c.leaves=40;c.interval_start=500000;c.interval_length=25000;auto w=doc::bench::make_reduction(c);doc::Runtime r(w.graph);std::string err;std::vector<doc::Value> v(40);for(int i=0;i<40;i++)v[i]=i;if(!r.stabilize(&err))return 1;auto direct=doc::bench::direct_reduction(c,v);if(r.value(w.root)!=direct)return 2;std::cout<<direct<<"\\n";}\n')
+    command([cxx,*rflags,check,runtime,workload,'-o',out/'paper-reference-check'])
+    assert int(command([out/'paper-reference-check']).stdout)==oracle_prime(40)
+    # 40-leaf graph is identical in shape to the paper. Larger graph emission
+    # uses the existing chunk interface and is a separate benchmark campaign.
+    for n,pure in [(40,False),(40,True)]:
         tag=('pure' if pure else 'prime')+str(n)
         src,root=generate(n,pure);(out/(tag+'.doc')).write_bytes(src)
         code=emit(reactive,src,out/(tag+'.generated.c'))
