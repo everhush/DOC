@@ -1,0 +1,48 @@
+name: DOC9 private HVM2 physical CUDA comparison
+on:
+  push:
+    branches: [master]
+    paths: ['.github/workflows/doc9-hvm-physical.yml', 'verification/hvm/prepare_cuda.py', 'ci/kaggle/hvm_dispatch.py', 'ci/kaggle/hvm_kernel.py']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: doc9-hvm-physical
+  cancel-in-progress: false
+jobs:
+  physical:
+    if: ${{ github.repository_id == '1471748051' && github.ref_name == 'master' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc11-stage2-webgpu
+          run-id: 46052437755
+          github-token: ${{ github.token }}
+          path: doc11-stage2-gpu-evidence
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install exact HVM2 and Bend releases
+        run: |
+          cargo install --locked --version 2.0.22 hvm
+          cargo install --locked --version 0.2.38 bend-lang
+          python3 -u verification/hvm/prepare_cuda.py
+      - name: Verify bundle transport
+        run: |
+          python3 -m unittest discover -s ci/kaggle -p test_independent_bundle.py -v
+          python3 -m pip install 'kaggle>=2.2.1,<3' 'six>=1.16'
+      - name: Execute unmodified stable CUDA runtime on same physical Tesla T4 as DOC
+        env:
+          KAGGLE_DOC_1: ${{ secrets.KAGGLE_DOC_1 }}
+          DOC_KAGGLE_USERNAME: ${{ vars.DOC_KAGGLE_USERNAME }}
+        run: python3 -u ci/kaggle/hvm_dispatch.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: doc9-hvm-physical-evidence
+          path: |
+            doc9-hvm-cuda/
+            doc9-hvm-physical/
