@@ -1,5 +1,18 @@
 # Independent DOC implementation — Issue #11
 
+## Current independent execution profile — autonomous scaling candidate
+
+The application source describes typed dependencies and runtime-sized finite families, not hardware thread counts. In the independent implementation, CPU worker admission uses process affinity, cgroup CPU quota and admitted ready work. The operator may bound the CPU pool with `DOC_WORKERS`, but no source or automatic benchmark requires it. Nested pools remain suppressed. Explicit `--backend=gpu` is strict; `--backend=auto` enables the existing automatic mixed placement policy, with eligibility checked before dispatch. CPU remains the default when no backend is requested.
+
+The fixed 4,096-lane family ceiling of the frozen reference is superseded in this candidate. Ordinary independent application lists and families use the checked region byte budget, while compiler workspaces, source-stream, text, natural, causal and other independent bounds remain separately enforced. Per-region aggregate allocation and device-specific binding and buffer limits can reject an otherwise representable extent. No promise of unbounded host or device memory is made. Input parsing preserves exact signed-64-bit semantics and malformed-input rejection.
+
+The DOC-authored GPU planner retains conservative legacy bounds and additionally proves supported signed-32-bit expressions, including positive-literal quotient and remainder. No general arithmetic wraparound, dynamic-divisor admission, arbitrary managed-value shader, or unrestricted GPU recurrence is claimed. A compact single family selector and grid-stride WGSL cover all admitted lanes. The portable local workgroup width is 64; the total group count is computed from the actual workload and negotiated device limit, not a per-workload tuning constant or a requested GPU thread count. Physical GPU scheduling is controlled by the provider. The existing automatic device threshold is a generic heuristic, not globally optimal profitability.
+
+Production candidate and acceptance: [physical-only integrated workflow 46052437755](https://github.com/xad3play/DOC/actions/runs/46052437755); [CPU/compiler preflight 46052604155](https://github.com/xad3play/DOC/actions/runs/46052604155). Older measurements below document historical implementations, not current limits. The final campaign builds GPU binaries on GitHub without opening an adapter and runs them on actual Kaggle hardware. The standard staged sort/reduction benchmark uses host stage orchestration; it is not a general on-device whole-program implementation. No paper or release status is implied.
+
+---
+
+
 ## Accepted handoff (2026-11-25)
 
 #24 and #15 closed. The Rust reference is frozen at commit `8fe3287102f7be69f3a05a67e1b3f971cf12b886`, tree `a95a38bc6e9300aae815f83b570db5f99d32f221`. Exact CPU/software [45540693642](https://github.com/rtu0/doc2/actions/runs/45540693642) and physical GPU [45541389519 attempt 2](https://github.com/rtu0/doc2/actions/runs/45541389519/attempts/2) passed. See [#15 closure](https://github.com/imxade/DOC/issues/15#issuecomment-7152198991). The Rust source must not change without explicit user authorization; it is a bootstrap and oracle, not a production dependency.
