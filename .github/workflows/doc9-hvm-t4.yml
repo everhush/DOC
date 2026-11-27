@@ -32,6 +32,7 @@ jobs:
             runtime-rust/target/release/doc-compile runtime-doc/compiler/$stage.doc --emit-c bootstrap/$stage.c --emit-ir bootstrap/$stage.ir --out bootstrap/$stage
           done
           python3 -u runtime-doc/tests/test_self_reproduction.py --native bootstrap/managed --evidence bootstrap/self
+          chmod +x bootstrap/self/stage2
           command -v clang-18 || (sudo apt-get update && sudo apt-get install -y clang-18)
           python3 -u - <<'PY'
           import sys
