@@ -1,0 +1,98 @@
+name: DOC9 integrated prime and physical scaling
+on:
+  push:
+    branches: [master]
+    paths: ['ci/integrated-scale-request.txt']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: doc9-integrated-scale
+  cancel-in-progress: false
+jobs:
+  source-and-software:
+    if: ${{ github.repository_id == '1471748051' && github.ref_name == 'master' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify exact unchanged compiler and final runtime trees
+        run: |
+          test "$(git rev-parse HEAD:runtime-doc/compiler)" = 451e807de59d2daa1536116b0dba4d2a19f29012
+          test "$(git rev-parse HEAD:runtime-doc/runtime)" = e2715a19ad35f74f7a4ac5869c672f71715171dc
+          test "$(git rev-parse HEAD:runtime-rust)" = a95a38bc6e9300aae815f83b570db5f99d32f221
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc11-stage2-games
+          run-id: 46019379377
+          github-token: ${{ github.token }}
+          path: doc11-game-evidence
+      - name: Verify accepted compiler artifact
+        run: |
+          test "$(cat doc11-game-evidence/source-sha.txt)" = 83823b42ad0bd7297302f081fd9ed29036493035
+          sha256sum -c doc11-game-evidence/SHA256SUMS
+          chmod +x doc11-game-evidence/{reactive2,gpu_plan2}
+      - name: Actual integrated original prime source and all admitted workers
+        run: |
+          python3 -u runtime-doc/tests/benchmark_integrated_prime.py --reactive doc11-game-evidence/reactive2 --out doc9-integrated-prime --samples 10 --cc clang-18
+      - name: Install pinned WebGPU dependency
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y mesa-vulkan-drivers libvulkan1
+          curl -fL --retry 3 https://github.com/gfx-rs/wgpu-native/releases/download/v27.0.4.1/wgpu-linux-x86_64-release.zip -o doc11-wgpu.zip
+          echo '9385b8a9e4e6f0b00264757577511097104fedf6db7819aa3e34a106c3dc0a42  doc11-wgpu.zip' | sha256sum -c -
+          unzip -q doc11-wgpu.zip -d doc11-wgpu
+      - name: Independently emitted family kernels and software smoke
+        run: |
+          python3 -u runtime-doc/tests/build_gpu_family_benchmark.py --reactive doc11-game-evidence/reactive2 --planner doc11-game-evidence/gpu_plan2 --wgpu doc11-wgpu --out doc9-scale-build
+          mkdir -m 700 doc9-xdg
+          XDG_RUNTIME_DIR="$PWD/doc9-xdg" python3 -u runtime-doc/tests/benchmark_gpu_family.py --root doc9-scale-build --out doc9-scale-software --samples 1 --epochs 3 --widths 1,63,64,4096
+          cp doc11-wgpu/lib/libwgpu_native.so doc9-scale-build/libwgpu_native.so
+          git rev-parse HEAD > doc9-scale-build/source-sha.txt
+          find doc9-scale-build -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > doc9-scale-build/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: doc9-integrated-prime
+          path: doc9-integrated-prime/
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: doc9-scale-build
+          path: doc9-scale-build/
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: doc9-scale-software
+          path: doc9-scale-software/
+  physical:
+    needs: source-and-software
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc9-scale-build
+          path: doc9-scale-build
+      - name: Verify exact prebuilt artifact
+        run: |
+          test "$(cat doc9-scale-build/source-sha.txt)" = "$(git rev-parse HEAD)"
+          sha256sum -c doc9-scale-build/SHA256SUMS
+          mkdir -p doc11-wgpu/lib
+          cp doc9-scale-build/libwgpu_native.so doc11-wgpu/lib/
+      - name: Install authenticated Kaggle dispatcher
+        run: python3 -m pip install 'kaggle>=2.2.1,<3' 'six>=1.16'
+      - name: Execute physical GPU and CPU scaling campaign
+        env:
+          KAGGLE_DOC_1: ${{ secrets.KAGGLE_DOC_1 }}
+          DOC_KAGGLE_USERNAME: ${{ vars.DOC_KAGGLE_USERNAME }}
+        run: python3 -u ci/kaggle/physical_scale_dispatch.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: doc9-physical-scale
+          path: doc9-physical-scale-evidence/
