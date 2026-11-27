@@ -56,8 +56,14 @@ def main():
         kernel=root/'kernel';name=prepare_kernel(kernel,template,spec,owner,placeholder=INDEPENDENT_SPEC_MARKER)
         # Exactly one submission; no ambiguous automatic retries or redundant GPU jobs.
         kaggle(['kernels','push','-p',str(kernel),'--accelerator',spec['accelerator']],env,timeout=180)
+        errors=0
         while True:
-            state=status_from_cli(kaggle(['kernels','status',name],env))
+            try:
+                state=status_from_cli(kaggle(['kernels','status',name],env));errors=0
+            except RuntimeError as exc:
+                errors+=1;print('DOC9_READ_ONLY_STATUS_RETRY',errors,type(exc).__name__,flush=True)
+                if errors>=8:raise
+                time.sleep(15);continue
             print('DOC11_PHYSICAL_STATUS:',state,flush=True)
             if state in ('COMPLETE','FAILED'):break
             time.sleep(30)

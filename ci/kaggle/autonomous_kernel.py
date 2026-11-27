@@ -23,12 +23,19 @@ def main():
         (output/(label+'.log')).write_bytes(p.stdout+b'\n'+p.stderr)
         print(p.stdout.decode(errors='replace'),flush=True)
         if p.returncode:raise RuntimeError(label+' failed: '+p.stderr.decode(errors='replace')[-3000:])
-    run('micro',tests/'test_gpu.py','--prebuilt',gpu/'micro','--wgpu-root',wgpu,'--physical','--artifacts',output/'micro')
-    run('games',tests/'test_stage2_game_gpu.py','--games',games,'--prebuilt',gpu/'games','--wgpu-root',wgpu,'--evidence',output/'games','--physical')
-    run('family',tests/'benchmark_autonomous_family.py','--root',base/'scale/families','--out',output/'families','--physical','--samples','3','--epochs','6')
-    run('algorithm',tests/'benchmark_autonomous_algorithms.py','--root',base/'scale/algorithms','--out',output/'algorithms','--physical','--samples','3')
-    result={'sha':SPEC['sha'],'run_id':SPEC['run_id'],'bundle_sha256':SPEC['bundle_sha256'],'hardware':True,'result':'pass'}
-    (output/'summary.json').write_text(json.dumps(result,sort_keys=True)+'\n')
-    with tarfile.open(Path('/kaggle/working/doc9-autonomous-results.tar.gz'),'w:gz') as archive:archive.add(output,arcname='doc9-autonomous-evidence')
+    try:
+        run('micro',tests/'test_gpu.py','--prebuilt',gpu/'micro','--wgpu-root',wgpu,'--physical','--artifacts',output/'micro')
+        run('games',tests/'test_stage2_game_gpu.py','--games',games,'--prebuilt',gpu/'games','--wgpu-root',wgpu,'--evidence',output/'games','--physical')
+        run('family',tests/'benchmark_autonomous_family.py','--root',base/'scale/families','--out',output/'families','--physical','--samples','3','--epochs','6')
+        run('algorithm',tests/'benchmark_autonomous_algorithms.py','--root',base/'scale/algorithms','--out',output/'algorithms','--physical','--samples','3')
+        result={'sha':SPEC['sha'],'run_id':SPEC['run_id'],'bundle_sha256':SPEC['bundle_sha256'],'hardware':True,'result':'pass'}
+        (output/'summary.json').write_text(json.dumps(result,sort_keys=True)+'\n')
+    except BaseException as error:
+        (output/'failure.txt').write_text(type(error).__name__+': '+str(error)[-12000:]+'\n')
+        raise
+    finally:
+        with tarfile.open(Path('/kaggle/working/doc9-autonomous-results.tar.gz'),'w:gz') as archive:
+            for item in sorted(output.iterdir()):
+                if item.name!='xdg':archive.add(item,arcname='doc9-autonomous-evidence/'+item.name)
     print('DOC11_PHYSICAL_PASS: exact micrographs, games, rollback, device loss and autonomous scale',flush=True)
 if __name__=='__main__':main()

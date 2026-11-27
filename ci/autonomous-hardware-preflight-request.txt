@@ -1,0 +1,1 @@
+2026-11-28: early physical regression using independently verified production tree and passed preflight 46052604155. Original compiler/game inputs verified from 46020955848; recompile CPU game executables with current headers, exact source-generated GPU planner and all five production scale executables. No software adapter. Full replacement 46052437755 continues independently.
