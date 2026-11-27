@@ -1,0 +1,42 @@
+name: DOC9 physical evidence recovery
+on:
+  push:
+    branches: [master]
+    paths: ['ci/physical-scale-recovery-request.txt']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  recover:
+    if: ${{ github.repository_id == '1471748051' && github.ref_name == 'master' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc9-physical-scale
+          run-id: 46032762791
+          github-token: ${{ github.token }}
+          path: doc9-physical-scale-evidence
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc9-scale-build
+          run-id: 46032762791
+          github-token: ${{ github.token }}
+          path: doc9-scale-build
+      - run: |
+          sha256sum -c doc9-scale-build/SHA256SUMS
+          python3 -m pip install 'kaggle>=2.2.1,<3' 'six>=1.16'
+      - name: Retrieve missing outputs from completed exact GPU run
+        env:
+          KAGGLE_DOC_1: ${{ secrets.KAGGLE_DOC_1 }}
+          DOC_KAGGLE_USERNAME: ${{ vars.DOC_KAGGLE_USERNAME }}
+        run: python3 -u ci/kaggle/recover_physical_scale.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: doc9-physical-scale-recovered
+          path: doc9-physical-scale-evidence/
