@@ -1,0 +1,40 @@
+name: DOC9 independent returned-evidence verification
+on:
+  push:
+    branches: [master]
+    paths: ['ci/autonomous-evidence-request.txt']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  verify:
+    if: ${{ github.repository_id == '1471748051' && github.ref_name == 'master' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc11-stage2-physical
+          run-id: 46053188589
+          github-token: ${{ github.token }}
+          path: physical
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc11-stage2-webgpu
+          run-id: 46053188589
+          github-token: ${{ github.token }}
+          path: doc11-stage2-gpu-evidence
+      - name: Verify exact raw files and independently reconstruct numerical checksums
+        run: |
+          set -euo pipefail
+          sha256sum -c doc11-stage2-gpu-evidence/physical-SHA256SUMS
+          mkdir -p doc9-evidence-audit
+          python3 runtime-doc/tests/verify_autonomous_evidence.py --physical physical --build doc11-stage2-gpu-evidence --source-sha da93c980bbb8999b1f7c1d8b2491167c4c612bb5 --run-id 46053188589 | tee doc9-evidence-audit/result.txt
+          git rev-parse HEAD > doc9-evidence-audit/source-sha.txt
+          sha256sum doc9-evidence-audit/*.txt > doc9-evidence-audit/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: doc9-evidence-audit
+          path: doc9-evidence-audit/

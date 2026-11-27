@@ -1,0 +1,1 @@
+Recover completed run 46032762791 via ordinary non-forced read-only output, after CLI pattern rejection; no new GPU submission.

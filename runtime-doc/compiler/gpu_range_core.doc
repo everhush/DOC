@@ -1,0 +1,23 @@
+# Conservative extension: preserve legacy bounds. For previously unadmitted
+# scalar arithmetic and positive-literal division, derive a conservative
+# signed-32-bit magnitude bound from the actual typed expression tree.
+# Encoded literal flag is outside the signed 32-bit magnitude domain.
+fn sx_op(l) = if(gpu_op_ok(l),true,if(eq(l,-124),true,eq(l,-125)))
+fn sx_event(es,ds,ls,i,k,d,f) = if(eq(k,6),gpu_formal_ok(ds,get(ls,i),f),if(gpu_family_prefix(ds,i,d,f),true,if(eq(k,10),gpu_atom_ok(es,ds,ls,i,f),if(eq(k,13),sx_op(get(ls,i)),true))))
+fn sx_check(s,es,ds,ls,ns,i,k,d) = if(eq(k,1),gpu_begin(s,ds,ls,d),if(eq(k,16),append(s,if(eq(get(s,1),1),1,-1)),if(eq(get(s,1),1),if(sx_event(es,ds,ls,i,k,d,gpu_family_source(ds,ls,d)),gpu_measure(s,es,ls,ns,i,k),replace_at(s,1,0)),s)))
+fn sx_scan(s,es,ds,ls,ns,owners) = replace_at(sx_check(s,es,ds,ls,ns,get(s,0),ev(es,get(s,0)),get(owners,get(s,0))),0,add(get(s,0),1))
+fn sx_mag(v) = if(le(4294967296,v),sub(v,4294967296),v)
+fn sx_literal(v) = if(le(0,v),add(v,4294967296),gpu_abs(v))
+fn sx_atom(es,ds,ls,ns,i,b) = if(eq(ea(es,i),2),sx_literal(get(ns,i)),if(le(0,get(ls,i)),if(eq(gtype(ds,get(ls,i)),1),1,b),if(eq(get(ls,i),-2),b,1)))
+fn sx_safe(v) = if(le(v,2147483647),v,-1)
+fn sx_div(op,a,b,raw) = if(if(le(4294967297,raw),lt(0,b),false),if(eq(op,24),quot(a,b),if(lt(a,b),a,sub(b,1))),-1)
+fn sx_binary(op,a,b,raw) = if(if(lt(a,0),true,lt(b,0)),-1,if(le(op,2),sx_safe(add(a,b)),if(eq(op,3),sx_safe(mul(a,b)),if(le(op,6),1,sx_div(op,a,b,raw)))))
+fn sx_cond(a,b,c) = if(if(lt(a,0),true,if(lt(b,0),true,lt(c,0))),-1,gpu_max(b,c))
+fn sx_result(s,op) = if(eq(op,7),sx_cond(sx_mag(top(s,0)),sx_mag(top(s,1)),sx_mag(top(s,2))),sx_binary(op,sx_mag(top(s,0)),sx_mag(top(s,1)),top(s,1)))
+fn sx_call(s,ds,l,base) = if(syntax_arity_ok(s,call_arity(ds,l),base),tpop(s,call_arity(ds,l),sx_result(s,op_of(l))),preject(s))
+fn sx_stack(s,es,ds,ls,ns,i,k,b,base) = if(eq(k,15),append(s,-99),if(eq(k,10),append(s,sx_atom(es,ds,ls,ns,i,b)),if(eq(k,13),sx_call(s,ds,get(ls,i),base),s)))
+fn sx_body(ds,d,i,f) = if(le(0,f),if(lt(add(gbody(ds,d),6),i),lt(i,sub(gend(ds,d),1)),false),if(lt(gbody(ds,d),i),lt(i,gend(ds,d)),false))
+fn sx_finish(s,d,b,base) = if(eq(len(s),add(base,1)),replace_at(slice(s,0,base),add(d,1),if(le(0,top(s,0)),b,-1)),preject(s))
+fn sx_visit(s,es,ds,ls,ns,d,i,b,base) = if(eq(i,gbody(ds,d)),sx_finish(s,d,b,base),if(sx_body(ds,d,i,gpu_family_source(ds,ls,d)),sx_stack(s,es,ds,ls,ns,i,ev(es,i),b,base),s))
+fn sx_try(s,es,ds,ls,ns,valid,d,i,b) = if(if(eq(get(s,add(d,1)),-1),eq(get(valid,d),1),false),sx_visit(s,es,ds,ls,ns,d,i,b,add(gn(ds),1)),s)
+fn sx_step(s,es,ds,ls,ns,valid,owners,b) = replace_at(sx_try(s,es,ds,ls,ns,valid,get(owners,get(s,0)),get(s,0),b),0,sub(get(s,0),1))

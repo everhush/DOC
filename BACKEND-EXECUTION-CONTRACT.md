@@ -1,3 +1,20 @@
+# DOC execution contract — independent native compiler, WebGPU/WGSL only
+
+## Current independent profile (2026-11-28)
+
+Active private development is `xad3play/DOC`, with `runtime-doc/` the independent DOC-authored compiler and native runtime, and `runtime-rust/` frozen as reference/bootstrap. The original Rust-only statements below are historical profile-specific provenance. The normative manuscripts and prior submitted versions remain unchanged.
+
+- Ordinary compiled managed-reactive executables default to CPU; `--backend=cpu` selects CPU, `--backend=gpu` is strict, and `--backend=auto` enables automatic heterogeneous placement. The last two require a GPU-enabled build for actual GPU execution. If the adapter is unavailable before work, auto may select CPU unless physical GPU is explicitly required; explicit GPU rejects. Once work has been admitted or a device fault invalidates an attempt, do not publish an incomplete candidate or silently retry it as CPU.
+- CPU capacity is derived from process affinity and cgroup quota and admitted independent work. Optional `DOC_WORKERS` is an external cap/measurement control, not authored placement. Nested pools are suppressed. No fixed application-wide worker ceiling or workload-specific scheduling hints.
+- Physical realization uses compiler-emitted typed WGSL and the pinned WebGPU ABI only. DOC source does not choose native GPU APIs, drivers, or hardware names. Provider limits and typed range proof determine admission; strict mode rejects unsupported work. Test infrastructure can inspect adapter class to prove real hardware and provision host graphics; it is not DOC-level hardware policy.
+- Runtime-sized finite lexical families use a checked region byte budget instead of the old fixed lane cap. Compiler/source/causal and device buffer limits remain independently enforced. GPU group count is derived from admitted lanes and actual negotiated device limits; the 64-invocation local width is not a total thread cap. Grid-stride execution covers admitted lanes beyond one-dimensional dispatch extent. No manual group cap in production.
+- The automatic placement heuristic is generic but does not promise globally optimal profitability. Cheap maps and reductions can be slower than serial CPU; preserve negative results. CPU/GPU use the same typed semantic, source-epoch, private-candidate, rollback and stable observation contract. The shader subset is bounded scalar bool/signed-32-bit and admitted lexical families, not arbitrary effects, managed structures or recurrence.
+- Current production runtime tree `a7fe0554abea1a2b218929b33ad2f8f66f632f94`, compiler tree `9120f50dde55af7c0a656d43ece6acf824cbcab0`. Physical preflight 46053188589 and original-workload CPU 46053929420 passed; full exact same-run validation 46052437755 remains in progress. See [autonomous scaling audit](verification/AUTONOMOUS-SCALING-AUDIT.md). No new software GPU measurements, manuscript revision, or public release.
+
+---
+
+## Historical frozen reference profile
+
 # DOC active execution contract — Rust reference, WebGPU/WGSL only
 
 **Current #15 reconciliation (2026-11-25).** Initial host Linux x86_64. Active development rtu0/doc2/main; Rust is the reference/bootstrap, Goose is historical and excluded from active CI. The independent DOC implementation belongs in runtime-doc/ only after the audited Rust handoff. The normative manuscript is unchanged. This contract distinguishes actual supported entry points and does not promise final self-hosting or universal GPU coverage.

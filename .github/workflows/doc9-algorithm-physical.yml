@@ -1,0 +1,49 @@
+name: DOC9 matched algorithm physical GPU
+on:
+  push:
+    branches: [master]
+    paths: ['ci/algorithm-physical-request.txt']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  physical:
+    if: ${{ github.repository_id == '1471748051' && github.ref_name == 'master' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 110
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc9-algorithm-build
+          run-id: 46049477411
+          github-token: ${{ github.token }}
+          path: doc9-algorithm-build
+      - run: |
+          test "$(cat doc9-algorithm-build/source-sha.txt)" = "61b55981b5fa7153d3047beb8997f0e27b8f58b2"
+          mkdir -p doc9-wgpu/lib
+          cp doc9-algorithm-build/libwgpu_native.so doc9-wgpu/lib/
+          python3 -m pip install 'kaggle>=2.2.1,<3' 'six>=1.16'
+      - name: Wait for preceding physical campaign to finish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for _ in $(seq 1 160); do
+            state=$(gh api repos/${GITHUB_REPOSITORY}/actions/runs/46048894537 --jq .status)
+            if [ "$state" = completed ]; then exit 0; fi
+            sleep 15
+          done
+          echo "Preceding physical campaign did not finish; refusing overlapping submission"
+          exit 1
+      - name: Actual physical algorithms and CPU scaling
+        env:
+          KAGGLE_DOC_1: ${{ secrets.KAGGLE_DOC_1 }}
+          DOC_KAGGLE_USERNAME: ${{ vars.DOC_KAGGLE_USERNAME }}
+        run: python3 -u ci/kaggle/algorithm_dispatch.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: doc9-algorithm-physical
+          path: doc9-algorithm-evidence/

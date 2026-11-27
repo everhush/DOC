@@ -1,5 +1,13 @@
 # DOC claim-to-evidence map
 
+## Current independent implementation evidence (2026-11-28)
+
+The active implementation is the independent native `runtime-doc/` compiler/runtime in private `xad3play/DOC`; Rust remains frozen as reference/bootstrap, Goose remains historical. The historical C++20 manuscript results retain their original source/data identities. The current [autonomous scaling audit](verification/AUTONOMOUS-SCALING-AUDIT.md) and [backend execution contract](BACKEND-EXECUTION-CONTRACT.md) identify the actual production source, tested limits, numerical oracles, negative cases, and final independent validation workflow. Exact-production physical and CPU preflight plus compiler self-reproduction have passed; full same-run regression remains pending. #9 is open until all required gates complete; #14 is deferred. No manuscript theorem or public release status follows merely from these tests.
+
+The model's finite core remains unchanged. Runtime-sized independent families expose value-dependent finite cardinality, not arbitrary persistent topology or per-lane reuse; graph-version replacement and causal recurrence are separate existing contracts. Physical placement and resource bounds are realization policy. None of the new experiments proves universal speedup, unrestricted device execution, multi-host elasticity, or unbounded memory.
+
+---
+
 ## Active scope reconciliation — 2026-11-25
 
 The following legacy dual-runtime tables and historical explicit-only GPU descriptions are retained for provenance and must not be read as the current acceptance record. The active reference is Rust on rtu0/doc2/main, with generated WGSL, automatic CPU/GPU placement in admitted host entry points and strict explicitly selected GPU execution; see [BACKEND-EXECUTION-CONTRACT.md](BACKEND-EXECUTION-CONTRACT.md). Goose is archived, not an acceptance requirement. #24 closed on 11e22c484a35a183ed9f77a2125afa5f22746c41; #15 reviews that combined foundation before the independent #11 handoff. The normative paper and original C++20 empirical results are unchanged. See [current #15 conformance ledger](docs/PRE-SELF-HOSTING-AUDIT.md) for current source-linked decisions, gaps and explicit production obligations. No claim of universal conformance or inherited empirical speedup.

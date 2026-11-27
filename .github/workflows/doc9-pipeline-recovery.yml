@@ -1,0 +1,40 @@
+name: DOC9 read-only pipeline result recovery
+on:
+  push:
+    branches: [master]
+    paths: ['ci/pipeline-recovery-request.txt']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  recover:
+    if: ${{ github.repository_id == '1471748051' && github.ref_name == 'master' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc9-pipeline-physical
+          run-id: 46048894537
+          github-token: ${{ github.token }}
+          path: doc9-pipeline-evidence
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc9-pipeline-build
+          run-id: 46048894537
+          github-token: ${{ github.token }}
+          path: doc9-pipeline-build
+      - run: python3 -m pip install 'kaggle>=2.2.1,<3' 'six>=1.16'
+      - name: Poll and retrieve original private physical notebook only
+        env:
+          KAGGLE_DOC_1: ${{ secrets.KAGGLE_DOC_1 }}
+          DOC_KAGGLE_USERNAME: ${{ vars.DOC_KAGGLE_USERNAME }}
+        run: python3 -u ci/kaggle/recover_pipeline.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: doc9-pipeline-recovered
+          path: doc9-pipeline-evidence/

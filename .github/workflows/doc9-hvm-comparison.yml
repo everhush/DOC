@@ -1,0 +1,71 @@
+name: DOC9 private HVM2 matched CPU comparison
+on:
+  push:
+    branches: [master]
+    paths: ['.github/workflows/doc9-hvm-comparison.yml', 'verification/hvm/compare_cpu.py']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: doc9-hvm-comparison
+  cancel-in-progress: false
+jobs:
+  compare:
+    if: ${{ github.repository_id == '1471748051' && github.ref_name == 'master' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc11-stage2-games
+          run-id: 46052437755
+          github-token: ${{ github.token }}
+          path: doc11-game-evidence
+      - name: Verify exact production trees and accepted stage2 compiler artifact
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD:runtime-doc/runtime)" = a7fe0554abea1a2b218929b33ad2f8f66f632f94
+          test "$(git rev-parse HEAD:runtime-doc/compiler)" = 9120f50dde55af7c0a656d43ece6acf824cbcab0
+          test "$(cat doc11-game-evidence/source-sha.txt)" = ed0cc865dbb0c416b903062c8869e6956635929e
+          sha256sum -c doc11-game-evidence/SHA256SUMS
+          chmod +x doc11-game-evidence/{reactive2,gpu_plan2}
+          python3 -m py_compile verification/hvm/compare_cpu.py
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install exact published HVM2 and matching Bend1 frontend
+        run: |
+          set -euo pipefail
+          cargo install --locked --version 2.0.22 hvm
+          cargo install --locked --version 0.2.38 bend-lang
+          hvm --version
+          bend --version
+      - name: Build unchanged DOC production benchmark binaries
+        run: |
+          set -euo pipefail
+          mkdir -p doc9-wgpu
+          curl -fL --retry 3 https://github.com/gfx-rs/wgpu-native/releases/download/v27.0.4.1/wgpu-linux-x86_64-release.zip -o wgpu.zip
+          echo '9385b8a9e4e6f0b00264757577511097104fedf6db7819aa3e34a106c3dc0a42  wgpu.zip' | sha256sum -c -
+          unzip -q wgpu.zip -d doc9-wgpu
+          python3 -u runtime-doc/tests/build_autonomous_scale.py --reactive doc11-game-evidence/reactive2 --planner doc11-game-evidence/gpu_plan2 --wgpu doc9-wgpu --out doc9-hvm-doc-build
+      - name: Execute exact matching workload inputs and preserve raw CPU evidence
+        env:
+          DOC_REQUIRE_PHYSICAL_GPU: '1'
+        run: |
+          set -euo pipefail
+          export LD_LIBRARY_PATH="$PWD/doc9-wgpu/lib"
+          python3 -u verification/hvm/compare_cpu.py --doc doc9-hvm-doc-build --out doc9-hvm-evidence --samples 3
+      - name: Record identities even on failure
+        if: always()
+        run: |
+          mkdir -p doc9-hvm-evidence
+          git rev-parse HEAD > doc9-hvm-evidence/source-sha.txt
+          git rev-parse HEAD:runtime-doc/runtime > doc9-hvm-evidence/runtime-tree.txt
+          git rev-parse HEAD:runtime-doc/compiler > doc9-hvm-evidence/compiler-tree.txt
+          find doc9-hvm-evidence -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > doc9-hvm-evidence/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: doc9-hvm-cpu-comparison
+          path: doc9-hvm-evidence/

@@ -1,0 +1,16 @@
+sample,scenario,case,variant,requested,evaluations,value
+1,cold,0,tuned,auto,4095,222056
+1,density,1,tuned,auto,12,222052
+1,density,8,tuned,auto,23,222024
+1,density,64,tuned,auto,132,221808
+1,density,512,tuned,auto,1007,221398
+1,density,2048,tuned,auto,4038,209944
+1,dense-cheap,0,tuned,auto,245730,8509440
+1,financial,1,tuned,auto,13,2638904283
+1,financial,64,tuned,auto,133,2639583043
+1,financial,1024,tuned,auto,2049,2649926332
+1,bitonic,1,tuned,auto,1986,260850087
+1,bitonic,8,tuned,auto,2830,270782492
+1,bitonic,64,tuned,auto,8828,534983688
+1,bitonic,256,tuned,auto,13808,3934204392
+1,bitonic,512,tuned,auto,23040,14472078440

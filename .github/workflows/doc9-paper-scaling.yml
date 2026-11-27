@@ -1,0 +1,53 @@
+name: DOC9 paper scaling reproduction
+on:
+  push:
+    branches: [master]
+    paths: ['ci/paper-scaling-request.txt']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: doc9-paper-scaling
+  cancel-in-progress: false
+jobs:
+  reproduce:
+    if: ${{ github.repository_id == '1471748051' && github.ref_name == 'master' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify accepted runtime source trees
+        run: |
+          test "$(git rev-parse HEAD:runtime-rust)" = a95a38bc6e9300aae815f83b570db5f99d32f221
+          test "$(git rev-parse HEAD:runtime-doc/runtime)" = "$(git rev-parse 431ce65c11e580c76b58cef885fd8f2ed3af1f71:runtime-doc/runtime)" || exit 1
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc11-stage2-games
+          run-id: 45967388390
+          github-token: ${{ github.token }}
+          path: doc11-game-evidence
+      - name: Verify exact accepted compiler and build matched benchmark
+        run: |
+          set -eu
+          test "$(cat doc11-game-evidence/source-sha.txt)" = 431ce65c11e580c76b58cef885fd8f2ed3af1f71
+          sha256sum -c doc11-game-evidence/SHA256SUMS
+          chmod +x doc11-game-evidence/reactive2
+          python3 -u runtime-doc/tests/benchmark_paper_scaling.py --reactive doc11-game-evidence/reactive2 --out doc9-paper-evidence --build-only
+          cd doc9-paper-evidence
+          sha256sum paper-original prime40-current prime40-full-capacity-diagnostic pure40-current pure40-full-capacity-diagnostic > binaries-SHA256SUMS
+      - name: Preserve exact compiled benchmarks for independent local replay
+        uses: actions/upload-artifact@v4
+        with:
+          name: doc9-paper-binaries
+          path: doc9-paper-evidence/
+      - name: Matched repeated benchmark on available runner capacity
+        run: |
+          python3 -u runtime-doc/tests/benchmark_paper_scaling.py --measure-only --out doc9-paper-evidence --samples 100 --warmups 3 --max-workers 4
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: doc9-paper-samples
+          path: doc9-paper-evidence/

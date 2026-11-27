@@ -1,0 +1,3 @@
+2026-11-27: user requested paper-equivalent scaling and automatic worker selection recheck. Exact historical 40-leaf / 25,000-integer prime-count workload vs accepted generated scheduler, current policy and temporary full-capacity diagnostic, plus genuinely DOC-authored coarse recurrence tests. 100 fresh samples and 3 warmups per row, raw retained, effective affinity/quota recorded. No production runtime change, no new physical GPU claim, no schedules.
+
+Correct diagnostic-only GNU feature macro include order. Prior original C++ reference built and root total verified; locally reconstructed 39 exact runtime blobs, corrected C harness built, exact prime total 76216 and pure recurrence total 44088954380. Re-run matched CI diagnostic; no production runtime edits.

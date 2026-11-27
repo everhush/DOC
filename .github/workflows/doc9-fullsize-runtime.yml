@@ -1,0 +1,34 @@
+name: DOC9 original-size runtime witness
+on:
+  push:
+    branches: [master]
+    paths: ['ci/fullsize-benchmark-request.txt']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: doc9-fullsize-runtime
+  cancel-in-progress: false
+jobs:
+  benchmark:
+    if: ${{ github.repository_id == '1471748051' && github.ref_name == 'master' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify finalization runtime and frozen source identities
+        run: |
+          test "$(git rev-parse HEAD:runtime-rust)" = a95a38bc6e9300aae815f83b570db5f99d32f221
+          test "$(git rev-parse HEAD:runtime-doc/runtime)" = "$(git rev-parse da79b00550fbc17ec69ce2ccbd4afa3d0d150138:runtime-doc/runtime)"
+          test "$(git rev-parse HEAD:engine)" = 4d6044ac566fa8374f44e3f32f153d63b95f2b9f
+      - name: All original-size paper workloads on the native runtime substrate
+        run: |
+          python3 -u runtime-doc/tests/benchmark_paper_fullsize.py --out doc9-fullsize-evidence --samples 30 --warmups 3
+          find doc9-fullsize-evidence -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > doc9-fullsize-evidence/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: doc9-fullsize-runtime
+          path: doc9-fullsize-evidence/

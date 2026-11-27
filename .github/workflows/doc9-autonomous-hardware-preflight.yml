@@ -1,0 +1,106 @@
+name: DOC9 exact production physical preflight
+on:
+  push:
+    branches: [master]
+    paths: ['ci/autonomous-hardware-preflight-request.txt']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  prepare:
+    if: ${{ github.repository_id == '1471748051' && github.ref_name == 'master' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc11-independent-bootstrap
+          run-id: 46020955848
+          github-token: ${{ github.token }}
+          path: doc11-evidence
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc11-stage2-games
+          run-id: 46020955848
+          github-token: ${{ github.token }}
+          path: doc11-game-evidence
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc9-autonomous-preflight
+          run-id: 46052604155
+          github-token: ${{ github.token }}
+          path: doc9-preflight
+      - name: Verify previous independent compiler and current production tree identity
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD:runtime-doc/runtime)" = a7fe0554abea1a2b218929b33ad2f8f66f632f94
+          test "$(git rev-parse HEAD:runtime-doc/compiler)" = 9120f50dde55af7c0a656d43ece6acf824cbcab0
+          test "$(git rev-parse HEAD:runtime-rust)" = a95a38bc6e9300aae815f83b570db5f99d32f221
+          test "$(git rev-parse HEAD:engine)" = 4d6044ac566fa8374f44e3f32f153d63b95f2b9f
+          test "$(cat doc11-evidence/source-sha.txt)" = da79b00550fbc17ec69ce2ccbd4afa3d0d150138
+          test "$(cat doc11-game-evidence/source-sha.txt)" = da79b00550fbc17ec69ce2ccbd4afa3d0d150138
+          test "$(cat doc9-preflight/source-sha.txt)" = d0f9c952bd69a44265881a4a67c30b5653aa16a5
+          sha256sum -c doc11-evidence/oracle-SHA256SUMS
+          sha256sum -c doc11-game-evidence/SHA256SUMS
+          sha256sum -c doc9-preflight/SHA256SUMS
+          chmod +x doc11-evidence/doc doc11-game-evidence/{reactive2,scanner2}
+          cp doc9-preflight/gpu_plan2 doc11-game-evidence/gpu_plan2
+          chmod +x doc11-game-evidence/gpu_plan2
+          mkdir -p doc11-stage2-gpu-evidence doc11-wgpu
+          printf 'accepted compiler inputs: 46020955848\ncurrent runtime and planner preflight: 46052604155\n' > doc11-game-evidence/input-provenance.txt
+          for game in radar_chase radar_chase_3d; do
+            cc -std=gnu11 -O1 -pthread -I runtime-doc/runtime "doc11-game-evidence/$game.c" -o "doc11-game-evidence/$game"
+          done
+          git rev-parse HEAD > doc11-game-evidence/source-sha.txt
+          sha256sum doc11-game-evidence/{radar_chase,radar_chase_3d}{,.c,-reference.txt} doc11-game-evidence/{source-sha.txt,input-provenance.txt,reactive2,scanner2,gpu_plan2} > doc11-game-evidence/SHA256SUMS
+      - name: Build original physical regressions and reuse hash-verified production scale executables
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 https://github.com/gfx-rs/wgpu-native/releases/download/v27.0.4.1/wgpu-linux-x86_64-release.zip -o doc11-wgpu.zip
+          echo '9385b8a9e4e6f0b00264757577511097104fedf6db7819aa3e34a106c3dc0a42  doc11-wgpu.zip' | sha256sum -c -
+          unzip -q doc11-wgpu.zip -d doc11-wgpu
+          python3 -u runtime-doc/tests/test_gpu.py --build-only --reference doc11-evidence/doc --reactive doc11-game-evidence/reactive2 --gpu-plan doc11-game-evidence/gpu_plan2 --wgpu-root doc11-wgpu --stream --artifacts doc11-stage2-gpu-evidence/micro
+          python3 -u runtime-doc/tests/test_stage2_game_gpu.py --build-only --games doc11-game-evidence --wgpu-root doc11-wgpu --evidence doc11-stage2-gpu-evidence/games
+          cp -a doc9-preflight/scale doc11-stage2-gpu-evidence/scale
+          cp doc11-wgpu/lib/libwgpu_native.so doc11-stage2-gpu-evidence/
+          sha256sum doc11-stage2-gpu-evidence/libwgpu_native.so doc11-stage2-gpu-evidence/micro/* doc11-stage2-gpu-evidence/games/{radar_chase,radar_chase_3d}{-gpu,.c,.wgsl} > doc11-stage2-gpu-evidence/physical-SHA256SUMS
+          find doc11-stage2-gpu-evidence/scale -type f -print0 | sort -z | xargs -0 sha256sum >> doc11-stage2-gpu-evidence/physical-SHA256SUMS
+          git rev-parse HEAD > doc11-stage2-gpu-evidence/source-sha.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: doc11-stage2-games
+          path: doc11-game-evidence/
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: doc11-stage2-webgpu
+          path: doc11-stage2-gpu-evidence/
+  physical:
+    needs: prepare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 110
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc11-stage2-games
+          path: doc11-game-evidence
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc11-stage2-webgpu
+          path: doc11-stage2-gpu-evidence
+      - run: python3 -m pip install 'kaggle>=2.2.1,<3' 'six>=1.16'
+      - name: Actual physical device correctness and automatic scaling
+        env:
+          KAGGLE_DOC_1: ${{ secrets.KAGGLE_DOC_1 }}
+          DOC_KAGGLE_USERNAME: ${{ vars.DOC_KAGGLE_USERNAME }}
+        run: python3 -u ci/kaggle/autonomous_dispatch.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: doc11-stage2-physical
+          path: doc11-physical-evidence/

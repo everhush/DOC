@@ -1,0 +1,43 @@
+name: DOC9 final production original-paper CPU regression
+on:
+  push:
+    branches: [master]
+    paths: ['ci/autonomous-paper-regression-request.txt']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  cpu:
+    if: ${{ github.repository_id == '1471748051' && github.ref_name == 'master' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc11-stage2-games
+          run-id: 46020955848
+          github-token: ${{ github.token }}
+          path: doc11-game-evidence
+      - name: Verify exact current runtime, unchanged computation compiler and reference
+        run: |
+          test "$(git rev-parse HEAD:runtime-doc/runtime)" = a7fe0554abea1a2b218929b33ad2f8f66f632f94
+          test "$(git rev-parse HEAD:runtime-doc/compiler)" = 9120f50dde55af7c0a656d43ece6acf824cbcab0
+          test "$(git rev-parse HEAD:runtime-rust)" = a95a38bc6e9300aae815f83b570db5f99d32f221
+          test "$(cat doc11-game-evidence/source-sha.txt)" = da79b00550fbc17ec69ce2ccbd4afa3d0d150138
+          sha256sum -c doc11-game-evidence/SHA256SUMS
+          chmod +x doc11-game-evidence/reactive2
+          mkdir -p doc9-autonomous-paper
+          git rev-parse HEAD > doc9-autonomous-paper/source-sha.txt
+      - name: All original-size runtime witnesses, exact historical numerical and work-count oracles
+        run: |
+          python3 -u runtime-doc/tests/benchmark_paper_fullsize.py --out doc9-autonomous-paper/runtime-witness --samples 30 --warmups 3
+      - name: Ordinary integrated DOC prime graph, same source and all exposed workers
+        run: |
+          python3 -u runtime-doc/tests/benchmark_integrated_prime.py --reactive doc11-game-evidence/reactive2 --out doc9-autonomous-paper/integrated-prime --samples 10 --cc clang-18
+          find doc9-autonomous-paper -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > doc9-autonomous-paper/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: doc9-autonomous-paper
+          path: doc9-autonomous-paper/

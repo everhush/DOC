@@ -27,7 +27,10 @@ def rebuild(stage2,scanner,source,out,evidence,stream_scanner):
     data=bundle([scanner],source,stream=stream_scanner)
     code=emit([stage2],data,stream=True)
     c=evidence/(out.name+'.c');c.write_bytes(code)
-    execute(['cc','-std=gnu11','-O1','-pthread','-I',ROOT/'runtime',c,'-o',out],evidence,timeout=300)
+    # The expanded range planner has a large generated expression tree.
+    # Clang -O0 avoids optimizer expansion; this is a compiler tool, not a timed workload.
+    cc=['clang-18','-std=gnu11','-O0','-fmacro-backtrace-limit=1'] if out.name=='gpu_plan2' else ['cc','-std=gnu11','-O1']
+    execute([*cc,'-pthread','-I',ROOT/'runtime',c,'-o',out],evidence,timeout=600)
     print(f'DOC11_STAGE2_TOOL: {out.name} source_bytes={len(data)} c_bytes={len(code)} elf_bytes={out.stat().st_size} seconds={time.monotonic()-start:.3f} sha256={digest(out)}',flush=True)
 
 def main():

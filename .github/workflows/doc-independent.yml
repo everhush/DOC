@@ -9,16 +9,16 @@ on:
 permissions:
   contents: read
 
-# A newer deliberate validation batch supersedes an older run of this workflow.
+# Preserve a running deliberate validation batch; queue the next exact revision.
 concurrency:
   group: doc11-independent-${{ github.repository_id }}-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   bootstrap-stages:
     if: ${{ github.repository_id == '1471748051' && github.ref_name == 'master' }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - name: Verify frozen Rust tree
@@ -124,6 +124,11 @@ jobs:
           git rev-parse HEAD > doc11-game-evidence/source-sha.txt
           python3 -u runtime-doc/tests/test_stage2_games.py --stage2 doc11-self-evidence/stage2 --scanner doc11-evidence/module_scan --reference doc11-evidence/doc --evidence doc11-game-evidence | tee doc11-game-evidence/test.log
           python3 runtime-doc/tests/test_placement_policy.py --managed doc11-self-evidence/stage2 | tee doc11-game-evidence/placement-policy-test.log
+          cc -std=gnu11 -O1 -g -fno-pie -no-pie -fsanitize=address,undefined -fno-sanitize-recover=all -I runtime-doc/runtime runtime-doc/tests/scalable_scratch_test.c -o doc11-game-evidence/scalable-scratch-test
+          ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 doc11-game-evidence/scalable-scratch-test | tee doc11-game-evidence/scalable-scratch-test.log
+          cc -std=gnu11 -O1 -g -pthread -fno-pie -no-pie -fsanitize=address,undefined -fno-sanitize-recover=all -I runtime-doc/runtime runtime-doc/tests/name_index_test.c -o doc11-game-evidence/name-index-test
+          ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 doc11-game-evidence/name-index-test | tee doc11-game-evidence/name-index-test.log
+          python3 -u runtime-doc/tests/test_name_index.py --reactive doc11-game-evidence/reactive2 --reference doc11-evidence/doc --evidence doc11-game-evidence/generated-index | tee doc11-game-evidence/generated-index-test.log
           python3 runtime-doc/tests/test_recurrence_policy.py --managed doc11-self-evidence/stage2 --reactive doc11-game-evidence/reactive2 | tee doc11-game-evidence/recurrence-authority-test.log
           python3 -u runtime-doc/tests/test_nested_data.py --reference doc11-evidence/doc --managed doc11-self-evidence/stage2 --reactive doc11-game-evidence/reactive2 --evidence doc11-game-evidence/nested-data | tee doc11-game-evidence/nested-data-test.log
           python3 -u runtime-doc/tests/test_cpu_family.py --reference doc11-evidence/doc --reactive doc11-game-evidence/reactive2 --evidence doc11-game-evidence/cpu-family | tee doc11-game-evidence/cpu-family-test.log

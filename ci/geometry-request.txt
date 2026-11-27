@@ -1,0 +1,1 @@
+Corrected bounded addition input for every width (period 32760; <=32767 admission), independent wrap-sum oracle; preserve raw partial failure archive. Rerun first physical geometry campaign.

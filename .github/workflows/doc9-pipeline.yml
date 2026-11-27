@@ -1,0 +1,73 @@
+name: DOC9 physical ingestion and large family iterations
+on:
+  push:
+    branches: [master]
+    paths: ['ci/pipeline-request.txt']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  build-cpu:
+    if: ${{ github.repository_id == '1471748051' && github.ref_name == 'master' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc9-scale-build
+          run-id: 46032762791
+          github-token: ${{ github.token }}
+          path: doc9-accepted-scale
+      - name: Exact accepted source and pinned native ABI
+        run: |
+          test "$(git rev-parse HEAD:runtime-doc/runtime)" = e2715a19ad35f74f7a4ac5869c672f71715171dc
+          test "$(git rev-parse HEAD:runtime-doc/compiler)" = 451e807de59d2daa1536116b0dba4d2a19f29012
+          test "$(cat doc9-accepted-scale/source-sha.txt)" = ef06a32f0c0504784e15ea0db4b6ca5ab9cf8838
+          (cd doc9-accepted-scale; sed 's@doc9-scale-build/@@g' SHA256SUMS | sha256sum -c -)
+          curl -fL --retry 3 https://github.com/gfx-rs/wgpu-native/releases/download/v27.0.4.1/wgpu-linux-x86_64-release.zip -o wgpu.zip
+          echo '9385b8a9e4e6f0b00264757577511097104fedf6db7819aa3e34a106c3dc0a42  wgpu.zip' | sha256sum -c -
+          unzip -q wgpu.zip -d doc9-wgpu
+          python3 -u runtime-doc/tests/build_scale_pipeline.py --accepted doc9-accepted-scale --wgpu doc9-wgpu --out doc9-pipeline-build
+      - name: Actual CPU scaling, no GPU initialization
+        run: |
+          LD_LIBRARY_PATH="$PWD/doc9-wgpu/lib" python3 -u runtime-doc/tests/benchmark_scale_pipeline.py --root doc9-pipeline-build --out doc9-pipeline-cpu --samples 3 --epochs 6
+          cp doc9-wgpu/lib/libwgpu_native.so doc9-pipeline-build/
+          git rev-parse HEAD > doc9-pipeline-build/source-sha.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: doc9-pipeline-build
+          path: doc9-pipeline-build/
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: doc9-pipeline-cpu
+          path: doc9-pipeline-cpu/
+  physical:
+    needs: build-cpu
+    runs-on: ubuntu-24.04
+    timeout-minutes: 110
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc9-pipeline-build
+          path: doc9-pipeline-build
+      - run: |
+          test "$(cat doc9-pipeline-build/source-sha.txt)" = "$(git rev-parse HEAD)"
+          mkdir -p doc9-wgpu/lib
+          cp doc9-pipeline-build/libwgpu_native.so doc9-wgpu/lib/
+          python3 -m pip install 'kaggle>=2.2.1,<3' 'six>=1.16'
+      - name: Physical-only GPU configuration and CPU comparison
+        env:
+          KAGGLE_DOC_1: ${{ secrets.KAGGLE_DOC_1 }}
+          DOC_KAGGLE_USERNAME: ${{ vars.DOC_KAGGLE_USERNAME }}
+        run: python3 -u ci/kaggle/pipeline_dispatch.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: doc9-pipeline-physical
+          path: doc9-pipeline-evidence/

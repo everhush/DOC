@@ -1,0 +1,1 @@
+Corrected input domain for wide additions and large list variants; independent wrap-sum oracle, archive even on failure. Supersedes known-bad input snapshot. Actual physical GPU only.
