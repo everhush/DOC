@@ -92,3 +92,11 @@ The final working tree uses `runtime/results/independent-dedicated-100/` as the 
 The revised repository now includes `.github/workflows/publication-validation.yml`. It is configured to run clean GCC/Clang Release validation, separate ASan/UBSan and ThreadSanitizer jobs, a pinned Typst 0.15.1 build with PDF preflight and page rendering, and a fresh 20-sample benchmark campaign. Generated PDF/source/renders, benchmark evidence, and compiler/sanitizer logs are one-day GitHub Actions artifacts. A final `Publication gate` status requires every job to succeed. The workflow is read-only, persists no checkout credentials, creates no releases, and needs no user-managed secrets or tokens.
 
 The workflow definition and its component commands were validated locally in the revision environment: the local release gate passes, the historical 20-sample campaign passes the benchmark-artifact validator, and a fresh one-sample/all-scenario campaign also passes it. Hosted run 36583157931 at revision `d2e9edb4f962f132e96d7e342bd14f48ff8446cc` completed the publication gate successfully and produced the 33-page reviewer-revision manuscript artifact. A later audit found that the historical PDF font-preflight script parsed a fixed `pdffonts` field and that piped validation commands did not explicitly request bash pipefail semantics; the submitted PDF itself had all fonts embedded. The current repository corrects the parser and requires explicit bash run-shell semantics so future piped failures propagate. These post-run hardening edits were validated locally because the Actions artifact quota was exhausted; no new hosted run is claimed for them.
+
+## Licensing
+
+Copyright (c) 2026 Rituraj Basak. This verification report is licensed under
+the Creative Commons Attribution 4.0 International License (CC BY 4.0).
+The project's original software is additionally available under Apache 2.0.
+See the repository [license scope](../LICENSE) and [Apache license](../LICENSE-APACHE).
+This licensing notice does not change the historical verification results.

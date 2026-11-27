@@ -69,3 +69,12 @@ an available accelerator.** Issues [#7](https://github.com/imxade/DOC/issues/7),
 Rust-only gates. [#10](https://github.com/imxade/DOC/issues/10) begins only
 after the accepted source SHA, runtime semantics, physical GPU computation,
 and Linux release evidence are jointly signed off.
+
+## Licensing
+
+Copyright (c) 2026 Rituraj Basak. The research paper, reports and documentation
+are licensed under CC BY 4.0. Original software is additionally available
+under Apache 2.0; recipients may choose that license for the software.
+See [license scope](LICENSE), [Apache 2.0 license](LICENSE-APACHE), and
+[attribution notice](NOTICE). Existing CC BY 4.0 grants and third-party
+licenses remain in effect.
