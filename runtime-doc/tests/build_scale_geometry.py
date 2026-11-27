@@ -19,6 +19,10 @@ def main():
   f=headers/'value_primitives.h';v=f.read_text();v=replace(v,'#define DOC_FAMILY_LIMIT 4096u',f'#define DOC_FAMILY_LIMIT {limit}u');f.write_text(v)
   f=headers/'gpu_values.h';g=f.read_text()
   if variant!='base':
+   g=replace(g,'gpu_limits.maxComputeInvocationsPerWorkgroup<64||gpu_limits.maxComputeWorkgroupSizeX<64',f'gpu_limits.maxComputeInvocationsPerWorkgroup<{wg}||gpu_limits.maxComputeWorkgroupSizeX<{wg}')
+   g=replace(g,'(v.n+63)/64>gpu_limits.maxComputeWorkgroupsPerDimension','diag_groups(v.n)>gpu_limits.maxComputeWorkgroupsPerDimension')
+   assert g.count('(count+63)/64')==3
+   g=g.replace('(count+63)/64','diag_groups(count)')
    stride_code='const char *p=getenv("DOC_DIAG_GROUP_CAP");if(p){char *end;unsigned long z=strtoul(p,&end,10);if(*p&&!*end&&z&&z<groups)groups=z;}' if stride else ''
    g=replace(g,'static WGPULimits gpu_limits;',f'''static WGPULimits gpu_limits;
 static size_t diag_groups(size_t count){{
@@ -26,10 +30,6 @@ static size_t diag_groups(size_t count){{
     {stride_code}
     return groups;
 }}'''.replace('\\"','"'))
-   g=replace(g,'gpu_limits.maxComputeInvocationsPerWorkgroup<64||gpu_limits.maxComputeWorkgroupSizeX<64',f'gpu_limits.maxComputeInvocationsPerWorkgroup<{wg}||gpu_limits.maxComputeWorkgroupSizeX<{wg}')
-   g=replace(g,'(v.n+63)/64>gpu_limits.maxComputeWorkgroupsPerDimension','diag_groups(v.n)>gpu_limits.maxComputeWorkgroupsPerDimension')
-   assert g.count('(count+63)/64')==3
-   g=g.replace('(count+63)/64','diag_groups(count)')
    g=replace(g,'struct timespec interval={0,50000},start,now;',f'struct timespec interval={{0,{poll}}},start,now;')
   # Record actual negotiated limits, not assumptions about a T4.
   g=replace(g,'WGPUShaderSourceWGSL source=', 'fprintf(stderr,"DOC9_LIMITS: wg_invocations=%u wg_x=%u groups=%u storage=%llu buffer=%llu\\n",gpu_limits.maxComputeInvocationsPerWorkgroup,gpu_limits.maxComputeWorkgroupSizeX,gpu_limits.maxComputeWorkgroupsPerDimension,(unsigned long long)gpu_limits.maxStorageBufferBindingSize,(unsigned long long)gpu_limits.maxBufferSize);WGPUShaderSourceWGSL source=')
