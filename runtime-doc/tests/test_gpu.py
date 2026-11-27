@@ -40,6 +40,7 @@ def graph_generation(a,root,comp,plan,headers,wgpu):
   exe=root/'gpu_graph_generation'
   check([*flags,Path(__file__).resolve().parent/'gpu_graph_generation_host.c',*objects,'-L',wgpu/'lib','-Wl,-rpath,'+str(wgpu/'lib'),'-lwgpu_native','-o',exe],root)
   if a.artifacts:shutil.copy2(exe,a.artifacts/'gpu_graph_generation')
+ if a.build_only:return
  result=run([exe],root,a.physical)
  if a.artifacts:
   (a.artifacts/'gpu_graph_generation.stdout').write_bytes(result.stdout)
@@ -51,9 +52,10 @@ def graph_generation(a,root,comp,plan,headers,wgpu):
  print(result.stdout.decode().strip(),result.stderr.decode(),flush=True)
 
 def main():
- p=argparse.ArgumentParser();p.add_argument('--prebuilt',type=Path);p.add_argument('--artifacts',type=Path);p.add_argument('--reference',type=Path);p.add_argument('--reactive',type=Path);p.add_argument('--gpu-plan',type=Path);p.add_argument('--wgpu-root',required=True,type=Path);p.add_argument('--headers',type=Path,default=Path(__file__).resolve().parent.parent/'runtime');p.add_argument('--physical',action='store_true');p.add_argument('--stream',action='store_true');a=p.parse_args();ref=a.reference.resolve() if a.reference else None;comp=a.reactive.resolve() if a.reactive else None;plan=a.gpu_plan.resolve() if a.gpu_plan else None;headers=a.headers.resolve();wgpu=a.wgpu_root.resolve();checks=0
+ p=argparse.ArgumentParser();p.add_argument('--prebuilt',type=Path);p.add_argument('--build-only',action='store_true');p.add_argument('--artifacts',type=Path);p.add_argument('--reference',type=Path);p.add_argument('--reactive',type=Path);p.add_argument('--gpu-plan',type=Path);p.add_argument('--wgpu-root',required=True,type=Path);p.add_argument('--headers',type=Path,default=Path(__file__).resolve().parent.parent/'runtime');p.add_argument('--physical',action='store_true');p.add_argument('--stream',action='store_true');a=p.parse_args();ref=a.reference.resolve() if a.reference else None;comp=a.reactive.resolve() if a.reactive else None;plan=a.gpu_plan.resolve() if a.gpu_plan else None;headers=a.headers.resolve();wgpu=a.wgpu_root.resolve();checks=0
  if a.artifacts:a.artifacts.mkdir(parents=True,exist_ok=True)
  assert a.prebuilt or (ref and comp and plan)
+ assert not a.build_only or (a.artifacts and not a.prebuilt)
  scalar='source a:int=-2147483648\nsource b:int=2147483647\nderive lo:bool(a,b)=lt(a,b)\nderive hi:bool(a,b)=le(b,a)\nderive pick:int(a,b,lo)=if(lo,a,b)\n'
  arithmetic='source a:int=2\nsource b:int=-3\nderive x:int(a,b)=mul(a,b)\nderive y:int(a,b)=add(a,b)\nderive z:bool(x,y)=lt(x,y)\n'
  wide='source x:int=2\n'+''.join(f'derive g{i}:bool(x)=eq(x,{i})\n' for i in range(96))
@@ -88,6 +90,16 @@ def main():
      shutil.copy2(exe,a.artifacts/name);(a.artifacts/(name+'.expected')).write_bytes(expected)
      (a.artifacts/(name+'.wgsl')).write_bytes((root/'generated.wgsl').read_bytes())
      (a.artifacts/(name+'.c')).write_bytes(c.read_bytes())
+   if a.build_only:
+    if name=='mixed':
+     harness=root/'device_loss.c';harness.write_text("#define main generated_main\n#include \"generated.c\"\n#undef main\n#include <assert.h>\nint main(void){\n    Epoch e; size_t target; epoch_init(&e,states,sizeof(states)/sizeof(states[0]));\n    gpu_mode=2; assert(gpu_open(e.n));\n    epoch_begin(&e); assert(batch(&e,0,NULL,&target)); epoch_finish(&e,1);\n    assert(gpu_dispatches>0);\n    V *saved=calloc(e.n,sizeof(V)); unsigned char *dirty=malloc(e.n),*have=malloc(e.n);\n    assert(saved&&dirty&&have);\n    for(size_t i=0;i<e.n;i++)if(states[i].name)saved[i]=*states[i].slot;\n    memcpy(dirty,e.dirty,e.n);memcpy(have,e.have,e.n);\n    gpu_destroy_verified();\n    assert(!gpu_healthy());\n    char *updates[]={\"x=3\",\"xs=[4]\"};\n    epoch_begin(&e);assert(!batch(&e,2,updates,&target));epoch_finish(&e,0);\n    assert(!memcmp(dirty,e.dirty,e.n)&&!memcmp(have,e.have,e.n));\n    for(size_t i=0;i<e.n;i++)if(states[i].name)assert(equal(saved[i],*states[i].slot));\n    free(saved);free(dirty);free(have);\n    /* Only an explicit host decision may recover on CPU. */\n    gpu_close();gpu_mode=0;\n    epoch_begin(&e);assert(batch(&e,2,updates,&target));epoch_finish(&e,1);\n    size_t x=find_state(&e,\"x\",1),g3=find_state(&e,\"g3\",2),c0=find_state(&e,\"c0\",2);\n    assert(x<e.n&&g3<e.n&&c0<e.n);\n    assert(num(*states[x].slot)==3&&truth(*states[g3].slot));\n    V v=*states[c0].slot;assert(v.kind==L&&v.n==2&&((const int64_t*)v.p)[0]==4&&((const int64_t*)v.p)[1]==0);\n    epoch_free(&e);assert(live_bytes==0);\n    puts(\"DOC11_GPU_DEVICE_LOSS_PASS: actual device destroyed; rollback and explicit CPU recovery; live=0\");\n    return 0;\n}\n")
+     loss=root/'device_loss';check(['cc','-std=gnu11','-O1','-pthread','-DDOC_ENABLE_GPU','-I',root,'-I',headers,'-I',wgpu/'include',harness,'-L',wgpu/'lib','-Wl,-rpath,'+str(wgpu/'lib'),'-lwgpu_native','-o',loss],root)
+     if a.artifacts:shutil.copy2(loss,a.artifacts/'device_loss')
+     authority=root/'gpu_epoch_authority'
+     authority_source=Path(__file__).resolve().parent/'gpu_epoch_authority_host.c'
+     check(['cc','-std=gnu11','-O1','-pthread','-DDOC_ENABLE_GPU','-I',root,'-I',headers,'-I',wgpu/'include',authority_source,'-L',wgpu/'lib','-Wl,-rpath,'+str(wgpu/'lib'),'-lwgpu_native','-o',authority],root)
+     if a.artifacts:shutil.copy2(authority,a.artifacts/'gpu_epoch_authority')
+    continue
    actual=run([exe,'--backend='+mode,*args],root,a.physical)
    if a.artifacts:
     (a.artifacts/(name+'.actual')).write_bytes(actual.stdout)
@@ -153,5 +165,7 @@ def main():
     bad=run([exe,'--backend=gpu','--next','a=40000'],root,a.physical);assert bad.returncode and b'epoch: 1' not in bad.stdout and b'epoch: 0' in bad.stdout and b'DOC_GPU_UNSUPPORTED' in bad.stderr,bad
    print(name,actual.stderr.decode(),flush=True);checks+=1
   graph_generation(a,root,comp,plan,headers,wgpu)
+ if a.build_only:
+  print('DOC9_GPU_BUILD_ONLY_PASS: exact compiled micrographs and adverse harnesses; no device opened',flush=True);return
  print(f'DOC11_WEBGPU_PASS: {checks} native actual-device comparisons; generated typed WGSL, signed extrema, nested dependency barriers, strict rejection, mixed CPU/GPU; physical_required={a.physical}')
 if __name__=='__main__':main()

@@ -54,9 +54,10 @@ def measurements(raw,epochs=None):
 def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--games',required=True,type=Path);p.add_argument('--wgpu-root',required=True,type=Path);p.add_argument('--evidence',required=True,type=Path)
-    p.add_argument('--prebuilt',type=Path);p.add_argument('--engine',type=Path,default=ROOT.parent/'engine');p.add_argument('--physical',action='store_true')
+    p.add_argument('--prebuilt',type=Path);p.add_argument('--build-only',action='store_true');p.add_argument('--engine',type=Path,default=ROOT.parent/'engine');p.add_argument('--physical',action='store_true')
     a=p.parse_args();games=a.games.resolve();out=a.evidence.resolve();out.mkdir(parents=True,exist_ok=True)
     scanner=games/'scanner2';compiler=games/'reactive2';planner=games/'gpu_plan2';engine=a.engine.resolve()
+    assert not a.build_only or not a.prebuilt
     self_test();summary={}
     with tempfile.TemporaryDirectory() as tmp:
         assets=Path(tmp)/'assets';shutil.copytree(engine/'levels',assets/'levels');assert not list(assets.rglob('*.doc'))
@@ -77,6 +78,8 @@ def main():
                 code=build_bundled([compiler],snapshot,exe,ROOT/'runtime',True,c,stream=True,gpu_plan=[planner],wgpu_root=a.wgpu_root,emit_wgsl=wgsl,emit_gpu_header=out/(name+'-gpu.h'))
                 build_ns=time.perf_counter_ns()-start
             assert code==(games/(name+'.c')).read_bytes(),'CPU/GPU generated C differs'
+            if a.build_only:
+                print(f'DOC9_GPU_GAME_BUILD_ONLY: {name} sha256={sha(exe)}; no adapter opened',flush=True);continue
             # CPU-only ELF is a deterministic absent-WebGPU case, regardless of
             # installed driver. Auto may fall back before starting an epoch.
             fallback,_=execute(games/name,assets,args,'auto')

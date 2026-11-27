@@ -125,7 +125,7 @@ def gpu_artifacts(planner, data, stream=False):
     cases=[int(case,16) for case in re.findall(rb'if\(state==0x([0-9a-f]{8})u\)',shader)]
     if shader.count(b'if(state==')!=len(admitted) or cases!=admitted:
         raise ValueError('GPU plan/kernel case identity mismatch')
-    if shader.count(b'0xd0c11a5eu')!=1 or not shader.endswith(b'if(matched){out[idx*2u]=value;out[idx*2u+1u]=0xd0c11a5eu;}}'):
+    if shader.count(b'0xd0c11a5eu')!=1 or not shader.endswith((b'if(matched){out[idx*2u]=value;out[idx*2u+1u]=0xd0c11a5eu;}}',b'if(matched){out[idx*2u]=value;out[idx*2u+1u]=0xd0c11a5eu;}}}')):
         raise ValueError('GPU plan/kernel publication contract mismatch')
     header=('static const int64_t doc_gpu_bound[]={'+','.join(map(str,bounds))+'};\n'
             'static const int32_t doc_gpu_family[]={'+','.join(map(str,families))+'};\n'
