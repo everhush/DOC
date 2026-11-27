@@ -4,3 +4,8 @@ fn place_parallel(tasks) = le(32,tasks)
 fn place_workers(tasks,capacity) = if(place_parallel(tasks),if(lt(capacity,quot(tasks,16)),capacity,quot(tasks,16)),1)
 # 0 CPU, 1 admitted device/mixed frontier, -1 explicit unsupported frontier.
 fn place_device(mode,eligible,unsupported) = if(eq(mode,1),if(eq(unsupported,0),1,-1),if(eq(mode,2),if(le(64,eligible),1,0),0))
+
+# Use a completed private candidate as a coarse-work estimate; never repeat it.
+# The explicit external worker limit retains the deterministic grain diagnostic
+# on cheap fronts. Automatic mode only launches when sampled work amortizes it.
+fn place_cost_workers(tasks,capacity,cost_ns,limited) = if(le(50000,cost_ns),if(lt(tasks,capacity),tasks,capacity),if(limited,place_workers(tasks,capacity),if(le(200000,mul(tasks,cost_ns)),place_workers(tasks,capacity),1)))

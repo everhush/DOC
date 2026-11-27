@@ -34,7 +34,8 @@
 #endif
 #define REGION_LIMIT (64u*1024u*1024u)
 typedef struct Block {struct Block *next; max_align_t alignment; unsigned char data[];} Block;
-typedef struct Region {Block *head; size_t bytes; struct Region *parent;} Region;
+typedef struct Scratch {unsigned char *data;size_t used,charge;} Scratch;
+typedef struct Region {Block *head; size_t bytes; struct Region *parent; Scratch *scratch;} Region;
 #ifdef DOC_REACTIVE_VALUES
 static _Thread_local Region *active;
 static _Thread_local jmp_buf *failure_target;
@@ -54,7 +55,12 @@ static size_t live_bytes, peak_bytes, allocs;
 static int admit_test_allocation(void){return 1;}
 static void account(size_t z){live_bytes+=z;if(live_bytes>peak_bytes)peak_bytes=live_bytes;allocs++;}
 #endif
-static void clear(Region *r){while(r->head){Block *b=r->head;r->head=b->next;free(b);}live_bytes-=r->bytes;r->bytes=0;}
+/* Small scratch slabs are owned by a single causal region. Heap accounting
+ * records every actual reservation/free exactly, not logical bump allocations.
+ * The retained 512-byte slab is bounded and released on every scope exit. */
+#define DOC_SCRATCH_BYTES 512u
+static void reset_region(Region *r){while(r->head){Block *b=r->head;r->head=b->next;free(b);}if(r->bytes)live_bytes-=r->bytes;r->bytes=0;if(r->scratch)r->scratch->used=r->scratch->charge=0;}
+static void clear(Region *r){reset_region(r);if(r->scratch&&r->scratch->data){free(r->scratch->data);r->scratch->data=NULL;live_bytes-=DOC_SCRATCH_BYTES;}}
 static void cleanup(void){while(active){Region *r=active;active=r->parent;clear(r);}}
 static _Noreturn void fail(const char *message){cleanup();
 #ifdef DOC_REACTIVE_VALUES
@@ -64,7 +70,10 @@ static _Noreturn void fail(const char *message){cleanup();
 }
 static void push(Region *r){*r=(Region){.parent=active};active=r;}
 static void pop(Region *r){if(active!=r)fail("region stack");active=r->parent;clear(r);}
-static void *alloc_in(Region *r,size_t n){if(!n)return NULL;if(!r||n>REGION_LIMIT-sizeof(Block)||r->bytes>REGION_LIMIT-sizeof(Block)-n)fail("region capacity");size_t z=sizeof(Block)+n;if(!admit_test_allocation())fail("injected allocation failure");Block *b=malloc(z);if(!b)fail("allocation failure");b->next=r->head;r->head=b;r->bytes+=z;account(z);return b->data;}
+static void *alloc_in(Region *r,size_t n){if(!n)return NULL;if(!r||n>REGION_LIMIT-sizeof(Block)||r->bytes>REGION_LIMIT-sizeof(Block)-n||(r->scratch&&r->scratch->charge>REGION_LIMIT-sizeof(Block)-n-r->bytes))fail("region capacity");size_t z=sizeof(Block)+n;if(!admit_test_allocation())fail("injected allocation failure");
+    if(r->scratch&&z<=DOC_SCRATCH_BYTES){Scratch *s=r->scratch;size_t align=_Alignof(max_align_t),off=(s->used+align-1)/align*align;
+        if(off<=DOC_SCRATCH_BYTES&&z<=DOC_SCRATCH_BYTES-off){if(!s->data){s->data=malloc(DOC_SCRATCH_BYTES);if(!s->data)fail("allocation failure");account(DOC_SCRATCH_BYTES);}s->used=off+z;s->charge+=z;return s->data+off+sizeof(Block);}}
+    Block *b=malloc(z);if(!b)fail("allocation failure");b->next=r->head;r->head=b;r->bytes+=z;account(z);return b->data;}
 enum {I=0,B=1,N=2,L=3,M=4,T=5};
 typedef struct {int kind;int64_t x;size_t n;const void *p;} V;
 static V vi(int64_t x){return (V){.kind=I,.x=x};}
@@ -126,7 +135,7 @@ static V v_utf8_bytes(V a){need(a,T);int64_t *p=alloc_in(active,a.n*sizeof(*p));
 static V v_utf8_text(V a){need(a,L);char *p=alloc_in(active,a.n);for(size_t i=0;i<a.n;i++){int64_t x=((const int64_t*)a.p)[i];if(x<0||x>255)fail("byte range");p[i]=(char)x;}return txt(p,a.n);}
 /* Generated causal expressions use private alternating carry owners, not
  * references into a region that is being reset. No refcount or collector. */
-#define v_recur(seed,binder,pred,step) ({ Region *parent=active; V start=(seed); Region a,b,tmp;push(&a);push(&b);push(&tmp);Region *old=&a,*next=&b;V binder=own(old,start);size_t rounds=0;for(;;){if(truth(pred)){clear(&tmp);break;}if(rounds++>=DOC_CAUSAL_LIMIT)fail("causal step capacity");V result=(step);if(result.kind!=binder.kind)fail("causal type");V copy=own(next,result);clear(&tmp);clear(old);Region *swap=old;old=next;next=swap;binder=copy;}V out=own(parent,binder);pop(&tmp);pop(&b);pop(&a);out;})
+#define v_recur(seed,binder,pred,step) ({ Region *parent=active; V start=(seed); Region a,b,tmp;push(&a);push(&b);push(&tmp);Scratch as={0},bs={0},ts={0};a.scratch=&as;b.scratch=&bs;tmp.scratch=&ts;Region *old=&a,*next=&b;V binder=own(old,start);size_t rounds=0;for(;;){if(truth(pred)){reset_region(&tmp);break;}if(rounds++>=DOC_CAUSAL_LIMIT)fail("causal step capacity");V result=(step);if(result.kind!=binder.kind)fail("causal type");V copy=own(next,result);reset_region(&tmp);reset_region(old);Region *swap=old;old=next;next=swap;binder=copy;}V out=own(parent,binder);pop(&tmp);pop(&b);pop(&a);out;})
 #define v_map_ints(seed,binder,expr) ({ V src=need((seed),L);if(src.n>DOC_FAMILY_LIMIT)fail("family lane capacity");int64_t *dst=alloc_in(active,src.n*sizeof(*dst));Region tmp;push(&tmp);for(size_t i=0;i<src.n;i++){V binder=vi(((const int64_t*)src.p)[i]);dst[i]=num(expr);clear(&tmp);}pop(&tmp);vv(L,src.n,dst);})
 static const char *skip(const char *s){while(isspace((unsigned char)*s))s++;return s;}
 static int64_t parse_i(const char **s){const char *p=skip(*s);if(!isdigit((unsigned char)*p)&&*p!='-'&&*p!='+')fail("integer literal");errno=0;char *e;long long x=strtoll(p,&e,10);if(errno||p==e)fail("integer literal");*s=skip(e);return x;}
