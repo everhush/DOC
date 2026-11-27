@@ -24,7 +24,7 @@
 /* Compiler executables have a separately bounded workspace for token triples
  * and type inference; never define this for compiled application code. */
 #define DOC_INPUT_LIMIT 65536u
-#define DOC_FAMILY_LIMIT 4096u
+#define DOC_FAMILY_LIMIT DOC_LIST_LIMIT
 #ifdef DOC_COMPILER_WORKSPACE
 #define LIMIT 131072u
 #define DOC_CAUSAL_LIMIT 262144u
@@ -33,6 +33,15 @@
 #define DOC_CAUSAL_LIMIT DOC_INPUT_LIMIT
 #endif
 #define REGION_LIMIT (64u*1024u*1024u)
+/* Application lists and families share the actual region byte budget.
+ * Compiler workspace and text/input-stream limits remain distinct. */
+#ifdef DOC_COMPILER_WORKSPACE
+#define DOC_LIST_LIMIT LIMIT
+#define DOC_LIST_INPUT_LIMIT DOC_INPUT_LIMIT
+#else
+#define DOC_LIST_LIMIT ((REGION_LIMIT-sizeof(Block))/sizeof(int64_t))
+#define DOC_LIST_INPUT_LIMIT DOC_LIST_LIMIT
+#endif
 typedef struct Block {struct Block *next; max_align_t alignment; unsigned char data[];} Block;
 typedef struct Scratch {unsigned char *data;size_t used,charge;} Scratch;
 typedef struct Region {Block *head; size_t bytes; struct Region *parent; Scratch *scratch;} Region;
@@ -83,9 +92,10 @@ static V need(V a,int k){if(a.kind!=k)fail("value kind");return a;}
 static int64_t num(V a){return need(a,I).x;}
 static int truth(V a){return need(a,B).x!=0;}
 static size_t count(size_t n){if(n>LIMIT)fail("value capacity");return n;}
-static size_t bytes(V a){return a.kind==L?a.n*sizeof(int64_t):a.kind==T||a.kind==N?a.n:0;}
+static size_t list_count(size_t n){if(n>DOC_LIST_LIMIT)fail("list capacity");return n;}
+static size_t bytes(V a){return a.kind==L?list_count(a.n)*sizeof(int64_t):a.kind==T||a.kind==N?a.n:0;}
 static V own(Region *r,V a){size_t z=bytes(a);if(z){void *p=alloc_in(r,z);memcpy(p,a.p,z);a.p=p;}else a.p=NULL;return a;}
-static V list(const int64_t *p,size_t n){return own(active,vv(L,count(n),p));}
+static V list(const int64_t *p,size_t n){return own(active,vv(L,list_count(n),p));}
 static int utf8(const unsigned char *p,size_t n){for(size_t i=0;i<n;){unsigned c=p[i++];if(c<128)continue;unsigned k=c>=0xc2&&c<=0xdf?1:c>=0xe0&&c<=0xef?2:c>=0xf0&&c<=0xf4?3:0;if(!k||k>n-i)return 0;unsigned lo=c==0xe0?0xa0:c==0xf0?0x90:0x80,hi=c==0xed?0x9f:c==0xf4?0x8f:0xbf;if(p[i]<lo||p[i]>hi)return 0;while(k--){if((p[i++]&0xc0)!=0x80)return 0;}}return 1;}
 static V txt(const char *p,size_t n){count(n);if(!utf8((const unsigned char*)p,n))fail("UTF-8");return vv(T,n,p);}
 #define TXT(s) txt((s),sizeof(s)-1)
@@ -126,7 +136,7 @@ static V v_try_get(V a,V b){need(a,L);int64_t i=num(b);return i<0||(uint64_t)i>=
 static V v_unwrap_or(V a,V b){need(a,M);need(b,I);return a.n?vi(a.x):b;}
 static V v_slice(V a,V b,V c){need(a,L);int64_t s=num(b),n=num(c);if(s<0||n<0||(uint64_t)s>a.n||(uint64_t)n>a.n-(size_t)s)fail("slice range");return vv(L,(size_t)n,n?(const int64_t*)a.p+s:NULL);}
 static V v_tail(V a){need(a,L);return a.n?vv(L,a.n-1,a.n>1?(const int64_t*)a.p+1:NULL):a;}
-static V v_append(V a,V b){need(a,L);size_t n=count(a.n+1);int64_t *p=alloc_in(active,n*sizeof(*p));if(a.n)memcpy(p,a.p,a.n*sizeof(*p));p[a.n]=num(b);return vv(L,n,p);}
+static V v_append(V a,V b){need(a,L);size_t n=list_count(a.n+1);int64_t *p=alloc_in(active,n*sizeof(*p));if(a.n)memcpy(p,a.p,a.n*sizeof(*p));p[a.n]=num(b);return vv(L,n,p);}
 static V v_remove_at(V a,V b){size_t i=index_of(a,b),n=a.n-1;if(!n)return v_empty();int64_t *p=alloc_in(active,n*sizeof(*p));if(i)memcpy(p,a.p,i*sizeof(*p));if(i<n)memcpy(p+i,(const int64_t*)a.p+i+1,(n-i)*sizeof(*p));return vv(L,n,p);}
 static V v_replace_at(V a,V b,V c){size_t i=index_of(a,b);int64_t *p=alloc_in(active,a.n*sizeof(*p));memcpy(p,a.p,a.n*sizeof(*p));p[i]=num(c);return vv(L,a.n,p);}
 static V v_concat(V a,V b){need(a,T);need(b,T);size_t n=count(a.n+b.n);char *p=alloc_in(active,n);if(a.n)memcpy(p,a.p,a.n);if(b.n)memcpy(p+a.n,b.p,b.n);return vv(T,n,p);}
@@ -138,8 +148,15 @@ static V v_utf8_text(V a){need(a,L);char *p=alloc_in(active,a.n);for(size_t i=0;
 #define v_recur(seed,binder,pred,step) ({ Region *parent=active; V start=(seed); Region a,b,tmp;push(&a);push(&b);push(&tmp);Scratch as={0},bs={0},ts={0};a.scratch=&as;b.scratch=&bs;tmp.scratch=&ts;Region *old=&a,*next=&b;V binder=own(old,start);size_t rounds=0;for(;;){if(truth(pred)){reset_region(&tmp);break;}if(rounds++>=DOC_CAUSAL_LIMIT)fail("causal step capacity");V result=(step);if(result.kind!=binder.kind)fail("causal type");V copy=own(next,result);reset_region(&tmp);reset_region(old);Region *swap=old;old=next;next=swap;binder=copy;}V out=own(parent,binder);pop(&tmp);pop(&b);pop(&a);out;})
 #define v_map_ints(seed,binder,expr) ({ V src=need((seed),L);if(src.n>DOC_FAMILY_LIMIT)fail("family lane capacity");int64_t *dst=alloc_in(active,src.n*sizeof(*dst));Region tmp;push(&tmp);for(size_t i=0;i<src.n;i++){V binder=vi(((const int64_t*)src.p)[i]);dst[i]=num(expr);clear(&tmp);}pop(&tmp);vv(L,src.n,dst);})
 static const char *skip(const char *s){while(isspace((unsigned char)*s))s++;return s;}
-static int64_t parse_i(const char **s){const char *p=skip(*s);if(!isdigit((unsigned char)*p)&&*p!='-'&&*p!='+')fail("integer literal");errno=0;char *e;long long x=strtoll(p,&e,10);if(errno||p==e)fail("integer literal");*s=skip(e);return x;}
-static V input_value(int k,const char *s){s=skip(s);size_t n=strlen(s);while(n&&isspace((unsigned char)s[n-1]))n--;if(k==T){if(n>DOC_INPUT_LIMIT+2u)fail("text input capacity");if(n<2||s[0]!='"'||s[n-1]!='"')fail("quoted text source");for(size_t i=1;i+1<n;i++)if(s[i]==10||s[i]==13||s[i]==34||s[i]==92)fail("text literal control");return txt(s+1,n-2);}if(k==N){if(n>DOC_INPUT_LIMIT)fail("natural input capacity");return nat(s,n);}if(k==B){if(n==4&&!memcmp(s,"true",4))return vb(1);if(n==5&&!memcmp(s,"false",5))return vb(0);fail("bool literal");}if(k==I){int64_t x=parse_i(&s);if(*s)fail("integer trailing input");return vi(x);}if(k==M){if(n==4&&!memcmp(s,"none",4))return v_none();if(n<7||memcmp(s,"some(",5))fail("maybe literal");s+=5;int64_t x=parse_i(&s);if(*s!=')'||*skip(s+1))fail("maybe literal");return v_some(vi(x));}if(k!=L||*s++!='[')fail("list literal");int64_t *p=alloc_in(active,DOC_INPUT_LIMIT*sizeof(*p));size_t z=0;s=skip(s);if(*s!=']'){for(;;){if(z==DOC_INPUT_LIMIT)fail("list capacity");p[z++]=parse_i(&s);if(*s!=',')break;s++;}}if(*s!=']'||*skip(s+1))fail("list literal");return vv(L,z,p);}
+static int64_t parse_i(const char **s){
+    const char *p=skip(*s);int negative=*p=='-';if(*p=='-'||*p=='+')p++;
+    if(*p<'0'||*p>'9')fail("integer literal");
+    uint64_t limit=negative?UINT64_C(9223372036854775808):UINT64_C(9223372036854775807),v=0;
+    do{unsigned d=(unsigned)(*p++-'0');if(v>limit/10||(v==limit/10&&d>limit%10))fail("integer literal");v=v*10+d;}while(*p>='0'&&*p<='9');
+    *s=skip(p);if(!negative)return (int64_t)v;
+    return v==UINT64_C(9223372036854775808)?INT64_MIN:-(int64_t)v;
+}
+static V input_value(int k,const char *s){s=skip(s);size_t n=strlen(s);while(n&&isspace((unsigned char)s[n-1]))n--;if(k==T){if(n>DOC_INPUT_LIMIT+2u)fail("text input capacity");if(n<2||s[0]!='"'||s[n-1]!='"')fail("quoted text source");for(size_t i=1;i+1<n;i++)if(s[i]==10||s[i]==13||s[i]==34||s[i]==92)fail("text literal control");return txt(s+1,n-2);}if(k==N){if(n>DOC_INPUT_LIMIT)fail("natural input capacity");return nat(s,n);}if(k==B){if(n==4&&!memcmp(s,"true",4))return vb(1);if(n==5&&!memcmp(s,"false",5))return vb(0);fail("bool literal");}if(k==I){int64_t x=parse_i(&s);if(*s)fail("integer trailing input");return vi(x);}if(k==M){if(n==4&&!memcmp(s,"none",4))return v_none();if(n<7||memcmp(s,"some(",5))fail("maybe literal");s+=5;int64_t x=parse_i(&s);if(*s!=')'||*skip(s+1))fail("maybe literal");return v_some(vi(x));}if(k!=L||*s++!='[')fail("list literal");size_t capacity=0;s=skip(s);if(*s!=']'){capacity=1;for(const char *q=s;*q&&*q!=']';q++)if(*q==','){if(capacity==DOC_LIST_INPUT_LIMIT)fail("list capacity");capacity++;}}int64_t *p=alloc_in(active,capacity*sizeof(*p));size_t z=0;if(*s!=']'){for(;;){if(z==capacity)fail("list capacity");p[z++]=parse_i(&s);if(*s!=',')break;s++;}}if(*s!=']'||*skip(s+1))fail("list literal");return vv(L,z,p);}
 /* Explicit startup-only read, using the host-granted root directory.
  * Every child component is descriptor-relative and no-follow. */
 static const char *asset_root=".";
