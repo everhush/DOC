@@ -1,6 +1,6 @@
 # Autonomous scalability audit — issue #9
 
-Status: exact production source/resource, CPU original-workload, early physical GPU and independent evidence verification passed. Full same-run independent compiler/application/physical regression remains in progress. This is a development evidence ledger, not a public release or manuscript change.
+Status: final production qualification complete; all six independent validation jobs passed. Private external CPU comparison passed; unmodified HVM CUDA cannot execute on the tested Tesla T4 configuration. This is a development evidence ledger, not a public release or manuscript change.
 
 ## Exact source identity
 
@@ -84,8 +84,12 @@ Modular auto backend speedup 15.03x vs serial. Four-worker CPU modular result 66
 
 The production source/resource preflight used ASan/UBSan, checked signed extrema and malformed input, million-element list, over-region rejection, shared-domain reference parity, 4097/16384 expanded native list oracles, allocation failure across 66 update and 33 snapshot ordinals, 128 replacements with stalled readers and zero live memory. Early hardware preflight uses actual compiler-generated shaders, no software device, verifies original 16/17 epoch game replays, actual mixed frontiers, injected failure rollback, actual device loss, submitted-work retirement, graph replacement, protected snapshot, strict numeric admission, pool growth/reuse/closure. Both games retain prior typed observations, with 876/878 GPU lanes and rejected successor epochs 3/4. Prior unchanged mesh/window evidence stays historical.
 
-The complete same-run validation must finish before #9 is closed. No manuscript edits or public release. #14 must distinguish finite-model theorems, conditional extensions, implementation checks and historical/current empirical evidence; neither paper may imply unbounded physical resources, universal speedup, automatic discovery of all semantic dependencies or distributed elasticity from these results.
+The complete same-run validation has finished successfully; the requested external comparison is documented separately. No manuscript edits or public release. #14 must distinguish finite-model theorems, conditional extensions, implementation checks and historical/current empirical evidence; neither paper may imply unbounded physical resources, universal speedup, automatic discovery of all semantic dependencies or distributed elasticity from these results.
 
 ## Final same-run validation — 2026-11-28
 
 Supersedes the pending status above. All six jobs of 46052437755 completed successfully at ed0cc865dbb0c416b903062c8869e6956635929e, with identical production runtime and compiler trees. Independent archive recheck: physical artifact 15227957875, 880 byte-matched archive members, 1827 numerical rows independently recomputed, 399 process pairs, 114 physical sessions and 4374 verified GPU dispatches. The actual selected adapter was one Tesla T4, not a software adapter. Original paper CPU regression and returned-evidence audit also passed. This is final DOC production evidence, separate from the newly requested private HVM comparison. No public release or manuscript change.
+
+## Issue #9 closure disposition — 2026-11-28
+
+The [private comparative ledger](hvm/COMPARISON.md) records all stable HVM2 CPU and physical comparison attempts, artifacts, independent checks and negative controls. Final matched CPU matrix PASS (198/198 processes), integrated prime PASS, one/two-worker control PASS (144/144 processes). Physical comparison 46060777040: DOC PASS (57 processes, 141 independently checked rounds, 2121 verified physical dispatches), HVM2 CUDA FAIL on all 47 compiled cases with identical launch error; the released evaluator needs 96 KiB dynamic shared memory per block on a T4 with maximum 64 KiB. CUDA 13 versus upstream CUDA 12 support is an additional caveat. No HVM GPU speed ratio and no false green result. External rendering excluded as requested. Original exact-production acceptance all green; no change in production compiler, runtime, reference, engine or manuscripts. Complete #9 on the supported workload evidence and recorded hardware limitation; no additional benchmark-specific tuning, public release or scheduled automation.
