@@ -25,6 +25,12 @@ int main(void){
         assert(num(F_place_cost_workers(vi(t),vi(hw),vi(50000),vb(limited)))==(t<hw?t:hw));cases++;
         assert(num(F_place_cost_workers(vi(t),vi(hw),vi(49999),vb(limited)))==((limited||t*49999>=200000)?grain:1));cases++;
     }
+    for(int64_t t=256;t<=4096;t*=2)for(int64_t hw=1;hw<=32;hw++){
+        int64_t grain=hw<t/16?hw:t/16;
+        assert(num(F_place_cost_workers(vi(t),vi(hw),vi(999),vb(0)))==1);cases++;
+        assert(num(F_place_cost_workers(vi(t),vi(hw),vi(999),vb(1)))==grain);cases++;
+        assert(num(F_place_cost_workers(vi(t),vi(hw),vi(1000),vb(0)))==grain);cases++;
+    }
     assert(!live_bytes);
     printf("DOC11_PLACEMENT_POLICY_PASS: %zu native decisions; no workload names or hints\n",cases);
     return 0;

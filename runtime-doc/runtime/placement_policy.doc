@@ -8,4 +8,4 @@ fn place_device(mode,eligible,unsupported) = if(eq(mode,1),if(eq(unsupported,0),
 # Use a completed private candidate as a coarse-work estimate; never repeat it.
 # The explicit external worker limit retains the deterministic grain diagnostic
 # on cheap fronts. Automatic mode only launches when sampled work amortizes it.
-fn place_cost_workers(tasks,capacity,cost_ns,limited) = if(le(50000,cost_ns),if(lt(tasks,capacity),tasks,capacity),if(limited,place_workers(tasks,capacity),if(le(200000,mul(tasks,cost_ns)),place_workers(tasks,capacity),1)))
+fn place_cost_workers(tasks,capacity,cost_ns,limited) = if(le(50000,cost_ns),if(lt(tasks,capacity),tasks,capacity),if(limited,place_workers(tasks,capacity),if(if(le(1000,cost_ns),le(200000,mul(tasks,cost_ns)),false),place_workers(tasks,capacity),1)))
