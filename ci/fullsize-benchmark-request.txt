@@ -1,0 +1,1 @@
+2026-11-27: reproduce all original-size paper graphs using exact historical C++ numerical callbacks, independently constructed test-only CSR graph and current native runtime substrate. Compare exact evaluation counts and numerical oracles. 30 samples per admitted mode, all retained, separate from integrated compiler acceptance. Do not cancel consolidated acceptance runs.
