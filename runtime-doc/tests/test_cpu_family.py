@@ -36,7 +36,14 @@ def main():
         assert observed==expected,(observed,expected,actual.stderr)
         rows.append({'requested':workers,'hardware':hw,'actual':observed,'sha256':hashlib.sha256(actual.stdout).hexdigest()})
     compare(exe,fixture,['--demand=ys',xs(4096)],label='capacity')
-    compare(exe,fixture,['--demand=ys',xs(4097)],valid=False,label='overcapacity')
+    # Frozen reference intentionally remains limited to 4096 lanes.
+    # The expanded native domain uses an independent mathematical oracle.
+    for size in (4097,16384):
+        actual=run([exe,'--backend=cpu','--demand=ys',xs(size)],workers=4)
+        expected=('ys: ['+','.join(str(i+5) for i in range(size))+']\n').encode()
+        assert actual.returncode==0 and actual.stdout==expected and b'DOC11_REGIONS: live=0 ' in actual.stderr,actual.stderr
+        assert not any(x in actual.stderr for x in (b'AddressSanitizer',b'LeakSanitizer',b'ThreadSanitizer',b'runtime error:')),actual.stderr
+        (out/('expanded-'+str(size)+'.stderr')).write_bytes(actual.stderr)
     bad=compare(exe,fixture,[*args,'--next','xs=[9223372036854775807]','flag=true'],valid=False,label='overflow')
     assert b'epoch: 4\n' in bad.stdout and b'epoch: 5\n' not in bad.stdout
     # A large parent frontier already owns a CPU pool. Inner family work is
@@ -45,6 +52,6 @@ def main():
     result=compare(mixed_exe,mixed_source,[xs(128)],label='mixed')
     if hw>=2:
         assert b'DOC11_CPU_FAMILY: lanes=128 workers=1' in result.stderr and b'DOC11_MANAGED_PARALLEL:' in result.stderr,result.stderr
-    (out/'summary.json').write_text(json.dumps({'cases':rows,'capacity':4096,'rollback':True,'nested_pool_suppressed':True},indent=2)+'\n')
-    print('DOC11_CPU_FAMILY_PASS: actual worker scaling, frozen 4096-lane cap, overflow rollback and no nested CPU pool',flush=True)
+    (out/'summary.json').write_text(json.dumps({'cases':rows,'frozen_reference_capacity':4096,'expanded_native_tested':16384,'rollback':True,'nested_pool_suppressed':True},indent=2)+'\n')
+    print('DOC11_CPU_FAMILY_PASS: actual worker scaling, frozen shared-domain parity and expanded native domain, overflow rollback and no nested CPU pool',flush=True)
 if __name__=='__main__':main()

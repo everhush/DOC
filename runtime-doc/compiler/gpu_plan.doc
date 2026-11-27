@@ -3,6 +3,7 @@ import parser_core.doc
 import common_core.doc
 import general_core.doc
 import gpu_core.doc
+import gpu_range_core.doc
 source input: ints = []
 derive validated: ints (input) = utf8_bytes(utf8_text(input))
 derive seed: ints () = append(append(append(empty(),0),0),0)
@@ -49,9 +50,17 @@ derive inferred: ints (infer_seed,syntax,end_tokens,validated,directory,links,de
 derive types: ints (inferred) = slice(inferred,7,sub(len(inferred),7))
 derive gpu_seed: ints (types,decl_count) = if(eq(len(types),decl_count),append(append(append(append(empty(),0),0),0),0),preject(types))
 derive gpu_state: ints (gpu_seed,syntax,directory,links,gnumbers,gowners,event_count) = recur(gpu_seed,s,eq(get(s,0),event_count),gpu_scan(s,syntax,directory,links,gnumbers,gowners))
-derive bounds: ints (gpu_state) = slice(gpu_state,4,sub(len(gpu_state),4))
+derive legacy_bounds: ints (gpu_state) = slice(gpu_state,4,sub(len(gpu_state),4))
+derive extended_state: ints (gpu_seed,syntax,directory,links,gnumbers,gowners,event_count) = recur(gpu_seed,s,eq(get(s,0),event_count),sx_scan(s,syntax,directory,links,gnumbers,gowners))
+derive extended_valid: ints (extended_state) = slice(extended_state,4,sub(len(extended_state),4))
+derive range_seed: ints (event_count) = append(empty(),sub(event_count,1))
+derive range_initial: ints (range_seed,legacy_bounds,decl_count) = recur(range_seed,s,eq(len(s),add(decl_count,1)),append(s,get(legacy_bounds,sub(len(s),1))))
+derive range_big: ints (range_initial,syntax,directory,links,gnumbers,extended_valid,gowners) = recur(range_initial,s,lt(get(s,0),0),sx_step(s,syntax,directory,links,gnumbers,extended_valid,gowners,2147483647))
+derive range_reset: ints (range_big,event_count) = replace_at(range_big,0,sub(event_count,1))
+derive range_mid: ints (range_reset,syntax,directory,links,gnumbers,extended_valid,gowners) = recur(range_reset,s,lt(get(s,0),0),sx_step(s,syntax,directory,links,gnumbers,extended_valid,gowners,32767))
+derive bounds: ints (range_mid,decl_count) = slice(range_mid,1,decl_count)
 derive family_seed: ints () = empty()
 derive families: ints (family_seed,bounds,directory,links,decl_count) = recur(family_seed,s,eq(len(s),decl_count),append(s,gpu_family_at(directory,links,bounds,len(s))))
 derive shader_seed: ints (bounds,decl_count) = if(eq(len(bounds),decl_count),append(append(utf8_bytes(concat(gpu_header(),nl())),0),0),preject(bounds))
 derive shader_state: ints (shader_seed,syntax,end_tokens,validated,directory,links,gnumbers,bounds,gowners,event_count) = recur(shader_seed,s,eq(e_cursor(s),event_count),gpu_emit(s,syntax,end_tokens,validated,directory,links,gnumbers,bounds,gowners))
-derive shader: text (shader_state) = concat(utf8_text(slice(shader_state,0,sub(len(shader_state),2))),text("if(matched){out[idx*2u]=value;out[idx*2u+1u]=0xd0c11a5eu;}}"))
+derive shader: text (shader_state) = concat(utf8_text(slice(shader_state,0,sub(len(shader_state),2))),text("if(matched){out[idx*2u]=value;out[idx*2u+1u]=0xd0c11a5eu;}}}"))
