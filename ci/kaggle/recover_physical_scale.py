@@ -18,15 +18,10 @@ def main():
   missing=[f"{tag}.{ext}" for tag in tags for ext in ("stdout","stderr") if not (raw/f"{tag}.{ext}").is_file()]
   # Only retrieve missing read-only outputs from the already completed run.
   files=["doc9-gpu-scale/provenance.json","doc9-gpu-scale/measurements/summary.json"]+[f"doc9-gpu-scale/measurements/raw/{p}" for p in missing]
-  for i in range(0,len(files),60):
-   group=files[i:i+60];pattern=".*(?:"+"|".join(re.escape(p) for p in group)+")$"
-   try:kaggle(["kernels","output",name,"-p",str(remote),"--file-pattern",pattern],env,timeout=300)
-   except RuntimeError:
-    # The CLI may time out after writing files; check, then do a read-only retry.
-    group=[p for p in group if not (remote/p).is_file()]
-    if group:kaggle(["kernels","output",name,"-p",str(remote),"--file-pattern",".*(?:"+"|".join(re.escape(p) for p in group)+")$"],env,timeout=300)
-  # If CLI patterns vary by version, retry ordinary non-forced output, skipping existing files.
-  if any(not (remote/p).is_file() for p in files):kaggle(["kernels","output",name,"-p",str(remote)],env,timeout=1200)
+  # The installed CLI rejected path-pattern selection. Ordinary non-forced
+  # output resumes/skips existing local files, with a sufficient timeout.
+  if any(not (remote/p).is_file() for p in files):
+   kaggle(["kernels","output",name,"-p",str(remote)],env,timeout=1200)
  rec=json.loads((base/"provenance.json").read_text());assert rec==dict(sha=SHA,run_id=spec["run_id"],bundle_sha256=spec["bundle_sha256"],physical=True,result="pass",binaries=expected)
  report=json.loads((base/"measurements/summary.json").read_text());assert report["physical"] and report["binaries"]==expected and report["epoch_count"]==14960 and report["dispatch_count"]==6120
  rows=list(csv.DictReader((base/"measurements/epochs.csv").open()));dispatch=list(csv.DictReader((base/"measurements/dispatches.csv").open()));assert len(rows)==14960 and len(dispatch)==6120
