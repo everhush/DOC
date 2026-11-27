@@ -74,13 +74,13 @@ def pluspair(a,b):
   (al,ah) = a
   (bl,bh) = b
   z = al+bl
-  return (z%65536,ah+bh+(z/65536))
+  return (z%65536,ah+bh+(z / 65536))
 
 def fold(d,i,e,f):
   switch d:
     case 0:
       v = f(i,e)
-      return (v%65536,v/65536)
+      return (v%65536,v / 65536)
     case _:
       return pluspair(fold(d-1,i,e,f),fold(d-1,i+(1 << (d-1)),e,f))
 
@@ -96,9 +96,9 @@ def tree(d,i,e,f) -> Any:
 # from 8-bit pieces; the remaining low-word arithmetic is exact modulo 65536.
 SORT = """def affine(lo,hi,ml,mh,cl,ch):
   p0 = (lo%256)*(ml%256)
-  p1 = (lo/256)*(ml%256)+(lo%256)*(ml/256)+(p0/256)
+  p1 = (lo / 256)*(ml%256)+(lo%256)*(ml / 256)+(p0 / 256)
   low = (p0%256)+256*(p1%256)+cl
-  high = (lo/256)*(ml/256)+(p1/256)+lo*mh+hi*ml+ch+(low/65536)
+  high = (lo / 256)*(ml / 256)+(p1 / 256)+lo*mh+hi*ml+ch+(low / 65536)
   return (low%65536,high%65536)
 
 def swap(s,a,b):
