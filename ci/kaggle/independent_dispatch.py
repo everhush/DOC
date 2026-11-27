@@ -3,10 +3,14 @@
 import json,os,re,subprocess,tempfile,time
 from pathlib import Path
 from bundle import create_private_dataset
-from dispatch import auth_environment,gpu_remaining_hours,kaggle,prepare_kernel,status_from_cli
+from dispatch import auth_environment,gpu_remaining_hours,kaggle,prepare_kernel,render_kernel_template,status_from_cli
 from independent_bundle import pack,digest
 from independent_micro_evidence import MICRO_GRAPHS,MICRO_EXECUTABLES,validate_micro_evidence,validate_destroy
 HERE=Path(__file__).resolve().parent
+INDEPENDENT_SPEC_MARKER='__DOC11_INDEPENDENT_RUN_SPEC__'
+
+def write_template(path):
+    path.write_text((HERE/'independent_bundle.py').read_text()+'\n'+(HERE/'independent_kernel.py').read_text(),encoding='utf-8')
 def main():
     sha=os.environ['GITHUB_SHA'];run_id=os.environ['GITHUB_RUN_ID'];attempt=os.environ['GITHUB_RUN_ATTEMPT']
     if os.environ.get('GITHUB_REPOSITORY_ID')!='1471748051':raise ValueError('hardware dispatch is CI-fork only')
@@ -37,14 +41,15 @@ def main():
     spec={'sha':sha,'run_id':run_id,'attempt':attempt,'accelerator':'NvidiaTeslaT4','executables':executables}
     with tempfile.TemporaryDirectory(prefix='doc11-private-') as td:
         root=Path(td)
+        template=root/'template.py';write_template(template)
+        render_kernel_template(template,spec,placeholder=INDEPENDENT_SPEC_MARKER)
         env,owner=auth_environment(os.environ.get('KAGGLE_DOC_1',''),root/'config',os.environ.get('DOC_KAGGLE_USERNAME',''))
         if gpu_remaining_hours(kaggle(['quota','--format','json'],env))<=0:raise RuntimeError('INFRA_BLOCKED: GPU quota unavailable')
         dataset=root/'dataset';dataset.mkdir()
         checksum,manifest=pack(paths,dataset/'doc-gpu-bundle.bin',sha,run_id)
         spec.update(bundle_sha256=checksum,bundle_dataset=create_private_dataset(dataset,owner,run_id,attempt,env))
         (out/'provenance.json').write_text(json.dumps({'spec':spec,'manifest':manifest},indent=2)+'\n')
-        template=root/'template.py';template.write_text((HERE/'independent_bundle.py').read_text()+'\n'+(HERE/'independent_kernel.py').read_text())
-        kernel=root/'kernel';name=prepare_kernel(kernel,template,spec,owner)
+        kernel=root/'kernel';name=prepare_kernel(kernel,template,spec,owner,placeholder=INDEPENDENT_SPEC_MARKER)
         # Exactly one submission; no ambiguous automatic retries or redundant GPU jobs.
         kaggle(['kernels','push','-p',str(kernel),'--accelerator',spec['accelerator']],env,timeout=180)
         while True:

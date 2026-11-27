@@ -1,8 +1,44 @@
 """Offline regression gate for private exact-build artifact transport."""
-import io,json,tarfile,tempfile,unittest
+import ast,io,json,tarfile,tempfile,unittest
 from pathlib import Path
 from independent_bundle import pack,unpack,digest
 from independent_micro_evidence import MICRO_GRAPHS,MICRO_EXECUTABLES,validate_micro_evidence,validate_destroy,DESTROY_QUEUE,DESTROY_CONFIRMED,ABANDON_QUEUE,LOSS_PROBE
+
+from dispatch import prepare_kernel,render_kernel_template
+from independent_dispatch import INDEPENDENT_SPEC_MARKER,write_template
+
+class NotebookTemplateTests(unittest.TestCase):
+    def test_actual_independent_template(self):
+        spec={'sha':'a'*40,'run_id':'12345','attempt':'1','accelerator':'NvidiaTeslaT4',
+              'bundle_sha256':'b'*64,'bundle_dataset':'tester/private-bundle','executables':['bin/program']}
+        with tempfile.TemporaryDirectory() as td:
+            root=Path(td);template=root/'template.py';write_template(template)
+            rendered=render_kernel_template(template,spec,placeholder=INDEPENDENT_SPEC_MARKER)
+            folder=root/'kernel'
+            self.assertEqual(prepare_kernel(folder,template,spec,'tester',placeholder=INDEPENDENT_SPEC_MARKER),'tester/doc-gpu-12345-1')
+            code=(folder/'doc_kaggle_gpu.py').read_text()
+            self.assertEqual(code,rendered)
+            self.assertNotIn(INDEPENDENT_SPEC_MARKER,code)
+            tree=ast.parse(code)
+            assignments=[n for n in tree.body if isinstance(n,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='SPEC' for t in n.targets)]
+            self.assertEqual(len(assignments),1)
+            self.assertEqual(ast.literal_eval(assignments[0].value),spec)
+            calls=[n for n in ast.walk(tree) if isinstance(n,ast.Call) and isinstance(n.func,ast.Attribute) and isinstance(n.func.value,ast.Name) and n.func.value.id=='runpy' and n.func.attr=='run_path']
+            self.assertEqual(len(calls),1)
+            globals_arg=next(k.value for k in calls[0].keywords if k.arg=='init_globals')
+            self.assertEqual([ast.literal_eval(k) for k in globals_arg.keys],['__DOC_KAGGLE_RUN_SPEC__'])
+            self.assertEqual(globals_arg.values[0].id,'SPEC')
+            metadata=json.loads((folder/'kernel-metadata.json').read_text())
+            self.assertEqual(metadata['dataset_sources'],[spec['bundle_dataset']])
+            self.assertEqual(metadata['is_private'],'true')
+            self.assertEqual(metadata['enable_gpu'],'true')
+    def test_template_fails_closed(self):
+        with tempfile.TemporaryDirectory() as td:
+            template=Path(td)/'template.py'
+            for source in ('SPEC=None','SPEC='+INDEPENDENT_SPEC_MARKER+'\nOTHER='+INDEPENDENT_SPEC_MARKER,'SPEC='+INDEPENDENT_SPEC_MARKER+'\nif'):
+                template.write_text(source)
+                with self.subTest(source=source),self.assertRaises((ValueError,SyntaxError)):
+                    render_kernel_template(template,{},placeholder=INDEPENDENT_SPEC_MARKER)
 
 SHA='a'*40
 RUN='12345'

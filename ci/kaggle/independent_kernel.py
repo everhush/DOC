@@ -1,7 +1,7 @@
 
 # The dispatcher prepends the bounded bundle verifier; no GitHub credentials.
 import os,runpy,subprocess,sys
-SPEC=__DOC_KAGGLE_RUN_SPEC__
+SPEC=__DOC11_INDEPENDENT_RUN_SPEC__
 def main():
     output=Path('/kaggle/working/doc11-physical');output.mkdir(parents=True,exist_ok=False)
     base=Path('/tmp/doc11-build')
