@@ -1,0 +1,38 @@
+name: DOC9 T4 read-only infrastructure preflight
+on:
+  push:
+    branches: [master]
+    paths: ['.github/workflows/doc9-t4-infrastructure.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  preflight:
+    if: ${{ github.repository_id == '1317169134' && github.ref_name == 'master' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: python3 -m pip install --disable-pip-version-check 'kaggle>=2.2.1,<3' 'six>=1.16'
+      - name: Verify migrated repository credential and GPU quota without submitting a notebook
+        env:
+          KAGGLE_DOC_1: ${{ secrets.KAGGLE_DOC_1 }}
+          DOC_KAGGLE_USERNAME: ${{ vars.DOC_KAGGLE_USERNAME }}
+        run: |
+          python3 - <<'PY'
+          import os,tempfile
+          from pathlib import Path
+          from ci.kaggle.dispatch import auth_environment,kaggle,gpu_remaining_hours
+          if not os.environ.get('KAGGLE_DOC_1','').strip():
+              raise SystemExit('DOC9_INFRA_BLOCKED: KAGGLE_DOC_1 secret is missing in migrated repository')
+          with tempfile.TemporaryDirectory() as td:
+              try:
+                  env,owner=auth_environment(os.environ['KAGGLE_DOC_1'],Path(td),os.environ.get('DOC_KAGGLE_USERNAME',''))
+                  remaining=gpu_remaining_hours(kaggle(['quota','--format','json'],env))
+              except Exception as exc:
+                  raise SystemExit('DOC9_INFRA_BLOCKED: credential or quota check failed ('+type(exc).__name__+')') from None
+              if remaining<=0:raise SystemExit('DOC9_INFRA_BLOCKED: no GPU quota remains')
+              print('DOC9_INFRA_PASS: configured credential, positive GPU quota; no notebook submitted')
+          PY
