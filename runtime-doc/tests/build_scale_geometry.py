@@ -48,6 +48,7 @@ static size_t diag_groups(size_t count){{
    (dest/'generated.c').write_text(code);(dest/'generated.wgsl').write_text(new)
    host=(H/'benchmark_gpu_family_host.c').read_text()
    host=replace(host,'n<=4096&&epochs>1','n<=DOC_FAMILY_LIMIT&&epochs>1')
+   host=replace(host,'(int64_t)(i+epoch)','(int64_t)((i+epoch)%32760)')
    (dest/'host.c').write_text(host)
    cmd=['cc','-std=gnu11','-O2','-pthread','-DDOC_ENABLE_GPU','-DDOC_SCALE_COMPLEX='+str(int(work=='poly')),'-I',headers,'-I',dest,'-I',wgpu/'include',dest/'host.c','-L',wgpu/'lib','-lwgpu_native','-lm','-o',dest/'bench']
    subprocess.run([str(x) for x in cmd],check=True,timeout=120)

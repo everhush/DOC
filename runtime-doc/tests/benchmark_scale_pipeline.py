@@ -17,7 +17,10 @@ def cpu_capacity():
  return mask,cap,quotas
 def oracle(work,n,e):
  b=e%7-3
- if work=='add':return n*(n-1)//2+n*(e+b)
+ if work=='add':
+  period=32760;cycles,r=divmod(n,period);start=e%period
+  first=min(r,period-start);rest=r-first
+  return cycles*period*(period-1)//2+first*(2*start+first-1)//2+rest*(rest-1)//2+n*b
  vals=[]
  for x in range(-4,5):
   v=b
