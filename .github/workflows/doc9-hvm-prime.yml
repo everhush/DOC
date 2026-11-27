@@ -1,0 +1,55 @@
+name: DOC9 private HVM2 integrated prime comparison
+on:
+  push:
+    branches: [master]
+    paths: ['.github/workflows/doc9-hvm-prime.yml', 'verification/hvm/compare_prime.py']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: doc9-hvm-prime
+  cancel-in-progress: false
+jobs:
+  prime:
+    if: ${{ github.repository_id == '1471748051' && github.ref_name == 'master' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc11-stage2-games
+          run-id: 46052437755
+          github-token: ${{ github.token }}
+          path: doc11-game-evidence
+      - name: Verify accepted compiler and production trees
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD:runtime-doc/runtime)" = a7fe0554abea1a2b218929b33ad2f8f66f632f94
+          test "$(git rev-parse HEAD:runtime-doc/compiler)" = 9120f50dde55af7c0a656d43ece6acf824cbcab0
+          test "$(cat doc11-game-evidence/source-sha.txt)" = ed0cc865dbb0c416b903062c8869e6956635929e
+          sha256sum -c doc11-game-evidence/SHA256SUMS
+          chmod +x doc11-game-evidence/reactive2
+          clang-18 --version
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install exact releases
+        run: |
+          cargo install --locked --version 2.0.22 hvm
+          cargo install --locked --version 0.2.38 bend-lang
+          hvm --version
+          bend --version
+      - name: Same runner forty-interval comparison
+        run: python3 -u verification/hvm/compare_prime.py --reactive doc11-game-evidence/reactive2 --out doc9-hvm-prime
+      - name: Retain identity and checksums
+        if: always()
+        run: |
+          mkdir -p doc9-hvm-prime
+          git rev-parse HEAD > doc9-hvm-prime/source-sha.txt
+          find doc9-hvm-prime -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > doc9-hvm-prime/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: doc9-hvm-prime
+          path: doc9-hvm-prime/
