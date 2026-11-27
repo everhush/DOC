@@ -1,0 +1,56 @@
+name: DOC9 private HVM2 matched CPU worker scaling
+on:
+  push:
+    branches: [master]
+    paths: ['.github/workflows/doc9-hvm-workers.yml', 'verification/hvm/compare_workers.py']
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: doc9-hvm-workers
+  cancel-in-progress: false
+jobs:
+  compare:
+    if: ${{ github.repository_id == '1471748051' && github.ref_name == 'master' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc9-hvm-cpu-comparison
+          run-id: 46060776985
+          github-token: ${{ github.token }}
+          path: doc9-qualified-hvm
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc11-stage2-webgpu
+          run-id: 46052437755
+          github-token: ${{ github.token }}
+          path: doc11-stage2-gpu-evidence
+      - name: Verify exact qualified artifacts and source trees
+        run: |
+          set -euo pipefail
+          test "$(cat doc9-qualified-hvm/source-sha.txt)" = 382f1eebfabe222f688dd536c50adced4bd082f3
+          (cd doc9-qualified-hvm && sed 's@  doc9-hvm-evidence/@  @' SHA256SUMS | sha256sum -c -)
+          test "$(cat doc11-stage2-gpu-evidence/source-sha.txt)" = ed0cc865dbb0c416b903062c8869e6956635929e
+          sha256sum -c doc11-stage2-gpu-evidence/physical-SHA256SUMS
+          test "$(git rev-parse HEAD:runtime-doc/runtime)" = a7fe0554abea1a2b218929b33ad2f8f66f632f94
+          test "$(git rev-parse HEAD:runtime-doc/compiler)" = 9120f50dde55af7c0a656d43ece6acf824cbcab0
+      - name: Execute same-machine one and two worker controls
+        run: |
+          export LD_LIBRARY_PATH="$PWD/doc11-stage2-gpu-evidence"
+          python3 -u verification/hvm/compare_workers.py
+      - name: Record exact identities
+        if: always()
+        run: |
+          mkdir -p doc9-hvm-workers
+          git rev-parse HEAD > doc9-hvm-workers/source-sha.txt
+          find doc9-hvm-workers -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > doc9-hvm-workers/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: doc9-hvm-worker-comparison
+          path: doc9-hvm-workers/
