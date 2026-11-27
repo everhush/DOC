@@ -19,8 +19,10 @@ typedef struct {
     unsigned char replaced,supplied,failed;
     const char *error;
 } Cell;
+typedef struct {const char *name;size_t len,id;} NameEntry;
 typedef struct {
     const State *states;size_t n;
+    NameEntry *name_index;size_t name_count;
     Cell *cell;
     unsigned char *dirty,*have,*saved_dirty,*saved_have,*need,*blocked;
     size_t *queue;
@@ -38,12 +40,20 @@ static void *zalloc(size_t n,size_t z){if(n>SIZE_MAX/z)return NULL;return calloc
 #ifdef DOC_ENABLE_PLACED
 static void placed_finish_epoch(Epoch *e,int success);
 #endif
+/* State names are immutable for the lifetime of an admitted graph. Large
+ * graphs get a bounded sorted index; short-lived small graphs avoid setup
+ * cost. Comparison is byte-exact and duplicate names retain the old first-ID
+ * lookup semantics. No hash collision or input-dependent probe chain. */
+#define DOC_NAME_INDEX_MIN 256u
+static int name_order(const char *a,size_t an,const char *b,size_t bn){if(an!=bn)return an<bn?-1:1;return memcmp(a,b,an);}
+static int name_entry_order(const void *av,const void *bv){const NameEntry *a=av,*b=bv;int c=name_order(a->name,a->len,b->name,b->len);return c?c:(a->id>b->id)-(a->id<b->id);}
+static int build_name_index(Epoch *e){if(e->n<DOC_NAME_INDEX_MIN)return 1;e->name_index=zalloc(e->n,sizeof(NameEntry));if(!e->name_index)return 0;for(size_t i=0;i<e->n;i++)if(e->states[i].name){const char *s=e->states[i].name;e->name_index[e->name_count++]=(NameEntry){s,strlen(s),i};}qsort(e->name_index,e->name_count,sizeof(NameEntry),name_entry_order);return 1;}
 static void epoch_free(Epoch *e){
 #ifdef DOC_ENABLE_PLACED
 if(e->placed)_Exit(1); /* explicit host-owned profile must be detached */
 #endif
-if(e->in_flight||e->reader_slots||pthread_mutex_destroy(&e->authority))_Exit(1);if(e->cell)for(size_t i=0;i<e->n;i++){clear(&e->cell[i].stable);clear(&e->cell[i].next);clear(&e->cell[i].candidate);}free(e->cell);free(e->dirty);free(e->have);free(e->saved_dirty);free(e->saved_have);free(e->need);free(e->blocked);free(e->queue);}
-static int epoch_try_init(Epoch *e,const State *states,size_t n){*e=(Epoch){.states=states,.n=n};if(pthread_mutex_init(&e->authority,NULL))return 0;atomic_init(&e->cancelled,0);e->cell=zalloc(n,sizeof(Cell));e->dirty=zalloc(n,1);e->have=zalloc(n,1);e->saved_dirty=zalloc(n,1);e->saved_have=zalloc(n,1);e->need=zalloc(n,1);e->blocked=zalloc(n,1);e->queue=zalloc(n,sizeof(size_t));if(!e->cell||!e->dirty||!e->have||!e->saved_dirty||!e->saved_have||!e->need||!e->blocked||!e->queue){epoch_free(e);return 0;}for(size_t i=0;i<n;i++)e->dirty[i]=states[i].role==2;return 1;}
+if(e->in_flight||e->reader_slots||pthread_mutex_destroy(&e->authority))_Exit(1);if(e->cell)for(size_t i=0;i<e->n;i++){clear(&e->cell[i].stable);clear(&e->cell[i].next);clear(&e->cell[i].candidate);}free(e->cell);free(e->dirty);free(e->have);free(e->saved_dirty);free(e->saved_have);free(e->need);free(e->blocked);free(e->queue);free(e->name_index);}
+static int epoch_try_init(Epoch *e,const State *states,size_t n){*e=(Epoch){.states=states,.n=n};if(pthread_mutex_init(&e->authority,NULL))return 0;atomic_init(&e->cancelled,0);e->cell=zalloc(n,sizeof(Cell));e->dirty=zalloc(n,1);e->have=zalloc(n,1);e->saved_dirty=zalloc(n,1);e->saved_have=zalloc(n,1);e->need=zalloc(n,1);e->blocked=zalloc(n,1);e->queue=zalloc(n,sizeof(size_t));if(!e->cell||!e->dirty||!e->have||!e->saved_dirty||!e->saved_have||!e->need||!e->blocked||!e->queue||!build_name_index(e)){epoch_free(e);return 0;}for(size_t i=0;i<n;i++)e->dirty[i]=states[i].role==2;return 1;}
 static void epoch_init(Epoch *e,const State *states,size_t n){if(!epoch_try_init(e,states,n))fail("epoch allocation");}
 static size_t cpu_quota_cap(size_t hw){
     char path[4096]="/sys/fs/cgroup",line[4096];
@@ -164,7 +174,10 @@ static int execute_frontier(Epoch *e,size_t tasks){if(epoch_cancelled(e))return 
 if(e->placed){if(!placed_execute(e,tasks)||epoch_cancelled(e))return 0;e->frontiers++;e->evaluations+=tasks;for(size_t k=0;k<tasks;k++)publish_private(e,e->queue[k]);return 1;}
 #endif
 int ok=1;size_t *cpu=NULL,*gpu=NULL,nc=0,ng=0,lanes=0;pthread_t thread;int started=0;CpuFrontier f={0};if(gpu_mode){if(!gpu_healthy())return 0;cpu=zalloc(tasks,sizeof(*cpu));gpu=zalloc(tasks,sizeof(*gpu));if(!cpu||!gpu){free(cpu);free(gpu);return 0;}for(size_t k=0;k<tasks;k++){size_t id=e->queue[k];if(gpu_eligible(e,id)){gpu[ng++]=id;lanes+=gpu_lane_count(e,id);}else cpu[nc++]=id;}int route=(int)num(F_place_device(vi(gpu_mode),vi((int64_t)lanes),vi((int64_t)nc)));if(route<0){fprintf(stderr,"DOC_GPU_UNSUPPORTED: explicit GPU frontier has unsupported lanes\n");ok=0;}else if(!route){ok=execute_cpu(e,e->queue,tasks);nc=tasks;ng=0;}else {f=(CpuFrontier){e,cpu,nc,1};if(nc&&ng&&!pthread_create(&thread,NULL,cpu_frontier,&f))started=1;else if(nc)f.ok=execute_cpu(e,cpu,nc);int g=gpu_execute(e,gpu,ng);if(started&&pthread_join(thread,NULL))_Exit(1);ok=f.ok&&g;}}else{nc=tasks;ok=execute_cpu(e,e->queue,tasks);}free(cpu);free(gpu);if(!ok||epoch_cancelled(e)||(gpu_mode&&!gpu_healthy()))return 0;e->frontiers++;e->evaluations+=tasks;if(ng)fprintf(stderr,"DOC11_GPU_FRONTIER: cpu=%zu gpu=%zu concurrent=%d\n",nc,ng,started);for(size_t k=0;k<tasks;k++)publish_private(e,e->queue[k]);return 1;}
-static size_t find_state(const Epoch *e,const char *name,size_t len){for(size_t i=0;i<e->n;i++)if(e->states[i].name&&strlen(e->states[i].name)==len&&!memcmp(e->states[i].name,name,len))return i;return e->n;}
+static size_t find_state(const Epoch *e,const char *name,size_t len){
+    if(e->name_index){size_t lo=0,hi=e->name_count;while(lo<hi){size_t m=lo+(hi-lo)/2;const NameEntry *x=e->name_index+m;if(name_order(x->name,x->len,name,len)<0)lo=m+1;else hi=m;}if(lo<e->name_count){const NameEntry *x=e->name_index+lo;if(!name_order(x->name,x->len,name,len))return x->id;}return e->n;}
+    for(size_t i=0;i<e->n;i++)if(e->states[i].name&&strlen(e->states[i].name)==len&&!memcmp(e->states[i].name,name,len))return i;return e->n;
+}
 static int batch_private(Epoch *e,int argc,char **argv,size_t *target){if(epoch_cancelled(e))return 0;*target=e->n;int has_target=0;for(size_t i=0;i<e->n;i++)if(e->states[i].role==5&&!e->have[i]){if(!evaluate(e,i,NULL))return 0;publish_private(e,i);}for(int a=0;a<argc;a++){const char *arg=argv[a];if(!strncmp(arg,"--demand=",9)){if(has_target)return 0;has_target=1;*target=find_state(e,arg+9,strlen(arg+9));if(*target==e->n)return 0;continue;}if(!strcmp(arg,"--backend=cpu"))continue;if(!strncmp(arg,"--backend=",10))return 0;const char *eq=strchr(arg,'=');if(!eq)return 0;size_t i=find_state(e,arg,(size_t)(eq-arg));if(i==e->n||!source_role(e->states[i].role)||e->cell[i].supplied)return 0;e->cell[i].supplied=1;if(!evaluate(e,i,eq+1)){fprintf(stderr,"DOC: %s\n",e->cell[i].error);return 0;}publish_private(e,i);}for(size_t i=0;i<e->n;i++)if(e->states[i].role==1&&!e->have[i]){if(!evaluate(e,i,NULL))return 0;publish_private(e,i);}memset(e->need,*target==e->n?1:0,e->n);if(*target!=e->n){e->need[*target]=1;doc_demand(e->need);}for(;;){memset(e->blocked,0,e->n);doc_block(e->dirty,e->blocked);size_t tasks=doc_select(e->dirty,e->need,e->blocked,e->queue);if(!tasks)break;if(!execute_frontier(e,tasks))return 0;}for(size_t i=0;i<e->n;i++)if(e->states[i].name&&e->need[i]&&(!e->have[i]||e->dirty[i]))return 0;return !epoch_cancelled(e)&&(!gpu_mode||gpu_healthy());}
 /* A single writer may prepare exactly one batch per open attempt. A failed or
  * repeated batch poisons that attempt; a caller's success flag cannot
