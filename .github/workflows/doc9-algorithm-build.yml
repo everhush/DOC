@@ -1,0 +1,53 @@
+name: DOC9 standard algorithm diagnostic compiler and CPU
+on:
+  push:
+    branches: [master]
+    paths: ['ci/algorithm-build-request.txt']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  build-cpu:
+    if: ${{ github.repository_id == '1471748051' && github.ref_name == 'master' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc11-self-reproduction
+          run-id: 46020955848
+          github-token: ${{ github.token }}
+          path: doc11-self-evidence
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc11-stage2-games
+          run-id: 46020955848
+          github-token: ${{ github.token }}
+          path: doc11-game-evidence
+      - name: Independently emitted extended range planner and algorithms
+        run: |
+          test "$(cat doc11-self-evidence/source-sha.txt)" = da79b00550fbc17ec69ce2ccbd4afa3d0d150138
+          test "$(cat doc11-game-evidence/source-sha.txt)" = da79b00550fbc17ec69ce2ccbd4afa3d0d150138
+          sha256sum -c doc11-self-evidence/SHA256SUMS
+          sha256sum -c doc11-game-evidence/SHA256SUMS
+          chmod +x doc11-self-evidence/stage2 doc11-game-evidence/{scanner2,reactive2,gpu_plan2}
+          curl -fL --retry 3 https://github.com/gfx-rs/wgpu-native/releases/download/v27.0.4.1/wgpu-linux-x86_64-release.zip -o wgpu.zip
+          echo '9385b8a9e4e6f0b00264757577511097104fedf6db7819aa3e34a106c3dc0a42  wgpu.zip' | sha256sum -c -
+          unzip -q wgpu.zip -d doc9-wgpu
+          python3 -u runtime-doc/tests/build_scale_algorithms.py --stage2 doc11-self-evidence/stage2 --scanner doc11-game-evidence/scanner2 --reactive doc11-game-evidence/reactive2 --planner doc11-game-evidence/gpu_plan2 --wgpu doc9-wgpu --out doc9-algorithm-build
+      - name: Actual CPU execution across admitted worker counts
+        run: |
+          LD_LIBRARY_PATH="$PWD/doc9-wgpu/lib" python3 -u runtime-doc/tests/benchmark_scale_algorithms.py --root doc9-algorithm-build --out doc9-algorithm-cpu --samples 3
+          cp doc9-wgpu/lib/libwgpu_native.so doc9-algorithm-build/
+          git rev-parse HEAD > doc9-algorithm-build/source-sha.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: doc9-algorithm-build
+          path: doc9-algorithm-build/
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: doc9-algorithm-cpu
+          path: doc9-algorithm-cpu/

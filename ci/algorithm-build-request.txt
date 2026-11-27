@@ -1,0 +1,1 @@
+Test-only range analysis for positive-literal quotient/remainder and deeper integer expressions; keep legacy bounds and all checked rejection. Actual independent compiler emits 32-round modular tree-leaf map and packed pairwise sorting/reduction stages. CPU GitHub first; no software GPU. Physical execution requires validated build and numerical oracles. No production changes.
