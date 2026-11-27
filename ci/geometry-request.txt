@@ -1,1 +1,1 @@
-Iteration 1 corrected: substitute three old dispatch expressions before inserting new geometry helper; initial build rejected exact-count assertion, no measurement taken.
+Corrected bounded addition input for every width (period 32760; <=32767 admission), independent wrap-sum oracle; preserve raw partial failure archive. Rerun first physical geometry campaign.

@@ -1,1 +1,1 @@
-Iteration 2: compare checked fast parsing, compact immutable family selector and resource-derived list admission against exact control, including 262144/1048576 lanes and fixed-workload stride sweep. All timings on GitHub or physical Kaggle, no software GPU. Test-only variants. Three fresh processes and six epochs each; phase timing separates source ingress, stabilization and submit/map.
+Corrected input domain for wide additions and large list variants; independent wrap-sum oracle, archive even on failure. Supersedes known-bad input snapshot. Actual physical GPU only.
