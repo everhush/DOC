@@ -1,0 +1,77 @@
+name: DOC9 autonomous source and resource preflight
+on:
+  push:
+    branches: [master]
+    paths: ['ci/autonomous-preflight-request.txt']
+permissions:
+  contents: read
+  actions: read
+jobs:
+  preflight:
+    if: ${{ github.repository_id == '1471748051' && github.ref_name == 'master' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc11-independent-bootstrap
+          run-id: 46020955848
+          github-token: ${{ github.token }}
+          path: doc11-evidence
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc11-self-reproduction
+          run-id: 46020955848
+          github-token: ${{ github.token }}
+          path: doc11-self-evidence
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc11-stage2-games
+          run-id: 46020955848
+          github-token: ${{ github.token }}
+          path: doc11-game-evidence
+      - name: Verify accepted input artifacts and current production source
+        run: |
+          set -euo pipefail
+          for d in doc11-evidence doc11-self-evidence doc11-game-evidence; do
+            test "$(cat "$d/source-sha.txt")" = da79b00550fbc17ec69ce2ccbd4afa3d0d150138
+            sha256sum -c "$d/SHA256SUMS"
+          done
+          sha256sum -c doc11-evidence/oracle-SHA256SUMS
+          chmod +x doc11-evidence/doc doc11-self-evidence/stage2 doc11-game-evidence/{scanner2,reactive2}
+          python3 -m py_compile runtime-doc/compiler/doc_build.py runtime-doc/tests/{test_gpu,test_stage2_game_gpu,test_stage2_games,build_autonomous_scale,benchmark_autonomous_family,benchmark_autonomous_algorithms}.py ci/kaggle/autonomous_dispatch.py
+          mkdir -p doc9-preflight
+          git rev-parse HEAD > doc9-preflight/source-sha.txt
+      - name: Native resource, signed input, and allocation/family rollback checks
+        run: |
+          set -euo pipefail
+          cc -std=gnu11 -O1 -g -fno-pie -no-pie -fsanitize=address,undefined -fno-sanitize-recover=all -I runtime-doc/runtime runtime-doc/tests/scale_resource_boundary.c -o doc9-preflight/resource-boundary
+          ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 doc9-preflight/resource-boundary | tee doc9-preflight/resource.log
+          python3 -u runtime-doc/tests/test_cpu_family.py --reference doc11-evidence/doc --reactive doc11-game-evidence/reactive2 --evidence doc9-preflight/cpu-family | tee doc9-preflight/family.log
+          python3 -u runtime-doc/tests/test_allocation_failure.py --reactive doc11-game-evidence/reactive2 | tee doc9-preflight/allocation.log
+      - name: Emit current production planner using accepted independent compiler
+        run: |
+          python3 -u - <<'PY'
+          import sys
+          from pathlib import Path
+          sys.path.insert(0,'runtime-doc/tests')
+          from test_stage2_games import rebuild
+          root=Path.cwd()
+          rebuild(root/'doc11-self-evidence/stage2',root/'doc11-game-evidence/scanner2',root/'runtime-doc/compiler/gpu_plan.doc',root/'doc9-preflight/gpu_plan2',root/'doc9-preflight',True)
+          PY
+          mkdir -p doc9-wgpu
+          curl -fL --retry 3 https://github.com/gfx-rs/wgpu-native/releases/download/v27.0.4.1/wgpu-linux-x86_64-release.zip -o wgpu.zip
+          echo '9385b8a9e4e6f0b00264757577511097104fedf6db7819aa3e34a106c3dc0a42  wgpu.zip' | sha256sum -c -
+          unzip -q wgpu.zip -d doc9-wgpu
+          python3 -u runtime-doc/tests/build_autonomous_scale.py --reactive doc11-game-evidence/reactive2 --planner doc9-preflight/gpu_plan2 --wgpu doc9-wgpu --out doc9-preflight/scale
+      - name: Native CPU preflight of same production workload code without GPU admission
+        run: |
+          LD_LIBRARY_PATH="$PWD/doc9-wgpu/lib" python3 -u runtime-doc/tests/benchmark_autonomous_family.py --root doc9-preflight/scale/families --out doc9-preflight/family-cpu --samples 1 --epochs 2
+          LD_LIBRARY_PATH="$PWD/doc9-wgpu/lib" python3 -u runtime-doc/tests/benchmark_autonomous_algorithms.py --root doc9-preflight/scale/algorithms --out doc9-preflight/algorithm-cpu --samples 1
+          find doc9-preflight -type f ! -name SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > doc9-preflight/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: doc9-autonomous-preflight
+          path: doc9-preflight/
