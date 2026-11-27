@@ -1,0 +1,1 @@
+Independent CPU-only preflight in parallel with full autonomous acceptance 46052437755; actual accepted toolchain emits production shader, tests current headers and source, no GPU device opened. No substitute for full pipeline.
