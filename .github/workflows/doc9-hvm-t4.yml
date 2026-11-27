@@ -1,0 +1,118 @@
+name: DOC9 HVM2 T4 compatibility comparison (CUDA 12)
+on:
+  push:
+    branches: [master]
+    paths: ['.github/workflows/doc9-hvm-t4.yml', 'verification/hvm/prepare_t4_cuda.py', 'ci/kaggle/hvm_t4_dispatch.py', 'ci/kaggle/hvm_t4_kernel.py']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: doc9-hvm-t4
+  cancel-in-progress: false
+jobs:
+  doc-build:
+    if: ${{ github.repository_id == '1317169134' && github.ref_name == 'master' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Rebuild unchanged qualified independent DOC toolchain and computational programs
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD:runtime-doc/runtime)" = a7fe0554abea1a2b218929b33ad2f8f66f632f94
+          test "$(git rev-parse HEAD:runtime-doc/compiler)" = 9120f50dde55af7c0a656d43ece6acf824cbcab0
+          test "$(git rev-parse HEAD:runtime-rust)" = a95a38bc6e9300aae815f83b570db5f99d32f221
+          test "$(git rev-parse HEAD:engine)" = 4d6044ac566fa8374f44e3f32f153d63b95f2b9f
+          cargo build --release --manifest-path runtime-rust/Cargo.toml --bin doc --bin doc-compile
+          mkdir -p bootstrap tools doc11-stage2-gpu-evidence wgpu
+          for stage in managed module_scan; do
+            runtime-rust/target/release/doc-compile runtime-doc/compiler/$stage.doc --emit-c bootstrap/$stage.c --emit-ir bootstrap/$stage.ir --out bootstrap/$stage
+          done
+          python3 -u runtime-doc/tests/test_self_reproduction.py --native bootstrap/managed --evidence bootstrap/self
+          command -v clang-18 || (sudo apt-get update && sudo apt-get install -y clang-18)
+          python3 -u - <<'PY'
+          import sys
+          from pathlib import Path
+          sys.path.insert(0,'runtime-doc/tests')
+          from test_stage2_games import rebuild
+          p=Path.cwd()
+          stage2=p/'bootstrap/self/stage2'
+          tools=p/'tools'
+          rebuild(stage2,p/'bootstrap/module_scan',p/'runtime-doc/compiler/module_scan.doc',tools/'scanner2',tools,False)
+          for src,dest in [('managed_reactive','reactive2'),('gpu_plan','gpu_plan2')]:
+              rebuild(stage2,tools/'scanner2',p/f'runtime-doc/compiler/{src}.doc',tools/dest,tools,True)
+          PY
+          curl -fL --retry 3 https://github.com/gfx-rs/wgpu-native/releases/download/v27.0.4.1/wgpu-linux-x86_64-release.zip -o wgpu.zip
+          echo '9385b8a9e4e6f0b00264757577511097104fedf6db7819aa3e34a106c3dc0a42  wgpu.zip' | sha256sum -c -
+          unzip -q wgpu.zip -d wgpu
+          cp wgpu/lib/libwgpu_native.so doc11-stage2-gpu-evidence/
+          python3 -u runtime-doc/tests/build_autonomous_scale.py --reactive tools/reactive2 --planner tools/gpu_plan2 --wgpu wgpu --out doc11-stage2-gpu-evidence/scale
+          git rev-parse HEAD > doc11-stage2-gpu-evidence/source-sha.txt
+          find doc11-stage2-gpu-evidence -type f ! -name physical-SHA256SUMS -print0 | sort -z | xargs -0 sha256sum > doc11-stage2-gpu-evidence/physical-SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: doc9-t4-doc-build
+          path: doc11-stage2-gpu-evidence/
+  hvm-build:
+    if: ${{ github.repository_id == '1317169134' && github.ref_name == 'master' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 75
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install CUDA 12.8 compiler and static runtime (no GPU driver)
+        run: |
+          set -euo pipefail
+          if [ ! -x /usr/local/cuda-12.8/bin/nvcc ]; then
+            curl -fL --retry 3 https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb -o /tmp/cuda-keyring.deb
+            sudo dpkg -i /tmp/cuda-keyring.deb
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends cuda-nvcc-12-8 cuda-cudart-dev-12-8
+          fi
+          /usr/local/cuda-12.8/bin/nvcc --version
+      - name: Build exact stable HVM2 plus compatibility-only patch
+        run: |
+          cargo install --locked --version 2.0.22 hvm
+          cargo install --locked --version 0.2.38 bend-lang
+          python3 -u verification/hvm/prepare_t4_cuda.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: doc9-t4-hvm-build
+          path: doc9-hvm-cuda/
+  physical:
+    needs: [doc-build, hvm-build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc9-t4-doc-build
+          path: doc11-stage2-gpu-evidence
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc9-t4-hvm-build
+          path: doc9-hvm-cuda
+      - name: Verify private transport
+        run: |
+          python3 -m unittest discover -s ci/kaggle -p test_independent_bundle.py -v
+          python3 -m pip install 'kaggle>=2.2.1,<3' 'six>=1.16'
+      - name: Compare physical T4 execution with identical numerical inputs
+        env:
+          KAGGLE_DOC_1: ${{ secrets.KAGGLE_DOC_1 }}
+          DOC_KAGGLE_USERNAME: ${{ vars.DOC_KAGGLE_USERNAME }}
+        run: python3 -u ci/kaggle/hvm_t4_dispatch.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: doc9-t4-physical-evidence
+          path: doc9-hvm-physical/
