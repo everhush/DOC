@@ -42,7 +42,7 @@ All new final timing runs use GitHub Actions CPU or actual Kaggle physical GPU. 
 | Production physical preflight | [46053188589](https://github.com/xad3play/DOC/actions/runs/46053188589) | PASS; artifact 15226800551, SHA256 50a6b7c5da1cb7d11e7ceb484237c523daf1fb196aab709fcda8e8ce7e2b4e16 |
 | Production physical build | same run | artifact 15225636606, SHA256 ded359f3a046e1b38c662849d2d4bb63187d8f85a99f173805d96bad890ef123 |
 | Independent returned-evidence audit | [46056113923](https://github.com/xad3play/DOC/actions/runs/46056113923) | PASS; artifact 15227225064, SHA256 a719e435495cdd73c4e4711c41880aac8a516760fc50172567ab88b2bbf00c55 |
-| Full same-run independent validation | [46052437755](https://github.com/xad3play/DOC/actions/runs/46052437755) | bootstrap and self-reproduction PASS; later jobs pending |
+| Full same-run independent validation | [46052437755](https://github.com/xad3play/DOC/actions/runs/46052437755) | PASS, all six jobs; physical artifact 15227957875, SHA256 aeaf10e30d72c2cee5aaa5c2a09316586923a7eb1ad5d1a17f4dd20e10399f91 |
 
 Offline verification of unpacked GitHub artifacts (no benchmark or adapter execution):
 ```sh
@@ -85,3 +85,7 @@ Modular auto backend speedup 15.03x vs serial. Four-worker CPU modular result 66
 The production source/resource preflight used ASan/UBSan, checked signed extrema and malformed input, million-element list, over-region rejection, shared-domain reference parity, 4097/16384 expanded native list oracles, allocation failure across 66 update and 33 snapshot ordinals, 128 replacements with stalled readers and zero live memory. Early hardware preflight uses actual compiler-generated shaders, no software device, verifies original 16/17 epoch game replays, actual mixed frontiers, injected failure rollback, actual device loss, submitted-work retirement, graph replacement, protected snapshot, strict numeric admission, pool growth/reuse/closure. Both games retain prior typed observations, with 876/878 GPU lanes and rejected successor epochs 3/4. Prior unchanged mesh/window evidence stays historical.
 
 The complete same-run validation must finish before #9 is closed. No manuscript edits or public release. #14 must distinguish finite-model theorems, conditional extensions, implementation checks and historical/current empirical evidence; neither paper may imply unbounded physical resources, universal speedup, automatic discovery of all semantic dependencies or distributed elasticity from these results.
+
+## Final same-run validation — 2026-11-28
+
+Supersedes the pending status above. All six jobs of 46052437755 completed successfully at ed0cc865dbb0c416b903062c8869e6956635929e, with identical production runtime and compiler trees. Independent archive recheck: physical artifact 15227957875, 880 byte-matched archive members, 1827 numerical rows independently recomputed, 399 process pairs, 114 physical sessions and 4374 verified GPU dispatches. The actual selected adapter was one Tesla T4, not a software adapter. Original paper CPU regression and returned-evidence audit also passed. This is final DOC production evidence, separate from the newly requested private HVM comparison. No public release or manuscript change.
