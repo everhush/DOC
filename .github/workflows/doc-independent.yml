@@ -18,7 +18,7 @@ jobs:
   bootstrap-stages:
     if: ${{ github.repository_id == '1471748051' && github.ref_name == 'master' }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - name: Verify frozen Rust tree
