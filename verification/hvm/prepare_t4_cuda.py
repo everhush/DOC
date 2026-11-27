@@ -5,10 +5,13 @@ from pathlib import Path
 from compare_cpu import family_source,sort_source,sha
 def patch_t4(source):
     # Preserve per-thread local capacity: 8192/128 = 4096/64.
+    # Keep TPB_L2 == BPG_L2: GROW uses max() to index spawn[TPB].
+    # This changes launch width and block count, never the Bend program.
     text=source.decode()
-    for old,new in [('const u32 L_NODE_LEN = 0x2000;', 'const u32 L_NODE_LEN = 0x1000;'),('const u32 L_VARS_LEN = 0x2000;', 'const u32 L_VARS_LEN = 0x1000;'),('const u32 TPB_L2 = 7;', 'const u32 TPB_L2 = 6;')]:
+    for old,new in [('const u32 L_NODE_LEN = 0x2000;', 'const u32 L_NODE_LEN = 0x1000;'),('const u32 L_VARS_LEN = 0x2000;', 'const u32 L_VARS_LEN = 0x1000;'),('const u32 TPB_L2 = 7;', 'const u32 TPB_L2 = 6;'),('const u32 BPG_L2 = 7;', 'const u32 BPG_L2 = 6;')]:
         assert text.count(old)==1,old
         text=text.replace(old,new)
+    assert 'const u32 TPB_L2 = 6;' in text and 'const u32 BPG_L2 = 6;' in text
     m=re.search(r'^\s*static const u8 BOOK_BUF\[\]\s*=\s*\{([\d,\s]+)\};',text,re.M)
     assert m
     data=bytes(int(v) for v in re.findall(r'\d+',m[1]))
