@@ -90,7 +90,7 @@ def build(reactive,headers,out):
                 pat=r'(static V E_leaf'+str(i)+r'\(void\)\{return )[^\n]+?;\}'
                 code,count=re.subn(pat,lambda m:m[1]+f'vi(paper_leaf(num(S_s{i})));'+'}',code)
                 assert count==1,(i,count)
-            code='#include <stdint.h>\nextern int64_t paper_leaf(int64_t);\n'+code
+            code='#define _GNU_SOURCE\n#include <stdint.h>\nextern int64_t paper_leaf(int64_t);\n'+code
         # Preserve generated source graph, epoch publication and actual scheduler.
         # Only replace CLI entry with timing/verification around one full stabilization.
         marker='int main(int argc,char **argv){return run_reactive(states,sizeof(states)/sizeof(states[0]),argc,argv);}'
