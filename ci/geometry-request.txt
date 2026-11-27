@@ -1,1 +1,1 @@
-Comparative scale iteration 1: exact compiler-emitted two family workloads; original 4096 cap control, existing 65536 input domain, 32/64/128/256 workgroup widths, grid-stride fixed-workload dispatch group caps, short poll diagnostic. GitHub CPU and actual Kaggle GPU only. No production modification, no software GPU. Five fresh processes per setting, nine verified epochs.
+Iteration 1 corrected: substitute three old dispatch expressions before inserting new geometry helper; initial build rejected exact-count assertion, no measurement taken.
