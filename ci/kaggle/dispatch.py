@@ -142,16 +142,24 @@ def kaggle(command, env, timeout=60):
             raise RuntimeError("Kaggle CLI operation failed: " + label + " category=" + category) from None
         time.sleep(2 ** attempt)
 
-def prepare_kernel(folder, template, spec, username):
-    folder.mkdir(parents=True, exist_ok=False)
+def render_kernel_template(template, spec, *, placeholder="__DOC_KAGGLE_RUN_SPEC__"):
+    """Render exactly one configuration marker and validate before dispatch."""
+    if not re.fullmatch(r"__[A-Z0-9_]+__", placeholder):
+        raise ValueError("Invalid notebook template marker")
+    code = template.read_text(encoding="utf-8")
+    if code.count(placeholder) != 1:
+        raise ValueError("GPU test notebook template has changed")
+    code = code.replace(placeholder, repr(spec))
+    compile(code, str(template), "exec")
+    return code
+
+def prepare_kernel(folder, template, spec, username, *, placeholder="__DOC_KAGGLE_RUN_SPEC__"):
     slug = "doc-gpu-{}-{}".format(spec["run_id"], spec["attempt"])
     if not re.fullmatch(r"doc-gpu-[0-9]+-[0-9]+", slug):
         raise ValueError("Invalid unique notebook name")
-    code = template.read_text(encoding="utf-8")
-    if code.count("__DOC_KAGGLE_RUN_SPEC__") != 1:
-        raise ValueError("GPU test notebook template has changed")
-    (folder / "doc_kaggle_gpu.py").write_text(
-        code.replace("__DOC_KAGGLE_RUN_SPEC__", repr(spec)), encoding="utf-8")
+    code = render_kernel_template(template, spec, placeholder=placeholder)
+    folder.mkdir(parents=True, exist_ok=False)
+    (folder / "doc_kaggle_gpu.py").write_text(code, encoding="utf-8")
     metadata = {
         "id": username + "/" + slug,
         "title": slug,  # Keep Kaggle title-derived URL slug consistent with kernel id.

@@ -28,3 +28,5 @@ Batch 2026-11-26: 45834325970 terminal: bootstrap, self-reproduction, Stage2 gam
 2026-11-26: Final foundation parity candidate — self-hosted GPU dependency-family support, actual software 512-lane and rollback regression, frozen nested-data ASan/UBSan regression. No frozen Rust changes; full exact-source CPU/software/physical acceptance required.
 
 2026-11-26: Complete bounded runtime-sized CPU family parity with DOC-generated native lane callbacks, affinity-capped worker ranges, 4096-lane capacity and sanitizer rollback gates. Consolidate with verified GPU family and tagged-data coverage.
+
+2026-11-27: Run 45858566388 passed all six nonphysical jobs; authenticated Kaggle private bundle integrity passed, but notebook template preparation rejected a duplicate textual marker before submission. Separate independent injection marker from legacy runpy configuration key, compile assembled notebook before remote upload, preserve strict marker validation and add actual-template regression. Full exact-source acceptance including physical GPU still required.
