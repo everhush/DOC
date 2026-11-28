@@ -56,3 +56,20 @@ The local full self-reproduction attempt was time-bounded and did not return a r
 The candidate workflow previously checked only the transported tar checksum before extraction. The new independent `release/verify_candidate.py` checks the source commit, unique canonical relative paths, exact file inventory, byte counts, SHA-256, Git blob SHA-1 identities, regular file modes, UTF-8 text, and capacity limits before writing any source file. It rejects links and unexpected members. The exporter now checks the original tar before upload; the clean job verifies it again and writes its own fresh source tree, rather than invoking unrestricted tar extraction. The verifier is transported as a separate stage-produced file and is also included in the curated source. This checks consistency and safe extraction, not cryptographic publisher identity or signed bootstrap provenance.
 
 Local test: the genuine source artifact 15247725787 at 9491ca31303579b2ce223e344dee9b8b5354214f passed all 85 file entries (696919 bytes). Sixteen negative cases were rejected without creating an output directory: wrong commit, duplicate manifest entry, unsafe manifest path, mismatched SHA-256, Git blob, mode, and size, missing manifest entry, extra tar file, traversal, absolute path, duplicate member, symbolic link, hard link, omitted file, and modified bytes. The revised workflow is not yet accepted as a successful new CI run. No qualified compiler/runtime or manuscript sources are changed by this validation patch.
+
+## Latest manuscript render — independent visual and PDF preflight
+
+Run [46105142888](https://github.com/everhush/DOC/actions/runs/46105142888), artifact 15247700465, source `9491ca31303579b2ce223e344dee9b8b5354214f`. Downloaded ZIP SHA-256 `292793fd471f5519625a2e7e8ee939fdfb4e38d6aba568c00030c329d2dabee0` matches GitHub metadata; all 24 unique ZIP entries passed CRC and the embedded source SHA agrees. GitHub comparison against master 8c879a5ff58b53aecd8007ffd55426c5fbda88f7 lists no changes to manuscript, bibliography or publisher wrapper sources.
+
+| PDF | Pages | SHA-256 | Embedded font entries |
+|---|---:|---|---:|
+| Preprint | 36 | `1390cde3a31a2cce5ded94454f543ed0284b09e64f65118149e25bfc18bf1977` | 7/7 |
+| Finite calculus | 5 | `81338b8bc574a8326e893cbd3306d2122defe2a3b34a4bef291546fd8d9e8341` | 3/3 |
+| Neutral LaTeX | 24 | `badfc01d2f8d4d6a55cf7fc9c97582ba976fca527cf3885645bb26d3b6609e09` | 27/27 |
+| Computing wrapper | 28 | `b5487a22addf757f1909ad6703dfd1d6e6d28bee329cc9ae6605621f042d1fdb` | 24/24 |
+
+Rendered and visually inspected contact sheets covering all 93 pages (nine sheets). No obvious page-scale clipping, blank pages, missing figures or broken layout observed. Programmatic text-block bounds check found zero blocks outside the page by more than 1 pt. All pages have extractable text; zero replacement characters, zero unresolved bracketed citation/numbered-reference markers detected, and zero matches for the excluded named comparative engines in extracted text. All fonts are embedded per pdffonts. This is a rendering/layout preflight, not a line-by-line proof validation, external-link availability check, copyright clearance or acceptance by the publisher.
+
+The Computing wrapper still exceeds its recorded 25-page limit by three pages; its log reports one 2.74968 pt overfull horizontal box at lines 535–536. The neutral LaTeX log has no matching overfull/undefined-reference/missing-character warnings. Retain the synchronized full-length neutral and Typst sources and defer venue-specific shortening until the version/editorial decision; do not alter margins or font sizes to force compliance. No submitted version replaced and no paper or runtime source edited.
+
+At this observation the original clean-cpu job (run 46105142921) remained in progress. The updated manifest-verification run [46106120875](https://github.com/everhush/DOC/actions/runs/46106120875) was pending with no job records. No new candidate build, physical GPU acceptance, or publication approval claimed. This documentation-only checkpoint avoids replacing an already pending CI run.
