@@ -1,4 +1,4 @@
-name: DOC9 T4 read-only infrastructure preflight
+name: DOC9 T4 read-only infrastructure and private dataset access preflight
 on:
   push:
     branches: [master]
@@ -10,12 +10,12 @@ jobs:
   preflight:
     if: ${{ github.repository_id == '1317169134' && github.ref_name == 'master' }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 8
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - run: python3 -m pip install --disable-pip-version-check 'kaggle>=2.2.1,<3' 'six>=1.16'
+      - run: python3 -m pip install --disable-pip-version-check 'kaggle==2.2.5' 'six>=1.16'
       - name: Verify migrated repository credential and GPU quota without submitting a notebook
         env:
           KAGGLE_DOC_1: ${{ secrets.KAGGLE_DOC_1 }}
@@ -36,3 +36,8 @@ jobs:
               if remaining<=0:raise SystemExit('DOC9_INFRA_BLOCKED: no GPU quota remains')
               print('DOC9_INFRA_PASS: configured credential, positive GPU quota; no notebook submitted')
           PY
+      - name: Diagnose owner binding and prior private bundle access (no upload or GPU submission)
+        env:
+          KAGGLE_DOC_1: ${{ secrets.KAGGLE_DOC_1 }}
+          DOC_KAGGLE_USERNAME: ${{ vars.DOC_KAGGLE_USERNAME }}
+        run: python3 -u ci/kaggle/doc9_t4_access_probe.py
