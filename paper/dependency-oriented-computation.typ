@@ -179,7 +179,7 @@ A derived state $d$ has an ordered premise sequence $P_d$ and a pure, total, det
 
 For finite acyclic programs, the paper proves termination of every legal repair schedule, uniqueness of the stable valuation, agreement with complete topological reevaluation, schedule independence, a per-episode at-most-once evaluation bound, and dependency-local repair. The assumptions are explicit: failures and external effects must be represented as values or handled outside the pure finite kernel. Recurrence, immutable graph-version replacement, logical availability, placement, and fail-stop reconstruction are presented separately with their additional contracts rather than as consequences of the finite theorem.
 
-A C++20 executable witness and five bounded model checkers test the stated semantics against complete reevaluation and independent oracles. The authoritative 100-sample bare-metal campaign shows the intended cost shape rather than universal speedup: sparse updates avoid most graph work, a coarse ready frontier uses up to four externally granted participants, a specialized cached financial baseline remains substantially faster than generic DOC repair, and a fine-grained sorting network is a negative case in which runtime overhead dominates.
+A conditional construction extends the finite kernel to input-dependent dependency families and generated graph versions without allowing same-epoch cycles. Historical C++20 experiments and bounded model checkers are complemented by an independent native realization with automatic multicore and admitted physical accelerator execution. Measured results demonstrate workload-dependent acceleration, while cheap work, specialized caches and fine-grained graphs expose overhead. These are bounded executable observations, not a proof of universal performance or distributed scalability.
 ])
 
 #block(width: 100%, inset: (x: 2pt, y: 4pt))[
@@ -585,7 +585,7 @@ For a frontier transition, let $x$ be inactive in $A'$. If $x in F$, all of its 
 #lemma([At-most-once selection and finite progress], [Fix one repair episode, meaning a repair-admissible seed followed only by frontier-subset transitions and no intervening accepted source batch. Every derived definition is selected at most once. Consequently every valid transition sequence in that episode is finite, and every maximal sequence ends quiescent.]) <lem:finite-progress>
 
 #proof([
-When $d$ is selected, it has no active strict ancestor. Suppose some strict ancestor of $d$ later became active, and choose the first such activation. Activation can arise only from publication by one of that ancestor's direct premises. That publishing premise is itself a strict ancestor of $d$ and must have been active and selected earlier, contradicting the choice of the first later ancestor activation. Sources do not change inside the fixed episode. Thus no strict ancestor of $d$ can publish after $d$ is selected, its premises cannot later change, and $d$ cannot be reactivated.
+When $d$ is selected, it has no active strict ancestor. Suppose some strict ancestor of $d$ later became active, and choose the first such activation. Activation can arise only from publication by one of that ancestor's direct premises. That publishing premise is itself a strict ancestor of $d$ and must be active immediately before the transition causing the first later activation. But no strict ancestor was active at the selection of $d$, and none has been activated in the intervening transitions, a contradiction. Sources do not change inside the fixed episode. Thus no strict ancestor of $d$ can publish after $d$ is selected, its premises cannot later change, and $d$ cannot be reactivated.
 
 At most $|D|$ definitions are therefore selected, while each transition selects a nonempty set, so no valid sequence is infinite. If a finite maximal sequence ended with $A != emptyset$, acyclicity of the finite dependency order would give a minimal member of $A$, hence a nonempty ready frontier and another valid transition. Therefore a maximal sequence ends with $A=emptyset$.
 ])
@@ -797,6 +797,24 @@ Let $mu^*$ be complete from-scratch evaluation of $G_(k+1)$ from the carried can
 ])
 
 #boundary([Topology identity boundary], [The runtime does not guess whether two arbitrary functions are semantically equivalent. Stable names and semantic keys are explicit compiler or builder contracts. Atomic graph replacement is implemented; distributed agreement on which graph version is authoritative remains a replica and partition policy.])
+
+== Dynamic dependency generation and evolution <sec:dynamic-generation>
+
+A dependency description need not enumerate every state before the program begins. Consider a compiler that first reads a list of source files: the length and contents of that list determine which files require analysis. The analysis of independent files can proceed without a prescribed sequential order. This is different from changing the contents of a file while keeping the same graph. It is also different from choosing a branch of a pure expression: a conditional may read a different branch without changing the declared premise sequence.
+
+There are three distinct forms of dynamic computation in addition to fixed-graph repair. A runtime-sized independent family is a finite collection of computations whose cardinality is a value. A graph-generation operation determines which logical states and ordered premises exist in a subsequent admitted version. Recurrence introduces dependencies across successive logical epochs. A change of physical worker count or device does not change any of these logical dependencies.
+
+#definition([Finite input-dependent generation], [Fix a typed, settled input snapshot $x$ and a pure deterministic generator $Phi$. For an admitted input, $Phi(x)=(G_x,sigma_x)$ terminates and constructs a finite well-formed acyclic graph with a complete typed source environment $sigma_x$. The generator has no read access to an unsettled candidate result from its own construction. State identities are unique within the candidate; identities retained across versions obey the compatibility contract of @def:graph-commit. A generator may reject an inadmissible input without installing a candidate. The existing graph and its committed observation remain authoritative until a successful private stabilization and atomic commit.]) <def:dynamic-generation>
+
+For example, a settled natural number $n$ and a typed collection of $n$ inputs may generate a family of $n$ independent applications of one total function, with an ordered collection as the boundary result. A zero-length family returns the empty collection. For each fixed admitted input the family can be expanded into a finite acyclic subgraph with fresh internal identities; its ordered boundary value is the same as the original local transformation. The representation may instead retain the family as one collection-valued definition and evaluate its members in batches. Neither representation implies persistent per-member identity or incremental reuse between different lengths. Reuse across changing topology requires explicit identity and compatibility evidence, not merely matching array indices.
+
+#theorem([Conditional generated-version agreement], [For a fixed admitted snapshot $x$, suppose $Phi(x)$ satisfies @def:dynamic-generation, the candidate source facts equal $sigma_x$, and the seed is initialized from scratch or satisfies the graph-version compatibility and repair-admissibility contract. Every maximal legal finite-kernel stabilization of that candidate has the same stable valuation as complete reevaluation of $G_x$ from $sigma_x$. With serialized generation admission and atomic successful commit, the published observation is independent of the candidate's legal repair schedule.]) <thm:generated-version>
+
+#proof([
+Determinism of the terminating generator fixes the graph and source environment for the given snapshot. A from-scratch seed activates every derived state; a reused seed is repair-admissible by the compatibility contract and the argument of @thm:graph-commit, with affected states including users of changed candidate source facts. Apply @thm:finite-stabilization to the resulting fixed finite graph. Its unique stable valuation is complete reevaluation from $sigma_x$. Publication exposes only this stable candidate; a rejected, failed, or superseded candidate does not publish. This proof concerns one admitted construction and its stabilization, not termination of a generator outside its domain or of an unbounded succession of versions.
+])
+
+A sequence of generated versions therefore composes the finite kernel rather than modifying the frontier rule during an episode. This construction is conditional: it neither discovers arbitrary hidden dependencies in opaque functions nor promises termination of arbitrary graph-generating recursion. Runtime-sized family evaluation and bounded graph replacement are executable witnesses of different parts of this construction, not evidence that unrestricted dynamic graph generation is implemented.
 
 = Realization contracts and boundaries
 
@@ -1051,9 +1069,9 @@ Five independent bounded checkers cover complementary state spaces. The ordinary
 
 These finite enumerations check initialization, repair admissibility, continued source batches, every nonempty legal subset of each bounded ready frontier, exact and conservative cutoff, locality, schedule agreement, demand restriction, recurrence support, graph-role changes, graph-local identifier reorderings, and replacement agreement. Bounded checking is executable counterexample search over the stated finite spaces; it is not a proof of universal correctness.
 
-#boundary([Current executable coverage], [The high-performance active-set evaluator remains specialized to scalar values; typed immutable objects, eviction, and reconstruction are checked in a separate safe-realization profile rather than a fully integrated generic evaluator. The placed runtime uses real transport but remains a bounded single-coordinator witness rather than a production multi-host platform. The finite metatheory is mathematically argued and bounded-exhaustively checked, not yet mechanized in a proof assistant. These limits concern evidence and engineering maturity, not hidden additions to the logical core.])
+#boundary([Historical executable coverage], [The original high-performance active-set evaluator is specialized to scalar values; typed immutable objects, eviction, and reconstruction were checked in a separate safe-realization profile rather than a fully integrated generic evaluator. The placed runtime uses real transport but remains a bounded single-coordinator witness rather than a production multi-host platform. The finite metatheory is mathematically argued and bounded-exhaustively checked, not yet mechanized in a proof assistant. These limits concern evidence and engineering maturity, not hidden additions to the logical core.])
 
-== Performance evaluation
+== Historical C++20 performance evaluation
 
 The benchmark executable checks every DOC output against an independent correctness oracle and exits nonzero on disagreement. Reduction workloads compare against complete serial reevaluation; the financial workload additionally compares against a conventional serial cached segment tree; and the sorting-network workload checks both direct execution of the same Batcher network and `std::sort`. The benchmarked runtime uses signed 64-bit integer values with exact equality. Its concrete scheduling policy chooses the complete ready frontier $F=R(A)$ at each transition; `DOC_MAX_WORKERS` limits participant capacity externally and is not stored in the application graph.
 
@@ -1191,13 +1209,39 @@ A 512-input Batcher sorting network contains 11,520 compare-exchanges represente
 
 #boundary([Evaluation boundary], [These measurements support conformance and workload-specific cost-shape claims only. They do not establish universal speedup, production distributed scalability, accelerator efficiency, or a hardware-independent constant. Stronger scaling evidence requires new experiments on dedicated many-core and multi-host systems rather than extrapolation from @fig:parallel-speedup.])
 
+== Independent native realization and empirical validation <sec:native-evidence>
+
+The later independent DOC realization compiles admitted programs to native executables, with no original evaluator required at execution. It preserves the distinction between declared dependencies and physical scheduling: worker capacity is derived from available resources, eligible independent work may be assigned to a physical accelerator, and privately computed candidates are validated before publication. Explicit accelerator execution rejects unsupported operations or unavailable devices. Automatic heterogeneous placement uses eligibility and cost heuristics, not a theorem of optimal placement. Region ownership, protected immutable observations and retirement of in-flight work give a bounded realization of the logical lifetime contract without tracing collection or reference counting for ordinary DOC-owned values. This does not characterize all possible realizations or external libraries.
+
+The native prime-counting workload uses 40 independent leaves, each testing 25,000 candidates, and a balanced reduction. An earlier four-worker campaign (ten fresh processes per setting, means) obtained 3.368-fold explicit four-worker speedup and 3.233-fold automatic speedup, or 84.2% and 80.8% parallel efficiency. A separate final two-worker regression (ten processes per setting, medians) measured 2083.876 ms serial and 1196.991 ms automatic, giving 1.741-fold speedup and 87.0% efficiency. For fixed work, speedup is $S(p)=T_1/T_p$ and efficiency is $S(p)/p$, where $p$ is the admitted participant count. Neither campaign is the historical bare-metal C++20 measurement.
+
+#figure(
+  table(
+    columns: (1.7fr, 1fr, 1fr, 0.85fr),
+    table.header([*Workload (lanes)*], [*CPU 1 (ms)*], [*Auto (ms)*], [*Speedup*]),
+    [Polynomial (65,536)], [5.328], [1.760], [3.03$times$],
+    [Modular map (65,536)], [30.522], [2.205], [13.85$times$],
+    [Modular map (262,144)], [123.547], [8.981], [13.76$times$],
+    [Staged sort (65,536)], [1008.125], [411.512], [2.45$times$],
+    [Staged reduction (65,536)], [4.253], [5.208], [0.82$times$],
+    [Addition (64)], [0.00409], [0.28374], [0.014$times$],
+  ),
+  caption: [Representative same-session DOC warm epoch or epoch-sum medians from the final physical campaign. Auto denotes automatic backend selection, not necessarily GPU in every row. Negative controls are retained.],
+) <tab:native-physical>
+
+The final campaign used four granted host CPU workers and one selected physical NVIDIA Tesla T4. Each setting used three fresh processes with repeated epochs or rounds; warm measurements exclude the first round, device initialization and the independent oracle, but include source ingress, evaluation and publication. Staged algorithms also have separately recorded host orchestration and whole-algorithm timings. The complete matrix covers 19 workload sizes, 1,827 numerical observations and 4,374 verified physical dispatches. A separate preflight measured polynomial throughput growth of 40.26-fold (62.9% of proportional growth) as the logical width increased from 64 to 4,096, and dispatch-wall throughput growth of 47.65-fold (74.5%). These percentages measure workload scaling, not GPU utilization or CPU-equivalent efficiency. The largest admitted family had 4,194,304 logical lanes; physical work is divided into device-limited dispatch groups, not that many simultaneous threads.
+
+The independently compiled realization also passed bounded recurrence, graph replacement, protected-reader, resource exhaustion, actual device-loss and atomic rollback checks, including mixed CPU/accelerator application replays. Short application replays were slower when device startup was included. The evidence supports the stated bounded profile; it does not establish arbitrary effects or managed values on an accelerator, optimal automatic placement, multi-device or distributed scaling, or universal memory safety.
+
+The DOC-only reproducibility supplement identifies source revisions, workload definitions, hardware, raw evidence identifiers and timing boundaries; the archived historical campaign remains a separate artifact. See #link("https://github.com/everhush/DOC")[DOC development repository] and the accompanying source supplement. Evidence availability is distinct from release readiness.
+
 = Limitations
 
-1. *Finite acyclic theorem.* The central theorem covers finite acyclic programs. Versioned recurrence supplies temporal repetition and ordinary partial computation, but same-epoch cyclic equations require a separately stated order, convergence, and observation semantics.
+1. *Finite acyclic theorem.* The central theorem covers finite acyclic programs. Versioned recurrence supplies temporal repetition and ordinary partial computation; finite generated versions require a terminating admitted generator and a well-formed candidate. Same-epoch cyclic equations require separately stated order, convergence, and observation semantics.
 2. *Equality and function contracts.* Sound cutoff, total deterministic definitions, stable-name compatibility, and semantic keys are supplied by a compiler, builder, or application contract; the runtime cannot decide arbitrary function equivalence.
 3. *Policy-dependent physical behavior.* Placement, routing, replica authority, partition handling, retention, compaction, checkpoints, quotas, and irreversible-effect recovery are not determined by the logical kernel.
 4. *No universal memory or performance bound.* Logically rooted recurrence or audit history may grow without bound. Direct or specialized incremental execution may outperform the generic runtime, especially for dense or fine-grained work.
-5. *Evidence limits.* The finite metatheory is not proof-assistant mechanized. Exhaustive checking is bounded. The physical witness is a bounded single-coordinator implementation, and the present scaling measurements are limited to participant counts 1--4 on one bare-metal host; they do not establish many-core or multi-host scaling.
+5. *Evidence limits.* The finite metatheory is not proof-assistant mechanized. Exhaustive checking is bounded. The placed witness is bounded and single-coordinator. The historical bare-metal campaign and later native campaigns measure small granted CPU counts and a single physical accelerator; they do not establish many-core, multi-accelerator or multi-host scaling.
 
 = Related work <sec:related-work>
 
@@ -1242,7 +1286,7 @@ $ G=(S,Delta), #h(2em) Q=(nu,A). $
 
 A program is a family of typed logical states and partial local definitions. A stable valuation agrees with current sources and every required definition. A source change adds induced users to the current repair obligations. One transition selects any subset of the dependency-minimal active frontier, evaluates it from a common settled pre-state, and publishes complete candidates together. Candidates not proven equal propagate; a sound equality proof stops the wave.
 
-The finite kernel deliberately contains only the persistent graph, retained valuation, repair obligations, and transition relation. Recurrence, graph replacement, and physical placement are separate layers with additional assumptions. Publication, reclamation, transport, authority, reconstruction, and effects therefore remain explicit contracts rather than consequences silently attributed to the finite theorem.
+The finite kernel deliberately contains only the persistent graph, retained valuation, repair obligations, and transition relation. Input-dependent generation, recurrence, graph replacement, and physical placement are separate layers with additional assumptions. Publication, reclamation, transport, authority, reconstruction, and effects therefore remain explicit contracts rather than consequences silently attributed to the finite theorem.
 
 DOC does not claim universal speedup or distributed-systems guarantees. Its contribution is the specific finite repair semantics proved here, together with separately stated extension and realization contracts and an executable implementation that tests those boundaries.
 
@@ -1368,6 +1412,6 @@ The sequence is a meta-level conformance test, not stored history or logical con
 
 #strong[Competing interests.] The author declares no competing interests.
 
-#strong[Code and data availability.] A source and reference archive is provided with this submission.
+#strong[Code and data availability.] The historical source and reference archive remains distinct from the later native validation. The revised source identifies the latter in the DOC-only reproducibility supplement; no public release or new submission is implied by this revision.
 
 #bibliography("references.bib", title: [References], style: "ieee")

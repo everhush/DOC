@@ -15,7 +15,7 @@
 
 *Status.* This is a standalone research draft defining a minimal source language and an
 executable restriction of the finite DOC kernel. It is not a revision of the submitted
-Dependency-Oriented Computation paper. Recurrence, graph-version replacement,
+Dependency-Oriented Computation paper. A separate finite-family elaboration is included below; recurrence, general graph-version replacement,
 placement, storage, and effects retain their separate conditional status.
 
 = Abstract
@@ -28,11 +28,8 @@ order and physical placement. State changes enter through atomic source batches;
 changed conclusions propagate through dependency edges, while sound equality
 cutoffs can suppress downstream work. The calculus intentionally expresses
 neither user-visible memory management nor actors, API calls, network effects,
-or database operations. We state type safety, preservation of repair admissibility,
-finite termination, unique stable observation, and sound expansion as proof
-obligations and provide proof sketches under the existing DOC assumptions.
-A separate Rust implementation checks representative instances and is not a
-mechanized proof of the metatheory.
+or database operations. We give arguments for expression type safety, preservation of repair admissibility,
+finite termination, unique stable observation, and sound expansion under the existing DOC assumptions. A conditional elaboration of input-dependent finite families leaves the finite repair rules unchanged. Executable reference and independent native checks are not mechanized proofs.
 
 = Scope and relationship to DOC
 
@@ -59,12 +56,14 @@ overflow as a failed evaluation; that failure is not covered by
 the total-transformation theorem.
 
 For a premise type context Gamma, the typing judgment Gamma |- e : T
-uses ordinary rules. A premise variable has the type assigned by Gamma.
+uses the following syntax-directed rules. A premise variable has the type assigned by Gamma.
 Arithmetic requires two integer expressions and returns an integer.
 Equality requires matching argument domains and returns a boolean.
 A conditional requires a boolean guard and equally typed branches;
 only the selected branch is evaluated. Every permitted expression is
 pure, deterministic, and total under its declared semantic domain.
+
+*Expression type safety.* Under a well-typed premise environment, evaluation of a well-typed expression terminates with a value in its declared domain, provided each primitive is total and closed over its declared domain. Proof by structural induction: constants and variables have their assigned types; the inductive hypotheses give typed operands for each arithmetic or equality primitive, whose interpretation returns a typed result. For a conditional the guard evaluates to a boolean and the selected branch terminates with the common branch type by induction. The finite expression tree has no recursive calls. A checked machine overflow is an exceptional implementation outcome unless an explicit result-valued primitive and type are modeled; it is not a counterexample to the total-domain statement.
 
 The surface implementation uses named source declarations and derived
 definitions with an explicit ordered list of premises. The order of
@@ -142,17 +141,11 @@ Reason: an unmaterialized derived premise must be active under
 repair admissibility; every ready state has no active ancestor.
 
 *Lemma 2: Preservation.* A legal frontier-subset transition preserves
-repair admissibility. States whose local equation may become
-unsatisfied are precisely those whose direct premises were
-changed; these users are activated. All other inactive
-definitions remain locally satisfied.
+repair admissibility. Selected definitions become satisfied because their premises are unchanged within the frontier and equal candidates retain equal values. An unselected inactive definition can lose satisfaction only if a direct premise changes; all such users are activated. Other inactive definitions retain their satisfaction. The analogous source-boundary argument uses validation and activation of direct users of the changed-source set.
 
 *Lemma 3: At most once per episode.* Within a fixed graph version
 and a repair episode between source boundaries, each derived state
-is selected at most once. When a state is selected, no active
-derived strict predecessor remains; all earlier predecessors are
-already settled. Consequently, no later publication in that
-episode can newly activate the selected state.
+is selected at most once. When a state is selected, no active derived strict predecessor remains. If a strict predecessor were first activated later, the publishing premise responsible for that activation would itself be a strict predecessor active immediately before the transition, contradicting the absence of any active predecessor up to that point. Sources are fixed within the episode. Consequently no later publication can reactivate the selected state.
 
 *Theorem 1: Finite stabilization.* For a finite acyclic well-formed
 program, a repair-admissible seed, and total local definitions,
@@ -169,7 +162,7 @@ every derived definition. Therefore every legal maximal
 schedule terminates at that unique valuation and agrees
 with complete topological reevaluation.
 
-*Corollary: Dependency locality.* After a source batch, definitions
+*Corollary: Dependency locality.* After a source batch applied at a stable boundary, definitions
 outside the forward dependency cone of changed source facts
 cannot be newly activated through this transition rule.
 Sound cutoff can reduce the activated subset further.
@@ -192,7 +185,19 @@ to be scheduled separately. Fusion or batching may be necessary
 for performance; expansion without a cost model is not guaranteed
 to improve runtime.
 
-= Extensions excluded from this calculus
+= Conditional finite-family elaboration
+
+A runtime-sized family is a small example of dynamic dependency computation: an input determines how many independent definitions are needed. This is not an unrestricted graph-rewriting rule.
+
+Fix a settled input snapshot containing a natural number n, a collection of n typed elements, and any other fixed typed premises. For an admitted n, a family constructor has the abstract form `family(n, items, f)`, where f is a pure total expression template from the element and fixed premises to T. Extend the boundary value domain with finite ordered sequences of T; this is an explicitly separate extension of the ground domains, not a primitive in the original int/bool calculus. The admission judgment requires a finite n, agreement with the collection length, and the ordinary expression typing judgment for f under a context containing the element and fixed premises.
+
+The elaboration creates fresh distinct internal identities (family identity, index) for indices 0 through n minus 1, each with its own element and fixed premises. A fresh collection constructor reads all n results in index order and publishes to the declared boundary. For n = 0 it publishes the empty collection. Element and shape facts are obtained from the settled snapshot; no candidate reads its own unsettled output. The candidate graph is acyclic, since edges run from input facts to member results to the collection. If admission fails, no candidate is installed. No bound on physical resources follows from this abstract finiteness.
+
+*Conditional elaboration agreement.* Given an admitted snapshot, evaluating the elaboration from scratch yields the same ordered sequence as pointwise application of f. Each member has a typed result by expression type safety, and the collector returns the ordered sequence of precisely those results. Theorem 1 and Theorem 2 therefore establish finite stabilization and schedule independence for this fixed elaboration. This is a boundary-observational refinement for the given snapshot, not a claim that the internal identities persist across lengths or that every member is individually cached.
+
+When the input changes, a new elaboration may be constructed privately. Reusing materializations between elaborations requires the separate graph-version compatibility contract of the computation-model paper; otherwise initialize the candidate from scratch. Atomic successful publication and rejection of obsolete generations are required realization boundaries. The theorem does not cover a generator that fails to terminate, an evolving graph during a repair episode, or unbounded recursive family creation.
+
+= Extensions outside the finite kernel
 
 Versioned recurrence requires epoch indexes, finite demand prefixes,
 carry authority, and retention rules. Immutable graph replacement
@@ -204,8 +209,7 @@ must not be inferred from the ready-frontier law. Nondeterministic
 external effects occur at explicit boundaries whose recorded outcomes
 may subsequently become source facts.
 
-A future language or runtime may implement these contracts, but
-each must have independent semantics and validation. No
+Bounded realizations of several of these contracts exist, but their implementation tests do not extend the finite calculus theorem. Each additional formal extension requires its own semantics and validation. No
 shared-memory cluster, exactly-once external side effects,
 consensus, partition tolerance, or production failover is
 established by this paper.
@@ -223,23 +227,11 @@ not exhaustive verification of arbitrary programs. Checked i64
 overflow is an explicit runtime error, not a theorem-preserving
 ordinary value. The original manuscript's C++20 benchmark results
 remain evidence for that distinct C++ witness and hardware campaign;
-they are not evidence about the new Rust implementation.
+they are not evidence about the Rust reference or the later independent native realization. The accepted native evidence includes typed recurrence and bounded independent-family evaluation, graph replacement and failure isolation; these are executable checks of supported profiles, not a proof of this elaboration for every typed input. The main paper and its DOC-only reproducibility supplement record the exact revisions and measurements.
 
-= Evaluation plan and open obligations
+= Open obligations
 
-Before any production-ready or comparative performance claim, the
-following must be demonstrated: total-domain semantics or explicit
-result-valued errors, independent model checking against the
-frontier-subset transition relation, randomized differential and
-adversarial tests, robust safety and concurrency testing, complete
-extension coverage where claimed, realistic resource limits, and
-reproducible same-host baseline comparisons.
-
-HVM systems implement different computational semantics. A meaningful
-comparison must select common workloads, equivalent results, agreed
-work counts and graph granularity, controlled input sizes, and fair
-single- and multi-CPU configurations. A raw timing ratio without
-this matching does not establish either model's superiority.
+The finite proofs and conditional elaboration are mathematical arguments rather than proof-assistant objects. Mechanization, arbitrary typed graph-generating recursion, general graph-version transition syntax, and richer type domains require separate formal work. Resource admission and failure paths must remain explicit, and executable conformance tests are bounded. Performance and broader application evidence belong in the computation-model paper rather than being repeated here.
 
 = Conclusion
 
@@ -247,13 +239,9 @@ A typed pure calculus provides a concrete entry point for programming
 the finite dependency-oriented repair relation without redefining DOC
 as an actor platform, database, cloud API, or deployment system.
 The formal model remains independent of runtime memory layout and
-physical worker topology. Both the language and its implementation
-require further verification before general completeness,
-production readiness, or HVM performance parity can be claimed.
+physical worker topology. The finite family elaboration illustrates how input-dependent work can refine the unchanged kernel under explicit assumptions. General completeness and production readiness are outside this calculus; unrestricted graph generation and recurrence remain separate extensions.
 
 = Reference
 
 Basak, R. Dependency-Oriented Computation: Persistent-Graph Semantics
-for Incremental Repair. Computing manuscript (submitted research
-artifact). The present calculus draft follows the assumptions and
-scope boundaries of the existing finite DOC model.
+for Incremental Repair. Research manuscript, revised preprint source. The present calculus draft follows the assumptions and scope boundaries of the finite DOC model; the earlier submitted version remains identifiable separately.

@@ -1,0 +1,58 @@
+name: DOC14 manuscript review
+on:
+  push:
+    branches: [doc14-manuscript-review]
+    paths: ['paper/**', 'paper-calculus/**', 'paper-latex/**', '.github/workflows/doc14-manuscript-review.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  render:
+    if: github.repository_id == '1317169134' && github.ref_name == 'doc14-manuscript-review'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install manuscript tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y texlive-latex-extra texlive-fonts-recommended texlive-pictures lmodern poppler-utils fonts-linuxlibertine
+          curl -fsSL --retry 3 https://github.com/typst/typst/releases/download/v0.13.1/typst-x86_64-unknown-linux-musl.tar.xz | tar -xJ -C /tmp
+          sudo install /tmp/typst-x86_64-unknown-linux-musl/typst /usr/local/bin/typst
+          typst --version
+      - name: Render both Typst papers and maintained LaTeX wrappers
+        run: |
+          set -euo pipefail
+          mkdir -p manuscript-output
+          git rev-parse HEAD > manuscript-output/source-sha.txt
+          typst compile --root . paper/dependency-oriented-computation.typ manuscript-output/preprint.pdf 2> manuscript-output/preprint.log
+          typst compile --root . paper-calculus/dependency-oriented-calculus.typ manuscript-output/calculus.pdf 2> manuscript-output/calculus.log
+          cd paper-latex
+          for src in dependency-oriented-computation dependency-oriented-computation-computing; do
+            pdflatex -interaction=nonstopmode -halt-on-error -file-line-error "$src.tex"
+            bibtex "$src"
+            pdflatex -interaction=nonstopmode -halt-on-error -file-line-error "$src.tex"
+            pdflatex -interaction=nonstopmode -halt-on-error -file-line-error "$src.tex"
+            cp "$src.pdf" "$src.log" "$src.blg" ../manuscript-output/
+          done
+          cd ..
+          for pdf in manuscript-output/*.pdf; do
+            pdfinfo "$pdf" > "$pdf.info"
+            pdffonts "$pdf" > "$pdf.fonts"
+            pdftotext "$pdf" "$pdf.txt"
+          done
+          grep -E 'Pages:|File size:' manuscript-output/*.info
+          if grep -Ei 'undefined references|citation.*undefined|there were undefined|LaTeX Error' manuscript-output/*.log; then exit 1; fi
+          for pdf in manuscript-output/*.pdf; do
+            if grep -Eiq '\\b(HVM2?|Bend)\\b' "$pdf.txt"; then exit 1; fi
+          done
+          pages=$(awk '/^Pages:/{print $2}' manuscript-output/dependency-oriented-computation-computing.pdf.info)
+          echo "Computing pages=$pages (prior submission limit 25)" | tee manuscript-output/venue-review.txt
+          if [ "$pages" -gt 25 ]; then echo "EDITORIAL_REVIEW_REQUIRED" >> manuscript-output/venue-review.txt; fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: doc14-manuscript-render
+          path: manuscript-output/
