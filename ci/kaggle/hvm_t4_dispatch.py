@@ -33,8 +33,10 @@ def main():
         if gpu_remaining_hours(kaggle(['quota','--format','json'],env))<=0:raise RuntimeError('INFRA_BLOCKED: GPU quota unavailable')
         dataset=temp/'dataset';dataset.mkdir()
         checksum,manifest=pack(paths,dataset/'doc-gpu-bundle.bin',sha,run_id)
-        spec.update(bundle_sha256=checksum,bundle_dataset=create_private_dataset(dataset,owner,run_id,attempt,env))
-        (out/'provenance.json').write_text(json.dumps(dict(spec={k:v for k,v in spec.items() if k!='bundle_dataset'},manifest=manifest),indent=2))
+        spec.update(bundle_sha256=checksum)
+        # Keep public-safe provenance even when private transport fails.
+        (out/'provenance.json').write_text(json.dumps(dict(spec=spec,manifest=manifest),indent=2))
+        spec.update(bundle_dataset=create_private_dataset(dataset,owner,run_id,attempt,env,readiness_attempts=40))
         kernel=temp/'kernel';name=prepare_kernel(kernel,template,spec,owner,placeholder=MARK)
         kaggle(['kernels','push','-p',str(kernel),'--accelerator',spec['accelerator']],env,timeout=180)
         for _ in range(360):

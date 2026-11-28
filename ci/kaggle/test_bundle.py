@@ -225,6 +225,52 @@ class NativeGpuBundle(unittest.TestCase):
                 with self.assertRaisesRegex(RuntimeError,"status AND bundle retrieval denied"):
                     bundle.create_private_dataset(folder,"owner","42","1",{})
 
+    def test_opt_in_readiness_grace_retries_reads_only_and_requires_bytes(self):
+        with tempfile.TemporaryDirectory() as td:
+            folder=Path(td)
+            (folder/"doc-gpu-bundle.bin").write_bytes(b"trusted")
+            calls=[]
+            def command(argv,**kwargs):
+                calls.append(argv[2])
+                if argv[2]=="create":
+                    return subprocess.CompletedProcess(argv,0,"","")
+                if argv[2]=="status":
+                    return subprocess.CompletedProcess(argv,1,"","403 Forbidden")
+                if calls.count("download")<3:
+                    return subprocess.CompletedProcess(argv,1,"","403 Forbidden")
+                (Path(argv[argv.index("-p")+1])/"doc-gpu-bundle.bin").write_bytes(b"trusted")
+                return subprocess.CompletedProcess(argv,0,"","")
+            with patch.object(bundle.subprocess,"run",side_effect=command), \
+                 patch.object(bundle.time,"sleep",return_value=None):
+                value=bundle.create_private_dataset(folder,"owner","42","1",{},readiness_attempts=4)
+            self.assertEqual(value,"owner/doc-gpu-42-1-bundle")
+            self.assertEqual(calls,["create","status","download","status","download","status","download"])
+
+    def test_opt_in_readiness_grace_permanent_denial_fails_closed(self):
+        with tempfile.TemporaryDirectory() as td:
+            folder=Path(td)
+            (folder/"doc-gpu-bundle.bin").write_bytes(b"trusted")
+            def command(argv,**kwargs):
+                return subprocess.CompletedProcess(argv,0,"","") if argv[2]=="create" else subprocess.CompletedProcess(argv,1,"","403 Forbidden")
+            with patch.object(bundle.subprocess,"run",side_effect=command) as invoke, \
+                 patch.object(bundle.time,"sleep",return_value=None):
+                with self.assertRaisesRegex(RuntimeError,"readiness exhausted"):
+                    bundle.create_private_dataset(folder,"owner","42","1",{},readiness_attempts=2)
+            self.assertEqual([c.args[0][2] for c in invoke.call_args_list],["create","status","download","status","download"])
+
+    def test_opt_in_readiness_never_retries_integrity_mismatch(self):
+        with tempfile.TemporaryDirectory() as td:
+            folder=Path(td)
+            (folder/"doc-gpu-bundle.bin").write_bytes(b"trusted")
+            def command(argv,**kwargs):
+                if argv[2]=="download":
+                    (Path(argv[argv.index("-p")+1])/"doc-gpu-bundle.bin").write_bytes(b"wrong")
+                return subprocess.CompletedProcess(argv,0,'{"status":"COMPLETE"}',"")
+            with patch.object(bundle.subprocess,"run",side_effect=command) as invoke:
+                with self.assertRaisesRegex(RuntimeError,"bytes mismatch"):
+                    bundle.create_private_dataset(folder,"owner","42","1",{},readiness_attempts=4)
+            self.assertEqual(invoke.call_count,3)
+
     def test_no_dataset_upload_after_api_failure(self):
         with tempfile.TemporaryDirectory() as td:
             (Path(td)/"doc-gpu-bundle.bin").write_bytes(b"synthetic exact-SHA bundle")

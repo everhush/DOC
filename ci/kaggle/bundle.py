@@ -147,6 +147,10 @@ def _api_denied(completed):
         "insufficient scope", "invalid token"))
 
 
+class PrivateBundleAccessDenied(RuntimeError):
+    """Authenticated private retrieval failed; never an integrity success."""
+
+
 def verify_private_bundle_download(dataset, expected_archive, env):
     """Fallback for Kaggle's status endpoint: fetch and hash real private bytes.
 
@@ -163,7 +167,7 @@ def verify_private_bundle_download(dataset, expected_archive, env):
             env=env,capture_output=True,text=True,timeout=120)
         if proc.returncode:
             if _api_denied(proc):
-                raise RuntimeError(
+                raise PrivateBundleAccessDenied(
                     "Kaggle private dataset status AND bundle retrieval denied")
             return False
         downloaded=remote/expected_archive.name
@@ -178,7 +182,9 @@ def verify_private_bundle_download(dataset, expected_archive, env):
         return True
 
 
-def create_private_dataset(folder, owner,run_id,attempt,env):
+def create_private_dataset(folder, owner,run_id,attempt,env, *, readiness_attempts=None):
+    if readiness_attempts is not None and (not isinstance(readiness_attempts,int) or not 1 <= readiness_attempts <= 40):
+        raise ValueError('invalid bounded private dataset readiness attempts')
     slug=f"doc-gpu-{run_id}-{attempt}-bundle"
     if not re.fullmatch(r"doc-gpu-[0-9]+-[0-9]+-bundle",slug):
         raise ValueError("Invalid private GPU binary dataset ID")
@@ -205,12 +211,26 @@ def create_private_dataset(folder, owner,run_id,attempt,env):
     # on the status endpoint despite valid create, quota and own-dataset APIs.
     # Alternative: require ACTUAL authenticated retrieval and a byte-for-byte
     # hash match of the private SHA-pinned bundle, never a listing alone.
+    polls=0
+    def checked_download():
+        try:
+            return verify_private_bundle_download(dataset,archive,env)
+        except PrivateBundleAccessDenied:
+            if readiness_attempts is None:
+                raise
+            # Newly accepted uploads can briefly return 403 on both APIs.
+            # Retry reads only, never recreate or alter permissions.
+            print("DOC_KAGGLE_PRIVATE_BUNDLE_ACCESS_PENDING",flush=True)
+            return False
     while True:
+        polls+=1
+        if readiness_attempts is not None and polls>readiness_attempts:
+            raise RuntimeError("Kaggle private dataset readiness exhausted; no verified bundle")
         status=subprocess.run(["kaggle","datasets","status",dataset,
             "--format","json"],env=env,capture_output=True,text=True,timeout=25)
         if status.returncode:
             if _api_denied(status):
-                if verify_private_bundle_download(dataset,archive,env):
+                if checked_download():
                     print("DOC_KAGGLE_PRIVATE_BUNDLE_INTEGRITY_PASS: authenticated exact bytes")
                     return dataset
                 # The dataset may still be indexing. We do not give up solely
@@ -228,7 +248,7 @@ def create_private_dataset(folder, owner,run_id,attempt,env):
             # Kaggle can return COMPLETE before indexing the actual input
             # filename. Status alone is NOT proof the private notebook can
             # mount our SHA-pinned native bundle.
-            if verify_private_bundle_download(dataset,archive,env):
+            if checked_download():
                 print("DOC_KAGGLE_PRIVATE_BUNDLE_INTEGRITY_PASS: authenticated exact bytes")
                 return dataset
             time.sleep(8)
