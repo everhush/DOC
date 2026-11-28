@@ -24,16 +24,64 @@ TESTS = {
     "test_graph_generation.py", "test_recurrence_policy.py", "recurrence_authority_host.c",
     "scalable_scratch_test.c", "name_index_test.c", "scale_resource_boundary.c",
 }
+COMPILER_FILES = {
+    "common_core.doc",
+    "doc_build.py",
+    "general.doc",
+    "general_core.doc",
+    "gpu_core.doc",
+    "gpu_plan.doc",
+    "gpu_range_core.doc",
+    "lexer.doc",
+    "lexer_core.doc",
+    "managed.doc",
+    "managed_core.doc",
+    "managed_reactive.doc",
+    "managed_reactive_core.doc",
+    "module_scan.doc",
+    "module_scan_core.doc",
+    "native_scalar.doc",
+    "native_scalar_core.doc",
+    "parser.doc",
+    "parser_core.doc",
+    "reactive.doc",
+    "reactive_core.doc",
+    "scalar.doc",
+    "scalar_core.doc",
+}
+RUNTIME_FILES = {
+    "checkpoint_io.h",
+    "effects_policy.doc",
+    "epoch_authority.doc",
+    "epoch_authority.h",
+    "gpu_pool_metrics.h",
+    "gpu_values.h",
+    "graph_generation.doc",
+    "graph_host.h",
+    "graph_reader_slots.h",
+    "graph_variant_abi.h",
+    "graph_variant_adapter.h",
+    "placed_authority.h",
+    "placed_epoch.h",
+    "placed_policy.doc",
+    "placed_transport.h",
+    "placement_policy.doc",
+    "reactive_values.h",
+    "recurrence_policy.doc",
+    "recurrence_values.h",
+    "repair_core.doc",
+    "repair_plan.doc",
+    "value_primitives.h",
+    "webgpu_loss_evidence.h",
+    "webgpu_retirement.h",
+}
+REQUIRED = (EXACT | {"runtime-doc/compiler/"+name for name in COMPILER_FILES}
+            | {"runtime-doc/runtime/"+name for name in RUNTIME_FILES}
+            | {"runtime-doc/tests/"+name for name in TESTS})
 DENIED = re.compile(r"(^|/)(?:runtime-rust|runtime-goose|local-evidence|__pycache__|target|\.git|\.github)(/|$)|(?:_generated\.h|\.(?:pdf|zip|tar|gz|so|a|o|exe|bin|spv|png|jpg|wav|log|pyc))$", re.I)
 
 def admitted(path):
-    if path in EXACT:
-        return True
-    if path.startswith("runtime-doc/compiler/"):
-        return pathlib.PurePosixPath(path).suffix in (".doc", ".py")
-    if path.startswith("runtime-doc/runtime/"):
-        return pathlib.PurePosixPath(path).suffix in (".doc", ".h", ".c") and not path.endswith("_generated.h")
-    return path.startswith("runtime-doc/tests/") and pathlib.PurePosixPath(path).name in TESTS
+    return path in REQUIRED
 
 def git(*args):
     return subprocess.check_output(["git", "-C", str(ROOT), *args])
@@ -72,7 +120,7 @@ def main():
         dst.write_bytes(data)
         dst.chmod(0o755 if mode=="100755" else 0o644)
         entries.append(dict(path=path,git_blob=oid,sha256=hashlib.sha256(data).hexdigest(),bytes=len(data),mode=mode))
-    assert (EXACT | {"runtime-doc/tests/"+name for name in TESTS}) <= {x["path"] for x in entries}
+    assert REQUIRED == {x["path"] for x in entries}, "missing required source: "+str(sorted(REQUIRED-{x["path"] for x in entries}))
     assert all("runtime-rust/" not in x["path"] and "runtime-goose/" not in x["path"] for x in entries)
     assert not list(out.rglob("*_generated.h"))
     assert {p.relative_to(out).as_posix() for p in out.rglob("*") if p.is_file()} == {x["path"] for x in entries}
