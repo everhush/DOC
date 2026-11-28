@@ -43,8 +43,9 @@ def extract_scale(archive, remote):
     return remote / PREFIX
 
 
-def audit_coverage(root):
+def audit_coverage(root, ids):
     """Enforce independent workload coverage and compute descriptive tails."""
+    from physical_gpu import require_t4
     output = {}
     for category, ordinal, timing in (('families', 'epoch', 'epoch_ns'), ('algorithms', 'round', 'epoch_sum_ns')):
         folder = root / category
@@ -72,7 +73,7 @@ def audit_coverage(root):
         for p in (folder/'raw').glob('*.stderr'):
             log = p.read_bytes()
             adapters = [line for line in log.splitlines() if line.startswith(b'DOC11_GPU_ADAPTER:')]
-            if adapters and not all(b' physical=1 ' in line and re.search(rb'\bT4\b',line) for line in adapters):
-                raise ValueError('non-T4 adapter evidence')
+            if adapters:
+                require_t4(log.decode(), ids, p.name)
         output[category] = [dict(work=k[0],lanes=k[1],mode=k[2],requested=k[3],warm_n=len(v),p50_ms=statistics.median(v),p95_ms=sorted(v)[math.ceil(.95*len(v))-1],p99_ms=sorted(v)[math.ceil(.99*len(v))-1]) for k,v in sorted(groups.items())]
     return output

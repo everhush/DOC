@@ -17,7 +17,7 @@ from scale_evidence import extract_scale, audit_coverage
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 sys.path.insert(0, str(ROOT/'release'))
-from physical_gpu import FILES, check_build, verify
+from physical_gpu import FILES, check_build, verify, host_t4_ids, require_t4, test_adapter_identity
 
 MARKER = '__DOC14_PHYSICAL_SPEC__'
 KERNEL = r'''
@@ -73,6 +73,7 @@ def write_template(template):
 
 
 def preflight():
+    test_adapter_identity()
     with tempfile.TemporaryDirectory(prefix='doc14-preflight-') as temp:
         write_template(Path(temp)/'kernel-template.py')
     print('DOC14_NOTEBOOK_TEMPLATE_PASS: complete rendered source compiles without credentials', flush=True)
@@ -144,22 +145,22 @@ def main():
         reports = list(remote.rglob('doc14-physical.json'))
         if len(reports)!=1 or reports[0].stat().st_size>4*1024*1024:
             raise ValueError('missing, ambiguous or oversized physical report')
-        verify(json.loads(reports[0].read_text()),record,sha,rid,checksum)
+        report=json.loads(reports[0].read_text())
+        verify(report,record,sha,rid,checksum)
+        ids=host_t4_ids(report['host_gpu_csv'])
         archives=list(remote.rglob('doc9-autonomous-results.tar.gz'))
         if len(archives)!=1: raise ValueError('missing or ambiguous scaling evidence archive')
         extracted=extract_scale(archives[0],remote)
         validate_micro_evidence(extracted/'micro',build/'micro')
         for log in (extracted/'micro').glob('*.stderr'):
-            adapters=[line for line in log.read_bytes().splitlines() if line.startswith(b'DOC11_GPU_ADAPTER:')]
-            if not adapters or not all(b' physical=1 ' in line and re.search(rb'\bT4\b',line) for line in adapters):
-                raise ValueError('missing or non-T4 micrograph device: '+log.name)
+            require_t4(log.read_text(),ids,log.name)
         if b'DOC11_WEBGPU_PASS: 5 native actual-device comparisons' not in (extracted/'micro.log').read_bytes():
             raise ValueError('missing full micrograph execution result')
         print('DOC14_PHYSICAL_MICRO_VERIFIED: 5 graphs, device loss, epoch retirement, graph replacement',flush=True)
         sys.path.insert(0,str(ROOT/'runtime-doc/tests'))
         from verify_autonomous_evidence import verify as verify_scale
         verified=verify_scale(out,build,sha,rid)
-        tails=audit_coverage(extracted)
+        tails=audit_coverage(extracted, ids)
         (out/'scale-verified.json').write_text(json.dumps({'verified':verified,'descriptive_warm_tails':tails},indent=2)+'\n')
         print('DOC14_PHYSICAL_SCALE_VERIFIED:',json.dumps(verified,sort_keys=True),flush=True)
 

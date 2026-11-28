@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Build and independently verify a candidate-only physical GPU fixture."""
 import argparse
+import csv
+import io
 import json
 import os
 from pathlib import Path
@@ -55,15 +57,60 @@ def commands():
             'fault': (['--backend=auto', *args], '2')}
 
 
+def host_t4_ids(inventory):
+    """Host NVML inventory and adapter PCI IDs must agree; description is driver text."""
+    require(isinstance(inventory,str) and len(inventory)<=65536, 'invalid GPU host inventory')
+    ids = set()
+    for row in csv.reader(io.StringIO(inventory), skipinitialspace=True):
+        require(len(row)==3, 'invalid GPU host inventory row')
+        name, pci, driver = (v.strip() for v in row)
+        require(name in ('Tesla T4','NVIDIA T4') and re.fullmatch(r'0x[0-9a-fA-F]{8}',pci)
+                and re.fullmatch(r'[0-9]+(?:\.[0-9]+)+',driver), 'unexpected GPU host inventory')
+        combined=int(pci,16)
+        require(combined & 0xffff == 0x10de and combined >> 16 != 0, 'invalid NVIDIA PCI identity')
+        ids.add((combined & 0xffff, combined >> 16))
+    require(bool(ids), 'empty GPU host inventory')
+    return ids
+
+
+def require_t4(log, ids, context):
+    adapters = [x for x in log.splitlines() if x.startswith('DOC11_GPU_ADAPTER:')]
+    require(bool(adapters), 'missing adapter evidence: '+context)
+    for line in adapters:
+        match = re.fullmatch(r'DOC11_GPU_ADAPTER: type=1 backend=6 physical=1 vendor=0x([0-9a-fA-F]{4,8}) device=0x([0-9a-fA-F]{4,8}) description=.*',line)
+        require(match is not None and tuple(int(x,16) for x in match.groups()) in ids,
+                'selected physical adapter does not match host Tesla T4 PCI identity: '+context)
+
+
+def test_adapter_identity():
+    ids = host_t4_ids('Tesla T4, 0x1EB810DE, 580.178.04\nTesla T4, 0x1EB810DE, 580.178.04\n')
+    good = 'DOC11_GPU_ADAPTER: type=1 backend=6 physical=1 vendor=0x10de device=0x1eb8 description=580.178.04'
+    require_t4(good,ids,'positive')
+    for bad in ('',good.replace('physical=1','physical=0'),good.replace('type=1','type=2'),
+                good.replace('backend=6','backend=7'),good.replace('0x10de','0x1002'),
+                good.replace('0x1eb8','0x1234'),good.replace('vendor=0x10de device=0x1eb8 ', ''),
+                good+'\n'+good.replace('physical=1','physical=0')):
+        try: require_t4(bad,ids,'negative')
+        except ValueError: pass
+        else: raise AssertionError('bad adapter accepted')
+    for bad in ('','NVIDIA A100, 0x1EB810DE, 580.178.04\n','Tesla T4, 0x1EB81002, 580.178.04\n',
+                'Tesla T4, invalid, 580.178.04\n','Tesla T4, 0x1EB810DE, invalid\n',
+                'Tesla T4, 0x1EB810DE, 580.178.04\nNVIDIA A100, 0x20B010DE, 580.178.04\n'):
+        try: host_t4_ids(bad)
+        except ValueError: pass
+        else: raise AssertionError('bad host inventory accepted')
+    print('DOC14_ADAPTER_IDENTITY_PASS: driver-only description accepted only with matching physical PCI IDs; 14 negative cases rejected', flush=True)
+
+
 def verify(report, build_record, sha, run_id, bundle_sha):
     require(report['source_sha']==sha and report['run_id']==str(run_id) and report['bundle_sha256']==bundle_sha and report['build']==build_record, 'stale physical report')
+    ids = host_t4_ids(report['host_gpu_csv'])
     cases = report['cases']
     require(set(cases)==set(commands()), 'incomplete physical cases')
     for name, row in cases.items():
         err = row['stderr']; out = row['stdout']; rc = row['returncode']
         require(type(rc) is int and isinstance(err,str) and isinstance(out,str), 'invalid raw evidence')
-        adapters = [x for x in err.splitlines() if x.startswith('DOC11_GPU_ADAPTER:')]
-        require(adapters and all(' physical=1 ' in x and re.search(r'\bT4\b',x) for x in adapters), 'missing physical T4 evidence: '+name)
+        require_t4(err, ids, name)
         require('DOC11_REGIONS: live=0 ' in err, 'missing region closure: '+name)
         if name=='auto':
             require(rc==0 and out.encode()==fixture()[1], 'physical oracle mismatch')
@@ -83,6 +130,8 @@ def execute(root, sha, run_id, bundle_sha, output):
     build_record = check_build(root, sha)
     report = {'source_sha':sha,'run_id':str(run_id),'bundle_sha256':bundle_sha,'build':build_record,'cases':{}}
     try:
+        report['host_gpu_csv'] = subprocess.run(['nvidia-smi','--query-gpu=name,pci.device_id,driver_version','--format=csv,noheader,nounits'], check=True, capture_output=True, text=True, timeout=30).stdout
+        host_t4_ids(report['host_gpu_csv'])
         for name,(args,fault) in commands().items():
             env = {k:v for k,v in os.environ.items() if not k.startswith('DOC_')}
             env.update(DOC_REQUIRE_PHYSICAL_GPU='1', DOC_REGION_METRICS='1', LD_LIBRARY_PATH=str(root)+':'+env.get('LD_LIBRARY_PATH',''))
