@@ -5,10 +5,56 @@ from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parent.parent/'compiler'))
 from doc_build import build_bundled,emit,gpu_artifacts
 
+# Independent expected output for the five curated physical micrographs.
+FAMILY = '''source xs:ints=[1,2,3]
+source bias:int=5
+source flag:bool=false
+derive ys:ints(xs,bias)=map_ints(xs,item,add(item,bias))
+derive unrelated:bool(flag,xs)=if(flag,eq(len(xs),0),true)
+derive count:int(ys)=len(ys)
+'''
+
+
+def value(x):
+    if isinstance(x, bool):
+        return str(x).lower()
+    if isinstance(x, list):
+        return '['+','.join(map(str,x))+']'
+    return str(x)
+
+
+def micro_expected(name):
+    epochs=[]
+    if name=='scalar':
+        for a in (-2147483648,0):
+            b=2147483647
+            epochs.append([('a',a),('b',b),('lo',a<b),('hi',b<=a),('pick',a if a<b else b)])
+    elif name=='arithmetic':
+        for a in (2,4):
+            b=-3; x=a*b; y=a+b
+            epochs.append([('a',a),('b',b),('x',x),('y',y),('z',x<y)])
+    elif name in ('wide','mixed'):
+        for x,xs in ((2,[1,2]),(3,[4])):
+            row=[('x',x)]
+            if name=='mixed': row.append(('xs',xs))
+            row.extend((f'g{i}',x==i) for i in range(96))
+            if name=='mixed': row.extend((f'c{i}',xs+[i]) for i in range(32))
+            epochs.append(row)
+    elif name=='family':
+        for n,b in ((128,5),(0,5),(256,6),(3,7),(128,8)):
+            xs=list(range(n))
+            epochs.append([('xs',xs),('bias',b),('flag',False),('ys',[x+b for x in xs]),('unrelated',True),('count',n)])
+    else:
+        raise ValueError('unknown micrograph: '+name)
+    return ''.join(f'epoch: {i}\n'+''.join(f'{k}: {value(v)}\n' for k,v in row) for i,row in enumerate(epochs)).encode()
+
 def run(cmd,cwd,physical=False,extra=None):
  env={**os.environ,'DOC_REGION_METRICS':'1','DOC_WORKERS':'4','DOC_GPU_ALLOW_SOFTWARE':'1'}
+ env.pop('DOC_GPU_TEST_FAIL_DISPATCH',None)
  if extra:env.update(extra)
- if physical:env['DOC_REQUIRE_PHYSICAL_GPU']='1'
+ if physical:
+  env.pop('DOC_GPU_ALLOW_SOFTWARE',None)
+  env['DOC_REQUIRE_PHYSICAL_GPU']='1'
  return subprocess.run([str(x) for x in cmd],cwd=cwd,capture_output=True,timeout=180,env=env)
 def check(cmd,cwd,prefix=None,physical=False):
  r=run(cmd,cwd,physical);assert r.returncode==0,(cmd[0],r.stderr[-6000:])
@@ -54,14 +100,13 @@ def graph_generation(a,root,comp,plan,headers,wgpu):
 def main():
  p=argparse.ArgumentParser();p.add_argument('--prebuilt',type=Path);p.add_argument('--build-only',action='store_true');p.add_argument('--artifacts',type=Path);p.add_argument('--reference',type=Path);p.add_argument('--reactive',type=Path);p.add_argument('--gpu-plan',type=Path);p.add_argument('--wgpu-root',required=True,type=Path);p.add_argument('--headers',type=Path,default=Path(__file__).resolve().parent.parent/'runtime');p.add_argument('--physical',action='store_true');p.add_argument('--stream',action='store_true');a=p.parse_args();ref=a.reference.resolve() if a.reference else None;comp=a.reactive.resolve() if a.reactive else None;plan=a.gpu_plan.resolve() if a.gpu_plan else None;headers=a.headers.resolve();wgpu=a.wgpu_root.resolve();checks=0
  if a.artifacts:a.artifacts.mkdir(parents=True,exist_ok=True)
- assert a.prebuilt or (ref and comp and plan)
+ assert a.prebuilt or (comp and plan)
  assert not a.build_only or (a.artifacts and not a.prebuilt)
  scalar='source a:int=-2147483648\nsource b:int=2147483647\nderive lo:bool(a,b)=lt(a,b)\nderive hi:bool(a,b)=le(b,a)\nderive pick:int(a,b,lo)=if(lo,a,b)\n'
  arithmetic='source a:int=2\nsource b:int=-3\nderive x:int(a,b)=mul(a,b)\nderive y:int(a,b)=add(a,b)\nderive z:bool(x,y)=lt(x,y)\n'
  wide='source x:int=2\n'+''.join(f'derive g{i}:bool(x)=eq(x,{i})\n' for i in range(96))
  mixed='source x:int=2\nsource xs:ints=[1,2]\n'+''.join(f'derive g{i}:bool(x)=eq(x,{i})\n' for i in range(96))+''.join(f'derive c{i}:ints(xs)=append(xs,{i})\n' for i in range(32))
- family_path=Path(__file__).resolve().parents[2]/'runtime-rust/examples/dependency_family.doc'
- family=family_path.read_text() if not a.prebuilt else ''
+ family=FAMILY if not a.prebuilt else ''
  family_args=[]
  for n,b in [(128,5),(0,5),(256,6),(3,7),(128,8)]:
   if family_args:family_args.append('--next')
@@ -76,6 +121,7 @@ def main():
    src.write_text(program);snapshot=program.encode()
    if a.prebuilt:
     exe=a.prebuilt.resolve()/name;expected=(a.prebuilt.resolve()/(name+'.expected')).read_bytes()
+    assert expected==micro_expected(name), 'prebuilt numerical oracle mismatch: '+name
    else:
     code=build_bundled([comp],snapshot,exe,headers,True,c,stream=a.stream,gpu_plan=[plan],wgpu_root=wgpu,emit_wgsl=root/'generated.wgsl',emit_gpu_header=gh)
     assert code==emit([comp],snapshot,True,stream=a.stream)
@@ -85,7 +131,8 @@ def main():
     except ValueError:pass
     else:raise AssertionError('accepted missing WebGPU ABI installation')
     assert exe.read_bytes()==saved,'failed GPU build replaced previous executable'
-    expected=check([ref,src,*args],root)
+    expected=micro_expected(name)
+    if ref:assert check([ref,src,*args],root)==expected, 'optional reference differs from independent oracle: '+name
     if a.artifacts:
      shutil.copy2(exe,a.artifacts/name);(a.artifacts/(name+'.expected')).write_bytes(expected)
      (a.artifacts/(name+'.wgsl')).write_bytes((root/'generated.wgsl').read_bytes())

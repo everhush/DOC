@@ -3,6 +3,7 @@
 import ast
 import json
 import os
+import re
 from pathlib import Path
 import sys
 import tempfile
@@ -10,6 +11,7 @@ import time
 from bundle import create_private_dataset
 from dispatch import auth_environment, gpu_remaining_hours, kaggle, prepare_kernel, status_from_cli
 from independent_bundle import pack
+from independent_micro_evidence import MICRO_GRAPHS, MICRO_EXECUTABLES, validate_micro_evidence
 from scale_evidence import extract_scale, audit_coverage
 
 HERE = Path(__file__).resolve().parent
@@ -40,6 +42,10 @@ def main():
     env.update(DOC_REQUIRE_PHYSICAL_GPU='1', LD_LIBRARY_PATH=str(root)+':'+env.get('LD_LIBRARY_PATH',''))
     for exe in (root/'scale').rglob('bench'): exe.chmod(0o700)
     try:
+        for exe in (root/'micro').iterdir():
+            if exe.is_file() and exe.suffix!='.expected': exe.chmod(0o700)
+        with (results/'micro.log').open('wb') as log:
+            subprocess.run([sys.executable,'-u',str(root/'micro-tests/test_gpu.py'),'--prebuilt',str(root/'micro'),'--wgpu-root',str(root),'--physical','--artifacts',str(results/'micro')],cwd=root,env=env,stdout=log,stderr=subprocess.STDOUT,check=True,timeout=2700)
         for category,script,flags in (
                 ('families','benchmark_autonomous_family.py',['--epochs','6']),
                 ('algorithms','benchmark_autonomous_algorithms.py',[])):
@@ -70,6 +76,15 @@ def main():
     provision = ast.get_source_segment(host,node)
     files = {name:build/name for name in (*FILES,'build.json')}
     files.update({name:ROOT/'release'/name for name in ('physical_gpu.py','test_gpu_candidate.py')})
+    sys.path.insert(0,str(ROOT/'runtime-doc/tests'))
+    from test_gpu import micro_expected
+    for name in MICRO_GRAPHS:
+        if (build/'micro'/(name+'.expected')).read_bytes()!=micro_expected(name):
+            raise ValueError('wrong independent micrograph oracle: '+name)
+    for name in (*MICRO_EXECUTABLES,*(name+'.expected' for name in MICRO_GRAPHS)):
+        files['micro/'+name]=build/'micro'/name
+    files['micro-tests/test_gpu.py']=ROOT/'runtime-doc/tests/test_gpu.py'
+    files['micro-tests/doc_build.py']=ROOT/'runtime-doc/compiler/doc_build.py'
     for name in ('benchmark_autonomous_family.py','benchmark_autonomous_algorithms.py','benchmark_scale_pipeline.py'):
         files[name] = ROOT/'runtime-doc/tests'/name
     for category,keys in (('families',('production/add','production/poly')),('algorithms',('stress','sort','reduce'))):
@@ -117,6 +132,14 @@ def main():
         archives=list(remote.rglob('doc9-autonomous-results.tar.gz'))
         if len(archives)!=1: raise ValueError('missing or ambiguous scaling evidence archive')
         extracted=extract_scale(archives[0],remote)
+        validate_micro_evidence(extracted/'micro',build/'micro')
+        for log in (extracted/'micro').glob('*.stderr'):
+            adapters=[line for line in log.read_bytes().splitlines() if line.startswith(b'DOC11_GPU_ADAPTER:')]
+            if not adapters or not all(b' physical=1 ' in line and re.search(rb'\bT4\b',line) for line in adapters):
+                raise ValueError('missing or non-T4 micrograph device: '+log.name)
+        if b'DOC11_WEBGPU_PASS: 5 native actual-device comparisons' not in (extracted/'micro.log').read_bytes():
+            raise ValueError('missing full micrograph execution result')
+        print('DOC14_PHYSICAL_MICRO_VERIFIED: 5 graphs, device loss, epoch retirement, graph replacement',flush=True)
         sys.path.insert(0,str(ROOT/'runtime-doc/tests'))
         from verify_autonomous_evidence import verify as verify_scale
         verified=verify_scale(out,build,sha,rid)

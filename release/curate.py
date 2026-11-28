@@ -26,6 +26,8 @@ TESTS = {
     "build_autonomous_scale.py", "benchmark_gpu_family_host.c", "scale_algorithm_host.c",
     "benchmark_autonomous_family.py", "benchmark_autonomous_algorithms.py",
     "benchmark_scale_pipeline.py", "verify_autonomous_evidence.py",
+    "test_gpu.py", "gpu_pool_metrics_test.c", "gpu_graph_generation_host.c",
+    "gpu_epoch_authority_host.c", "webgpu_loss_evidence_test.c",
 }
 COMPILER_FILES = {
     "common_core.doc",

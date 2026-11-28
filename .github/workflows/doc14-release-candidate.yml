@@ -105,7 +105,7 @@ jobs:
       contents: read
       attestations: read
     runs-on: ubuntu-24.04
-    timeout-minutes: 100
+    timeout-minutes: 115
     steps:
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # resolved v4
         with:
@@ -161,6 +161,9 @@ jobs:
           unzip -q wgpu.zip -d wgpu
           sha256sum -c clean-evidence/SHA256SUMS
           python3 -u clean/release/physical_gpu.py --stage2 clean-evidence/self/stage2 --scanner clean-evidence/scanner2 --reactive clean-evidence/reactive2 --wgpu wgpu --commit "$GITHUB_SHA" --output gpu-build
+          cc -std=c11 -O1 -Wall -Wextra -Werror -fsanitize=address,undefined -fno-pie -no-pie -I clean/runtime-doc/runtime clean/runtime-doc/tests/webgpu_loss_evidence_test.c -o gpu-build/loss-evidence-test
+          gpu-build/loss-evidence-test | tee gpu-build/loss-evidence-test.log
+          python3 -u clean/runtime-doc/tests/test_gpu.py --build-only --reactive clean-evidence/reactive2 --gpu-plan gpu-build/gpu_plan2 --wgpu-root wgpu --stream --artifacts gpu-build/micro | tee gpu-build/micro-build.log
           python3 -u clean/runtime-doc/tests/build_autonomous_scale.py --reactive clean-evidence/reactive2 --planner gpu-build/gpu_plan2 --wgpu wgpu --out gpu-build/scale
           sha256sum wgpu.zip > gpu-build/wgpu-archive-sha256.txt
           find gpu-build -type f ! -name SHA256SUMS -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > gpu-build/SHA256SUMS
