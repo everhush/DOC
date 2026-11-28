@@ -1,0 +1,109 @@
+#!/usr/bin/env python3
+"""Build and independently verify a candidate-only physical GPU fixture."""
+import argparse
+import json
+import os
+from pathlib import Path
+import re
+import shutil
+import subprocess
+import sys
+from test_gpu_candidate import SOURCE, fixture, digest, require
+
+ROOT = Path(__file__).resolve().parents[1]
+FILES = ('family.doc', 'family-gpu', 'family.c', 'family.wgsl', 'gpu_generated.h', 'libwgpu_native.so')
+
+
+def build(a):
+    sys.path.insert(0, str(ROOT/'runtime-doc/compiler'))
+    from doc_build import bundle, emit, build_bundled
+    out = a.output.resolve()
+    out.mkdir(parents=True, exist_ok=False)
+    headers = ROOT/'runtime-doc/runtime'
+    planner = out/'gpu_plan2'
+    code = emit([a.stage2.resolve()], bundle([a.scanner.resolve()], ROOT/'runtime-doc/compiler/gpu_plan.doc', stream=True), stream=True)
+    (out/'gpu_plan2.c').write_bytes(code)
+    subprocess.run(['cc','-std=gnu11','-O1','-pthread','-I',str(headers),str(out/'gpu_plan2.c'),'-o',str(planner)], check=True, timeout=600)
+    (out/'family.doc').write_bytes(SOURCE)
+    build_bundled([a.reactive.resolve()], SOURCE, out/'family-gpu', headers, True, out/'family.c', stream=True,
+                  gpu_plan=[planner], wgpu_root=a.wgpu.resolve(), emit_wgsl=out/'family.wgsl', emit_gpu_header=out/'gpu_generated.h')
+    shutil.copy2(a.wgpu/'lib/libwgpu_native.so', out/'libwgpu_native.so')
+    report = {'source_sha': a.commit, 'inputs': {name:digest(getattr(a,name)) for name in ('stage2','scanner','reactive')},
+              'planner_sha256': digest(planner), 'files': {name:digest(out/name) for name in FILES}}
+    (out/'build.json').write_text(json.dumps(report, indent=2)+'\n')
+    print('DOC14_GPU_BUILD_ONLY_PASS: no device opened', flush=True)
+
+
+def check_build(root, sha):
+    report = json.loads((root/'build.json').read_text())
+    require(re.fullmatch(r'[0-9a-f]{40}', sha) and report['source_sha']==sha, 'stale build')
+    require(set(report['files'])==set(FILES), 'incomplete GPU build inventory')
+    for name, expected in report['files'].items():
+        p = root/name
+        require(p.is_file() and not p.is_symlink() and digest(p)==expected, 'GPU build digest mismatch: '+name)
+    require((root/'family.doc').read_bytes()==SOURCE, 'fixture identity mismatch')
+    return report
+
+
+def commands():
+    args, _ = fixture()
+    return {'auto': (['--backend=auto', *args], None),
+            'strict': (['--backend=gpu','--demand=ys','xs=[1,2,3]','bias=5'], None),
+            'empty': (['--backend=gpu','--demand=ys','xs=[]'], None),
+            'reject': (['--backend=gpu','--demand=ys','xs=[9223372036854775807]'], None),
+            'fault': (['--backend=auto', *args], '2')}
+
+
+def verify(report, build_record, sha, run_id, bundle_sha):
+    require(report['source_sha']==sha and report['run_id']==str(run_id) and report['bundle_sha256']==bundle_sha and report['build']==build_record, 'stale physical report')
+    cases = report['cases']
+    require(set(cases)==set(commands()), 'incomplete physical cases')
+    for name, row in cases.items():
+        err = row['stderr']; out = row['stdout']; rc = row['returncode']
+        require(type(rc) is int and isinstance(err,str) and isinstance(out,str), 'invalid raw evidence')
+        adapters = [x for x in err.splitlines() if x.startswith('DOC11_GPU_ADAPTER:')]
+        require(adapters and all(' physical=1 ' in x and re.search(r'\bT4\b',x) for x in adapters), 'missing physical T4 evidence: '+name)
+        require('DOC11_REGIONS: live=0 ' in err, 'missing region closure: '+name)
+        if name=='auto':
+            require(rc==0 and out.encode()==fixture()[1], 'physical oracle mismatch')
+            require(re.findall(r'DOC11_GPU_FAMILY: state=3 lanes=(\d+)',err)==['128','256','128'] and 'DOC11_GPU_DISPATCH:' in err, 'missing family dispatch')
+        elif name=='strict':
+            require(rc==0 and out=='ys: [6,7,8]\n' and 'DOC11_GPU_DISPATCH:' in err, 'strict mismatch')
+        elif name=='empty':
+            require(rc==0 and out=='ys: []\n' and 'DOC11_GPU_DISPATCH:' not in err, 'empty mismatch')
+        elif name=='reject':
+            require(rc!=0 and not out and 'DOC_GPU_UNSUPPORTED' in err, 'unsupported range accepted')
+        elif name=='fault':
+            require(rc!=0 and out==fixture()[1].decode().split('epoch: 2\n')[0] and 'DOC11_GPU_INJECTED_FAILURE: dispatch=2' in err, 'failed dispatch published a candidate')
+    print('DOC14_PHYSICAL_SMOKE_PASS: exact numerical, dispatch, admission and rollback evidence', flush=True)
+
+
+def execute(root, sha, run_id, bundle_sha, output):
+    build_record = check_build(root, sha)
+    report = {'source_sha':sha,'run_id':str(run_id),'bundle_sha256':bundle_sha,'build':build_record,'cases':{}}
+    try:
+        for name,(args,fault) in commands().items():
+            env = {k:v for k,v in os.environ.items() if not k.startswith('DOC_')}
+            env.update(DOC_REQUIRE_PHYSICAL_GPU='1', DOC_REGION_METRICS='1', LD_LIBRARY_PATH=str(root)+':'+env.get('LD_LIBRARY_PATH',''))
+            if fault: env['DOC_GPU_TEST_FAIL_DISPATCH']=fault
+            result = subprocess.run([str(root/'family-gpu'),*args], cwd=root, env=env, capture_output=True, timeout=180)
+            report['cases'][name] = {'returncode':result.returncode,'stdout':result.stdout.decode(),'stderr':result.stderr.decode()}
+        verify(report,build_record,sha,run_id,bundle_sha)
+    finally:
+        output.write_text(json.dumps(report, indent=2)+'\n')
+
+
+def main():
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument('--stage2',type=Path,required=True)
+    p.add_argument('--scanner',type=Path,required=True)
+    p.add_argument('--reactive',type=Path,required=True)
+    p.add_argument('--wgpu',type=Path,required=True)
+    p.add_argument('--commit',required=True)
+    p.add_argument('--output',type=Path,required=True)
+    a = p.parse_args()
+    require(re.fullmatch(r'[0-9a-f]{40}',a.commit), 'invalid source commit')
+    build(a)
+
+
+if __name__=='__main__': main()
