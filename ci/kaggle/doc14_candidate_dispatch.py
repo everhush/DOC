@@ -9,7 +9,7 @@ import sys
 import tempfile
 import time
 from bundle import create_private_dataset
-from dispatch import auth_environment, gpu_remaining_hours, kaggle, prepare_kernel, status_from_cli
+from dispatch import auth_environment, gpu_remaining_hours, kaggle, prepare_kernel, render_kernel_template, status_from_cli
 from independent_bundle import pack
 from independent_micro_evidence import MICRO_GRAPHS, MICRO_EXECUTABLES, validate_micro_evidence
 from scale_evidence import extract_scale, audit_coverage
@@ -20,7 +20,7 @@ sys.path.insert(0, str(ROOT/'release'))
 from physical_gpu import FILES, check_build, verify
 
 MARKER = '__DOC14_PHYSICAL_SPEC__'
-KERNEL = '''
+KERNEL = r'''
 import os, sys, time, subprocess, tarfile
 SPEC = __DOC14_PHYSICAL_SPEC__
 LOGS = Path('/kaggle/working')
@@ -61,6 +61,23 @@ if __name__=='__main__': main()
 '''
 
 
+def write_template(template):
+    host = (HERE/'doc_kaggle_gpu.py').read_text()
+    node, = [n for n in ast.parse(host).body if isinstance(n,ast.FunctionDef) and n.name=='experiment_provision_host_graphics']
+    provision = ast.get_source_segment(host,node)
+    template.write_text((HERE/'independent_bundle.py').read_text()+'\n'+provision+'\n'+KERNEL)
+    # Compile the full rendered source before auth, quota checks or upload.
+    render_kernel_template(template, {'sha':'0'*40,'run_id':'1','attempt':'1',
+        'accelerator':'NvidiaTeslaT4','bundle_sha256':'0'*64,
+        'bundle_dataset':'example/doc-gpu-1-1-bundle'}, placeholder=MARKER)
+
+
+def preflight():
+    with tempfile.TemporaryDirectory(prefix='doc14-preflight-') as temp:
+        write_template(Path(temp)/'kernel-template.py')
+    print('DOC14_NOTEBOOK_TEMPLATE_PASS: complete rendered source compiles without credentials', flush=True)
+
+
 def main():
     if os.environ.get('GITHUB_REPOSITORY_ID')!='1317169134' or os.environ.get('GITHUB_REF')!='refs/heads/master':
         raise ValueError('trusted master CI only')
@@ -70,10 +87,6 @@ def main():
     out = Path('physical-evidence').resolve()
     out.mkdir(exist_ok=False)
     spec = {'sha':sha,'run_id':rid,'attempt':attempt,'accelerator':'NvidiaTeslaT4'}
-    # Reuse only the already-established host provisioning function, not the old reference test controller.
-    host = (HERE/'doc_kaggle_gpu.py').read_text()
-    node, = [n for n in ast.parse(host).body if isinstance(n,ast.FunctionDef) and n.name=='experiment_provision_host_graphics']
-    provision = ast.get_source_segment(host,node)
     files = {name:build/name for name in (*FILES,'build.json')}
     files.update({name:ROOT/'release'/name for name in ('physical_gpu.py','test_gpu_candidate.py')})
     sys.path.insert(0,str(ROOT/'runtime-doc/tests'))
@@ -100,7 +113,7 @@ def main():
     with tempfile.TemporaryDirectory(prefix='doc14-private-') as temp:
         td = Path(temp)
         template = td/'kernel-template.py'
-        template.write_text((HERE/'independent_bundle.py').read_text()+'\n'+provision+'\n'+KERNEL)
+        write_template(template)
         env, owner = auth_environment(os.environ.get('KAGGLE_DOC_1',''),td/'config',os.environ.get('DOC_KAGGLE_USERNAME',''))
         if gpu_remaining_hours(kaggle(['quota','--format','json'],env))<=0:
             raise RuntimeError('INFRA_BLOCKED: GPU quota unavailable')
@@ -148,4 +161,10 @@ def main():
         print('DOC14_PHYSICAL_SCALE_VERIFIED:',json.dumps(verified,sort_keys=True),flush=True)
 
 
-if __name__=='__main__': main()
+if __name__=='__main__':
+    if sys.argv[1:]==['--preflight']:
+        preflight()
+    elif not sys.argv[1:]:
+        main()
+    else:
+        raise SystemExit('usage: doc14_candidate_dispatch.py [--preflight]')
