@@ -176,12 +176,16 @@ jobs:
           python3 -u clean/runtime-doc/tests/test_gpu.py --build-only --reactive clean-evidence/reactive2 --gpu-plan gpu-build/gpu_plan2 --wgpu-root wgpu --stream --artifacts gpu-build/micro | tee gpu-build/micro-build.log
           python3 -u clean/runtime-doc/tests/build_autonomous_scale.py --reactive clean-evidence/reactive2 --planner gpu-build/gpu_plan2 --wgpu wgpu --out gpu-build/scale
           sha256sum wgpu.zip > gpu-build/wgpu-archive-sha256.txt
+          unzip -Z1 wgpu.zip > gpu-build/wgpu-archive-inventory.txt
+          test ! -e gpu-build/libwgpu_native.so
           find gpu-build -type f ! -name SHA256SUMS -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > gpu-build/SHA256SUMS
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # observed v4
         if: always()
         with:
           name: doc14-gpu-build
-          path: gpu-build/
+          path: |
+            gpu-build/
+            !gpu-build/libwgpu_native.so
   physical:
     needs: clean-cpu
     if: github.repository_id == '1317169134' && github.ref_name == 'master'
@@ -202,8 +206,22 @@ jobs:
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           sha256sum -c gpu-build/SHA256SUMS
+          test ! -e gpu-build/libwgpu_native.so
+          curl -fL --retry 3 https://github.com/gfx-rs/wgpu-native/releases/download/v27.0.4.1/wgpu-linux-x86_64-release.zip -o wgpu.zip
+          echo '9385b8a9e4e6f0b00264757577511097104fedf6db7819aa3e34a106c3dc0a42  wgpu.zip' | sha256sum -c -
+          unzip -q wgpu.zip -d external-wgpu
+          cp external-wgpu/lib/libwgpu_native.so gpu-build/libwgpu_native.so
+          expected="$(jq -er '.files["libwgpu_native.so"] | select(test("^[0-9a-f]{64}$"))' gpu-build/build.json)"
+          printf '%s  gpu-build/libwgpu_native.so\n' "$expected" | sha256sum -c -
+          mkdir -p physical-dependencies/wgpu-notices
+          curl -fL --retry 3 https://raw.githubusercontent.com/gfx-rs/wgpu-native/f16f716698899ebfcc3f703722fabd85543318a7/LICENSE.MIT -o physical-dependencies/wgpu-notices/wgpu-native.LICENSE.MIT
+          curl -fL --retry 3 https://raw.githubusercontent.com/gfx-rs/wgpu-native/f16f716698899ebfcc3f703722fabd85543318a7/LICENSE.APACHE -o physical-dependencies/wgpu-notices/wgpu-native.LICENSE.APACHE
+          curl -fL --retry 3 https://raw.githubusercontent.com/webgpu-native/webgpu-headers/7d3186c3dd2c708703524027b46b8703534ab3cc/LICENSE -o physical-dependencies/wgpu-notices/webgpu-headers.LICENSE
+          test "$(git hash-object --no-filters physical-dependencies/wgpu-notices/wgpu-native.LICENSE.MIT)" = 4699691b8ed37738afcbcd591c91f7759472c3d0
+          test "$(git hash-object --no-filters physical-dependencies/wgpu-notices/wgpu-native.LICENSE.APACHE)" = d9a10c0d8e868ebf8da0b3dc95bb0be634c34bfe
+          test "$(git hash-object --no-filters physical-dependencies/wgpu-notices/webgpu-headers.LICENSE)" = 58ca7d85bbe869ba7aa7b053af642dd29ef432cd
+          sha256sum physical-dependencies/wgpu-notices/* > physical-dependencies/wgpu-notices.sha256
           python3 -m pip install 'kaggle>=2.2.1,<3' 'six>=1.16'
-          mkdir -p physical-dependencies
           python3 -m pip freeze > physical-dependencies/pip-freeze.txt
           python3 -u ci/kaggle/doc14_candidate_dispatch.py --preflight
       - name: Execute and independently verify exact physical T4 fixture and scaling

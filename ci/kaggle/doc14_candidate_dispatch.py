@@ -88,6 +88,9 @@ def main():
     out.mkdir(exist_ok=False)
     spec = {'sha':sha,'run_id':rid,'attempt':attempt,'accelerator':'NvidiaTeslaT4'}
     files = {name:build/name for name in (*FILES,'build.json')}
+    notices = Path('physical-dependencies/wgpu-notices').resolve()
+    for name in ('wgpu-native.LICENSE.MIT','wgpu-native.LICENSE.APACHE','webgpu-headers.LICENSE'):
+        files['provider-notices/'+name] = notices/name
     files.update({name:ROOT/'release'/name for name in ('physical_gpu.py','test_gpu_candidate.py')})
     sys.path.insert(0,str(ROOT/'runtime-doc/tests'))
     from test_gpu import micro_expected

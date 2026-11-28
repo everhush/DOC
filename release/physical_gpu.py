@@ -5,7 +5,6 @@ import json
 import os
 from pathlib import Path
 import re
-import shutil
 import subprocess
 import sys
 from test_gpu_candidate import SOURCE, fixture, digest, require
@@ -27,9 +26,11 @@ def build(a):
     (out/'family.doc').write_bytes(SOURCE)
     build_bundled([a.reactive.resolve()], SOURCE, out/'family-gpu', headers, True, out/'family.c', stream=True,
                   gpu_plan=[planner], wgpu_root=a.wgpu.resolve(), emit_wgsl=out/'family.wgsl', emit_gpu_header=out/'gpu_generated.h')
-    shutil.copy2(a.wgpu/'lib/libwgpu_native.so', out/'libwgpu_native.so')
+    # Keep the upstream provider outside the uploaded build artifact.
+    provider = a.wgpu.resolve()/'lib/libwgpu_native.so'
+    require(provider.is_file(), 'missing external WebGPU provider')
     report = {'source_sha': a.commit, 'inputs': {name:digest(getattr(a,name)) for name in ('stage2','scanner','reactive')},
-              'planner_sha256': digest(planner), 'files': {name:digest(out/name) for name in FILES}}
+              'planner_sha256': digest(planner), 'files': {name:digest(provider if name=='libwgpu_native.so' else out/name) for name in FILES}}
     (out/'build.json').write_text(json.dumps(report, indent=2)+'\n')
     print('DOC14_GPU_BUILD_ONLY_PASS: no device opened', flush=True)
 
