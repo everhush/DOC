@@ -49,9 +49,11 @@ def main():
     p.add_argument("--scanner",type=pathlib.Path,required=True)
     p.add_argument("--scanner-sha256",required=True)
     p.add_argument("--evidence",type=pathlib.Path,required=True)
+    p.add_argument("--physical-wgpu-root",type=pathlib.Path,help="require actual physical GPU validation with a separately verified WebGPU ABI installation")
     a=p.parse_args()
     check_cpu_inputs(NATIVE)
     assert (ROOT/"release/test_install.py").is_file(), "missing isolated install regression"
+    assert (ROOT/"release/test_gpu_candidate.py").is_file(), "missing candidate GPU oracle"
     boot=a.bootstrap.resolve();scanner=a.scanner.resolve();out=a.evidence.resolve()
     assert sha(boot)==a.bootstrap_sha256 and sha(scanner)==a.scanner_sha256
     assert not (ROOT/"runtime-rust").exists() and not (ROOT/"runtime-goose").exists()
@@ -86,6 +88,13 @@ def main():
         run(["cc","-std=gnu11","-O1","-g","-pthread","-fsanitize=address,undefined","-fno-sanitize-recover=all","-fno-pie","-no-pie","-I",headers,NATIVE/"tests"/(name+".c"),"-o",exe])
         run([exe])
     (out/"native-hashes.json").write_text(json.dumps({str(f.relative_to(out)):sha(f) for f in (stage2,out/"self/stage3",scan2,reactive)},indent=2)+"\n")
+    gpu_args=[sys.executable,ROOT/"release/test_gpu_candidate.py","--compiler",reactive,"--evidence",out/"gpu-oracle"]
+    if a.physical_wgpu_root:
+        planner=tool("gpu_plan.doc","gpu_plan2",scan2,True)
+        gpu_args.extend(["--gpu-plan",planner,"--wgpu-root",a.physical_wgpu_root.resolve()])
+    else:
+        gpu_args.append("--cpu-only")
+    run(gpu_args)
     print("DOC14_CLEAN_CPU_CANDIDATE_PASS: separate native bootstrap, no reference evaluator in candidate")
 if __name__=="__main__":
     main()
