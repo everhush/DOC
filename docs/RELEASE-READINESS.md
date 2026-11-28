@@ -32,3 +32,21 @@ Run 46105142921, source 9491ca31303579b2ce223e344dee9b8b5354214f: source export 
 ## Retained empirical and caller re-audit
 
 Independent archive re-audit of the original physical result completed; see [DOC14 empirical audit](DOC14-EMPIRICAL-AUDIT.md). All 1,827 checksum observations, 399 process identities, 4,374 physical dispatch traces, 880 inner archive files and 133 warm medians match; descriptive tail and cold/process timing observations added without changing manuscript numbers. Candidate static caller scan identified optional scene/mesh source and legacy standalone frontend footprint for further curation. No new physical measurement or final R7/R9 clearance claimed.
+
+## Independent candidate bootstrap and bounded native resource checks
+
+Run [46105142921](https://github.com/everhush/DOC/actions/runs/46105142921), exact candidate revision `9491ca31303579b2ce223e344dee9b8b5354214f`. Independently downloaded source artifact 15247725787 and internal bootstrap artifact 15247027700. Both ZIP digests matched GitHub metadata and every ZIP entry passed CRC; source tar digest `1cc4009ff73c82f2a493b0de780b8f1402dc3515c247aa21151f1d15c633cd0c`; all 85 source file sizes, SHA-256 values, Git blob identities, modes and UTF-8 decoding match the manifest. No nonregular tar members other than directories were found. Bootstrap ZIP SHA-256 `ba6ccd431b313b2d658f80f2e2c789837312a27942226ec268ca41c31a12439b`; embedded source SHA matches the candidate. Independent ELF inspection:
+ 
+| Binary | SHA-256 | Size (bytes) | Declared shared-library dependency |
+|---|---|---:|---|
+| managed | `db17fecb3d0588993fe7700d47a2c623400d25431ba41ee3201dc9ad357c104c` | 832376 | libc.so.6 |
+| module_scan | `ebaf0b1b6c1da606aee00528979858548f961aa04155f0da8a7517f71bbca25b` | 97760 | libc.so.6 |
+
+Both are x86-64 ELF executables and both binary hashes agree with the embedded SHA256SUMS. This is artifact integrity and declared dynamic linkage verification, not signed bootstrap provenance, a complete runtime dependency audit or independent compiler reconstruction.
+
+An independent clean extraction of the same candidate, with the two native bootstrap binaries outside the source tree and without a reference evaluator checkout, generated all six policy headers. Local GCC builds with AddressSanitizer and UndefinedBehaviorSanitizer (nonrecovering) passed the three candidate C regressions:
+- `DOC9_SCRATCH_PASS`: 65 fault ordinals, 1000 repeated scopes, peak 1712, 7259 allocations, live 0.
+- `DOC9_NAME_INDEX_PASS`: seven size classes, 64 independent index lifetimes, length/prefix/duplicate/hole checks, live 0.
+- `DOC9_RESOURCE_BOUNDARY_PASS`: exact signed parsing, malformed rejection, million-lane list, resource overflow and zero live bytes.
+
+The local full self-reproduction attempt was time-bounded and did not return a result; it is not accepted as a pass. The GitHub clean-cpu job state at this observation was in_progress (no conclusion). No CI jobs were cancelled. The current workflow has only stage and clean-cpu jobs; GPU release-candidate qualification is not covered. Its CI uses mutable action/toolchain tags and must undergo immutable pinning and dependency review before final R7 acceptance. Existing rights grants, separate release approval, complete curation, signed bootstrap, physical GPU qualification, durable evidence and publisher constraints remain open. No production runtime/compiler or manuscript source changed in this checkpoint.
