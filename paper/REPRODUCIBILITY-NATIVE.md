@@ -1,6 +1,6 @@
 # DOC-only manuscript reproducibility supplement (revision candidate)
 
-Historical witness: code 27a0139643237bfcaf05c71155fd137f297f6a53, data 8d3d647ea913732a39ad4cb83d17b9f7f3e20d17. Preserve the original submission and archive unchanged. Independent native source: ed0cc865dbb0c416b903062c8869e6956635929e; runtime tree a7fe0554abea1a2b218929b33ad2f8f66f632f94; compiler tree 9120f50dde55af7c0a656d43ece6acf824cbcab0. Reference tree a95a38bc6e9300aae815f83b570db5f99d32f221 is frozen. Final source acceptance six jobs passed; see issue #9 DOC-only production sections 2–5, not the separate external comparison.
+Historical witness: code 27a0139643237bfcaf05c71155fd137f297f6a53, data 8d3d647ea913732a39ad4cb83d17b9f7f3e20d17. Preserve the original submission and archive unchanged. Independent native source: ed0cc865dbb0c416b903062c8869e6956635929e; runtime tree a7fe0554abea1a2b218929b33ad2f8f66f632f94; compiler tree 9120f50dde55af7c0a656d43ece6acf824cbcab0. Reference tree a95a38bc6e9300aae815f83b570db5f99d32f221 is frozen. Final source acceptance six jobs passed. The retained DOC production evidence is documented below.
 
 | Campaign | Run / artifact | Digest (SHA-256) |
 |---|---|---|
@@ -10,7 +10,7 @@ Historical witness: code 27a0139643237bfcaf05c71155fd137f297f6a53, data 8d3d647e
 | Final physical | 46052437755 / 15227957875 | aeaf10e30d72c2cee5aaa5c2a09316586923a7eb1ad5d1a17f4dd20e10399f91 |
 | Returned-evidence audit | 46056113923 / 15227225064 | a719e435495cdd73c4e4711c41880aac8a516760fc50172567ab88b2bbf00c55 |
 
-Previous development repository migration may make historic artifact URLs unavailable. IDs and digests identify existing evidence, not a promise of public download. A durable DOC-only source/data artifact with rights and access verified remains a release requirement; do not link the private comparative ledger in a manuscript supplement.
+Previous development repository migration may make historic artifact URLs unavailable. IDs and digests identify existing evidence, not a promise of public download. A durable DOC-only source/data artifact with rights and access verified remains a release requirement.
 
 Harness: runtime-doc/tests/build_autonomous_scale.py, runtime-doc/tests/verify_autonomous_evidence.py and production compiler/runtime at the pinned revision. Workloads: addition and polynomial maps (64–4,194,304 lanes), modular map (4,096–262,144 lanes; 32 modular recurrence steps per lane), staged bitonic sort and balanced reduction (1,024–65,536). Exact inputs, generated sources/shaders, independent numeric oracles and raw process/epoch/dispatch records are in the retained archives. The 40-leaf prime workload tests 1,000,000 candidate occurrences and returns 76,216. The earlier four-worker source campaign uses means, final two-worker regression uses medians; do not pool them. Historical C++20 timings retain their original meaning.
 

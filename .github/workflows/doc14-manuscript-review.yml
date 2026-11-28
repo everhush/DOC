@@ -46,7 +46,7 @@ jobs:
           grep -E 'Pages:|File size:' manuscript-output/*.info
           if grep -Ei 'undefined references|citation.*undefined|there were undefined|LaTeX Error' manuscript-output/*.log; then exit 1; fi
           for pdf in manuscript-output/*.pdf; do
-            if grep -Eiq '\\b(HVM2?|Bend)\\b' "$pdf.txt"; then exit 1; fi
+            if grep -Eiq '(^|[^[:alnum:]_])(HVM2?|Bend)([^[:alnum:]_]|$)' "$pdf.txt"; then exit 1; fi
           done
           pages=$(awk '/^Pages:/{print $2}' manuscript-output/dependency-oriented-computation-computing.pdf.info)
           echo "Computing pages=$pages (prior submission limit 25)" | tee manuscript-output/venue-review.txt
