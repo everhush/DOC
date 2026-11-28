@@ -51,6 +51,7 @@ def main():
     p.add_argument("--evidence",type=pathlib.Path,required=True)
     a=p.parse_args()
     check_cpu_inputs(NATIVE)
+    assert (ROOT/"release/test_install.py").is_file(), "missing isolated install regression"
     boot=a.bootstrap.resolve();scanner=a.scanner.resolve();out=a.evidence.resolve()
     assert sha(boot)==a.bootstrap_sha256 and sha(scanner)==a.scanner_sha256
     assert not (ROOT/"runtime-rust").exists() and not (ROOT/"runtime-goose").exists()
@@ -71,6 +72,7 @@ def main():
         return exe
     scan2=tool("module_scan.doc","scanner2",scanner,False)
     reactive=tool("managed_reactive.doc","reactive2",scan2,True)
+    run([sys.executable,ROOT/"release/test_install.py","--compiler",stage2,"--scanner",scan2,"--stream","--evidence",out/"install-smoke"])
     for name,args in (
         ("test_placement_policy.py",["--managed",stage2]),
         ("test_epoch_authority.py",["--managed",stage2,"--reactive",reactive]),
