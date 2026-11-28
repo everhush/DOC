@@ -2,7 +2,7 @@ name: DOC14 manuscript review
 on:
   push:
     branches: [master]
-    paths: ['preprint-model/**', 'preprint-calculus/**', '.github/workflows/doc14-manuscript-review.yml']
+    paths: ['preprint-model/**', 'preprint-calculus/**', '.github/workflows/doc14-manuscript-review.yml', 'verification/check_preprint_layout.py']
   workflow_dispatch:
 permissions:
   contents: read
@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
       - name: Install manuscript tools
@@ -40,7 +40,17 @@ jobs:
             if grep -Eiq '(^|[^[:alnum:]_])(HVM2?|Bend)([^[:alnum:]_]|$)' "$pdf.txt"; then exit 1; fi
           done
           echo 'Typst preprints only; previous Computing page-limit review is historical, not submission approval.' > manuscript-output/venue-review.txt
-      - uses: actions/upload-artifact@v4
+      - name: Preflight page geometry and retain visual review images
+        run: |
+          set -euo pipefail
+          for pdf in manuscript-output/*.pdf; do
+            pdftotext -bbox-layout "$pdf" "$pdf.bbox.html"
+            mkdir -p "${pdf%.pdf}-pages"
+            pdftoppm -r 144 -png "$pdf" "${pdf%.pdf}-pages/page"
+          done
+          python3 verification/check_preprint_layout.py manuscript-output | tee manuscript-output/layout-preflight.txt
+          (cd manuscript-output && find . -type f ! -name SHA256SUMS -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > SHA256SUMS)
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
         with:
           name: doc14-manuscript-render
