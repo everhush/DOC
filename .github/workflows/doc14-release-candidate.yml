@@ -14,6 +14,7 @@ jobs:
     if: github.repository_id == '1317169134' && github.ref_name == 'master'
     permissions:
       contents: read
+      actions: read
       id-token: write
       attestations: write
     runs-on: ubuntu-24.04
@@ -40,6 +41,18 @@ jobs:
       - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # observed stable action revision
         with:
           toolchain: "1.100.1"
+      - name: Retrieve exact previously reviewed bootstrap dependency lock
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p lock-input
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/15249125386" > lock-input/artifact.json
+          jq -e '.id == 15249125386 and .expired == false and .name == "doc14-internal-native-bootstrap" and .digest == "sha256:feccf548a5a0b5db3708f319dc7663e4f3ee08dd4cf0656887f481c51be522e7" and .workflow_run.id == 46106999905 and .workflow_run.head_sha == "2a251298e0f8bf9bdc62f51645a3441ade716531"' lock-input/artifact.json
+          gh run download 46106999905 --repo "$GITHUB_REPOSITORY" --name doc14-internal-native-bootstrap --dir lock-input
+          test "$(cat lock-input/source-sha.txt)" = 2a251298e0f8bf9bdc62f51645a3441ade716531
+          echo 'e1b60aca7f477425698a7247d50c2575cfffe39a592ebda664e43952c400407e  lock-input/Cargo.lock' | sha256sum -c -
       - name: Internal frozen bootstrap (separate from candidate)
         run: |
           set -euo pipefail
@@ -47,9 +60,11 @@ jobs:
           mkdir -p bootstrap-evidence
           rustc -Vv > bootstrap-evidence/rustc-version.txt
           cargo -V > bootstrap-evidence/cargo-version.txt
-          cargo generate-lockfile --manifest-path runtime-rust/Cargo.toml
+          cp lock-input/Cargo.lock runtime-rust/Cargo.lock
+          cp lock-input/artifact.json bootstrap-evidence/lock-origin.json
+          cargo build --locked --no-default-features --release --manifest-path runtime-rust/Cargo.toml --bin doc-compile
+          echo 'e1b60aca7f477425698a7247d50c2575cfffe39a592ebda664e43952c400407e  runtime-rust/Cargo.lock' | sha256sum -c -
           cp runtime-rust/Cargo.lock bootstrap-evidence/Cargo.lock
-          cargo build --locked --release --manifest-path runtime-rust/Cargo.toml --bin doc-compile
           cargo tree --locked --manifest-path runtime-rust/Cargo.toml --edges normal --no-default-features > bootstrap-evidence/cargo-tree.txt
           test "$(git rev-parse HEAD:runtime-rust)" = a95a38bc6e9300aae815f83b570db5f99d32f221
           git diff --exit-code -- runtime-rust
@@ -60,7 +75,7 @@ jobs:
           cd bootstrap-evidence
           git rev-parse HEAD > source-sha.txt
           cc --version > cc-version.txt
-          sha256sum managed module_scan Cargo.lock rustc-version.txt cargo-version.txt cargo-tree.txt source-sha.txt cc-version.txt managed-linkage.txt module_scan-linkage.txt > SHA256SUMS
+          sha256sum managed module_scan Cargo.lock rustc-version.txt cargo-version.txt cargo-tree.txt source-sha.txt cc-version.txt managed-linkage.txt module_scan-linkage.txt lock-origin.json > SHA256SUMS
       - name: Attest exact source and native bootstrap build inputs
         id: provenance
         uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
@@ -99,6 +114,7 @@ jobs:
             bootstrap-evidence/rustc-version.txt
             bootstrap-evidence/cargo-version.txt
             bootstrap-evidence/cargo-tree.txt
+            bootstrap-evidence/lock-origin.json
   clean-cpu:
     needs: stage
     permissions:
