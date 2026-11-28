@@ -1,0 +1,92 @@
+name: DOC14 source-only release candidate
+on:
+  push:
+    branches: [master]
+    paths: ['release/**', '.github/workflows/doc14-release-candidate.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: doc14-release-candidate
+  cancel-in-progress: false
+jobs:
+  stage:
+    if: github.repository_id == '1317169134' && github.ref_name == 'master'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Export fresh text source candidate
+        run: |
+          set -euo pipefail
+          mkdir -p candidate-evidence
+          python3 release/curate.py --commit "$GITHUB_SHA" --output candidate --manifest candidate-evidence/source-manifest.json
+          tar -cf candidate-evidence/candidate.tar -C candidate .
+          sha256sum candidate-evidence/candidate.tar > candidate-evidence/candidate.sha256
+          git rev-parse HEAD > candidate-evidence/source-sha.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: doc14-source-candidate
+          path: candidate-evidence/
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Internal frozen bootstrap (separate from candidate)
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD:runtime-rust)" = a95a38bc6e9300aae815f83b570db5f99d32f221
+          cargo build --release --manifest-path runtime-rust/Cargo.toml --bin doc-compile
+          mkdir -p bootstrap-evidence
+          for stage in managed module_scan; do
+            runtime-rust/target/release/doc-compile "runtime-doc/compiler/$stage.doc" --emit-c "bootstrap-evidence/$stage.c" --emit-ir "bootstrap-evidence/$stage.ir" --out "bootstrap-evidence/$stage"
+            readelf -d "bootstrap-evidence/$stage" > "bootstrap-evidence/$stage-linkage.txt"
+          done
+          cd bootstrap-evidence
+          sha256sum managed module_scan > SHA256SUMS
+          git rev-parse HEAD > source-sha.txt
+          cc --version > cc-version.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: doc14-internal-native-bootstrap
+          path: |
+            bootstrap-evidence/managed
+            bootstrap-evidence/module_scan
+            bootstrap-evidence/SHA256SUMS
+            bootstrap-evidence/*-linkage.txt
+            bootstrap-evidence/source-sha.txt
+            bootstrap-evidence/cc-version.txt
+  clean-cpu:
+    needs: stage
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc14-source-candidate
+          path: candidate-evidence
+      - uses: actions/download-artifact@v4
+        with:
+          name: doc14-internal-native-bootstrap
+          path: bootstrap-evidence
+      - name: Verify and rebuild without development checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(cat candidate-evidence/source-sha.txt)" = "$GITHUB_SHA"
+          test "$(cat bootstrap-evidence/source-sha.txt)" = "$GITHUB_SHA"
+          sha256sum -c candidate-evidence/candidate.sha256
+          (cd bootstrap-evidence && sha256sum -c SHA256SUMS && chmod +x managed module_scan)
+          mkdir clean
+          tar -xf candidate-evidence/candidate.tar -C clean
+          test ! -e clean/runtime-rust
+          test ! -e clean/runtime-goose
+          mkdir -p clean-evidence
+          python3 -u clean/release/rebuild_native.py --bootstrap bootstrap-evidence/managed --bootstrap-sha256 "$(awk '$2=="managed"{print $1}' bootstrap-evidence/SHA256SUMS)" --scanner bootstrap-evidence/module_scan --scanner-sha256 "$(awk '$2=="module_scan"{print $1}' bootstrap-evidence/SHA256SUMS)" --evidence clean-evidence | tee clean-evidence/rebuild.log
+          git --version > clean-evidence/git-version.txt
+          cc --version > clean-evidence/cc-version.txt
+          find clean-evidence -type f ! -name SHA256SUMS -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > clean-evidence/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: doc14-clean-cpu-evidence
+          path: clean-evidence/

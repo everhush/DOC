@@ -1,0 +1,7 @@
+# Source-only release candidate validation
+
+This directory prepares a **development candidate**, not a public release. The candidate is exported into a clean directory from an exact Git commit. It excludes Rust/Goose evaluators, old CI, comparative investigations, historical evidence, generated policy headers, publisher class files pending permission review and the optional game distribution. The game has already been validated on development source; omission from this initial core candidate does not remove its release acceptance prerequisite.
+
+The internal build job constructs a native bootstrap using the frozen reference in the development checkout. The separate clean candidate job receives only the native compiler bootstrap plus its digest, not the reference evaluator. Policy headers are regenerated from DOC source into the temporary build workspace. The candidate itself remains text-source-only; generated headers, executable outputs, manifests and logs are CI artifacts. The final distributed bootstrap still requires signed/hash-pinned provenance, rights review and clean reproducibility checks.
+
+The clean-source job verifies native compiler self-reproduction, an independently checked compiled sample and native policy/authority/rollback regressions where executed. It does not establish final install packaging, physical GPU execution on the curated tree, a complete dependency/caller audit, licensing clearance, or release approval. See the development readiness register for open gates.

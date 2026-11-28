@@ -1,80 +1,30 @@
 # DOC — Dependency-Oriented Computation
 
-**Current target: one Rust runtime, Linux x86_64, WebGPU/WGSL for selected GPU computation.**
+DOC investigates a simple question: when the inputs to a long-lived computation change, why repeat work whose results are still justified? A DOC program describes typed values and the relationships between them. The realization determines which conclusions need repair, which independent work is ready, and how to use available computation resources. The same dependency structure governs initial evaluation and subsequent updates.
 
-DOC is a typed dependency-graph programming model for incremental repair, exact
-cutoff, demanded evaluation and explicitly controlled effects and recurrence.
-The canonical research ledger and active development are in this private repository, [imxade/DOC](https://github.com/imxade/DOC), on `master`. The designated CI-only fork is `xad3play/DOC`; synchronize it from upstream after verifying private access and fork identity. No fork-only engineering commits. The former development repositories are historical only. See [migration and batch-validation policy](docs/DEVELOPMENT-MIGRATION.md).
-See [migration provenance](docs/PUBLIC-MIGRATION.md) and [Radar Chase](engine/RADAR-CHASE.md).
-Issue #22 and #21 have passed. #24 closed on 11e22c4; #15 is the active pre-self-hosting conformance gate. See [Stage-0 native C compiler](docs/DOC-AOT.md), [current #15 conformance ledger](docs/PRE-SELF-HOSTING-AUDIT.md), and [independent runtime reservation](runtime-doc/README.md). Rust freezes only after #15 acceptance; all subsequent #11 implementation belongs in runtime-doc/.
+For example, if two numbers change but their sum does not, downstream work that depends only on the sum can retain its previous result. Input-dependent finite computation families can also determine the amount of independent work at runtime. The research model distinguishes that construction from changing values in a fixed graph, recurrence across epochs and physical scheduling.
 
-## Active and archived implementations
+## What has been demonstrated
 
-- `runtime-rust/` is the **only active** DOC CPU runtime and GPU implementation.
-  CPU is the standalone CLI default; the WebGPU-capable game host uses automatic dependency-frontier placement. `--backend=gpu` requests the actual Rust `wgpu`
-  provider with WGSL; no DOC-level graphics API selection, direct driver
-  configuration, or implicit CPU fallback is permitted in explicitly selected GPU mode. Auto mode reports CPU-only placement when no usable GPU is available.
-- `runtime-goose/` is **deprecated historical source**, not built, shipped,
-  tested as release acceptance, or required for game-engine issue #10. See
-  [DEPRECATED.md](runtime-goose/DEPRECATED.md). Older dual-runtime claims and
-  measurements remain in Git history and issue comments for provenance.
+The finite acyclic model gives conditional mathematical arguments for stabilization, agreement with complete reevaluation, schedule independence and sound equality cutoff. These results have explicit typing, totality, determinism and graph assumptions; they are not proof-assistant mechanized.
 
-The code does **not** directly invoke platform graphics APIs. The native
-GPU implementation `wgpu` chooses a compatible underlying provider and
-driver. Runtime and tests use only the exposed WebGPU adapter/device,
-pipeline, workgroup and storage APIs. The physical-GPU gate accepts actual
-discrete/integrated adapters and rejects CPU/software adapters unless a
-clearly labeled software-only **test** is explicitly enabled. This says
-nothing about other host platforms being supported by the DOC CLI.
+The independent DOC-authored compiler and runtime in `runtime-doc/` compile supported DOC programs into native executables without the original evaluator at execution. Linux x86_64 is the qualified host. The bounded implementation supports typed incremental repair, demand, recurrence, runtime-sized independent work, private graph replacement, automatic CPU worker admission and selected physical WebGPU execution. CPU is the default; strict GPU selection rejects unsupported operations or unavailable devices. Automatic heterogeneous placement uses heuristics, not an optimality guarantee.
 
-## Run directly authored DOC programs
+In the final production campaign, all six validation jobs passed, including actual Tesla T4 execution. Automatic two-worker CPU prime-counting achieved 1.741-fold speedup (87.0% efficiency); representative same-session warm modular work achieved 13.85-fold automatic-backend speedup over one CPU worker. Cheap work, small reductions and device startup can be slower. See the [DOC-only reproducibility supplement](paper/REPRODUCIBILITY-NATIVE.md) for the complete matrix, methods, source identities and limitations. No universal acceleration, distributed scalability or unbounded memory claim follows.
 
-```sh
-cargo build --release --manifest-path runtime-rust/Cargo.toml --bin doc
-runtime-rust/target/release/doc runtime-rust/examples/repair.doc --backend=cpu
+## Explore the research
 
-cargo build --release --manifest-path runtime-rust/Cargo.toml --features webgpu --bin doc
-runtime-rust/target/release/doc runtime-rust/examples/boolean_staged.doc --backend=gpu
-```
+- [Computation-model preprint source](paper/dependency-oriented-computation.typ) — semantics, metatheory, conditional dynamic dependency generation and empirical evaluation.
+- [Finite calculus source](paper-calculus/dependency-oriented-calculus.typ) — typed expressions and finite-family elaboration.
+- [Independent implementation](runtime-doc/README.md), [current execution contract](BACKEND-EXECUTION-CONTRACT.md), [claim/evidence map](CLAIM-EVIDENCE-MAP.md).
+- [Native compiler validation](https://github.com/everhush/DOC/issues/11), [performance evidence](https://github.com/everhush/DOC/issues/9), [release readiness](https://github.com/everhush/DOC/issues/14).
 
-For CPU, `--backend=cpu` can be omitted. For GPU, an explicitly selected,
-physically supported WebGPU adapter is required. Only the documented
-pure, bounded Boolean and signed-integer DAG fragment runs inside current
-WGSL compute. Source imports/effects, heterogeneous structures, unsupported
-large integers and arbitrary graph functions are **not** silently run as
-GPU shaders. GPU-facing failures must leave no partially published DOC state.
-The host remains responsible for source authority, effects, dependent
-frontier barriers, recurrence epochs and resource lifetimes.
+## Development and release status
 
-## Tests and acceptance
+This is the canonical development repository, not the separately curated release specified in #14. Master retains the immutable reference/bootstrap implementation and historical evidence; the retired Goose implementation is not part of the planned product. Native compiler/source-only release-candidate work is tracked in [the release readiness register](docs/RELEASE-READINESS.md). The development bootstrap may use the frozen reference; a distributed release must instead use a separately trusted native bootstrap and rebuild its DOC-authored compiler. No public installable compiler release or production support promise is implied.
 
-- [Linux Rust CI](.github/workflows/doc-validation.yml):
-  exact-source Rust language/safety tests plus labeled **WebGPU
-  software-device** correctness and release-package checks.
-- [Physical accelerator CI](.github/workflows/doc-kaggle-gpu.yml):
-  checks private exact-commit artifact hashes and runs real Rust wgpu
-  computations with physical WebGPU adapter-class verification and same-source
-  CPU/oracle comparisons. It uses **no native graphics API probes or
-  driver-specific overrides**. A requested accelerator alone never counts.
-- [Backend contract](BACKEND-EXECUTION-CONTRACT.md),
-  [Rust-only acceptance checklist](docs/RUST-ONLY-ACCEPTANCE.md),
-  [GPU instruction ABI](docs/GPU-INSTRUCTION-ABI-v1.md),
-  [complexity audit](docs/RUST-ONLY-COMPLEXITY-AUDIT.md).
+The source-level [candidate validation guide](release/README.md) describes the clean-source build being qualified. Its artifact is a development review candidate, not a released distribution.
 
-**Release and game-engine readiness are not implied by a green CPU job or
-an available accelerator.** Issues [#7](https://github.com/imxade/DOC/issues/7),
-[#9](https://github.com/imxade/DOC/issues/9),
-[#15](https://github.com/imxade/DOC/issues/15), and
-[#17](https://github.com/imxade/DOC/issues/17) track the remaining verified
-Rust-only gates. [#10](https://github.com/imxade/DOC/issues/10) begins only
-after the accepted source SHA, runtime semantics, physical GPU computation,
-and Linux release evidence are jointly signed off.
+## Rights and collaboration
 
-## Licensing
-
-Copyright (c) 2026 Rituraj Basak. The research paper, reports and documentation
-are licensed under CC BY 4.0. Original software is additionally available
-under Apache 2.0; recipients may choose that license for the software.
-See [license scope](LICENSE), [Apache 2.0 license](LICENSE-APACHE), and
-[attribution notice](NOTICE). Existing CC BY 4.0 grants and third-party
-licenses remain in effect.
+The existing [LICENSE](LICENSE), [Apache 2.0 text](LICENSE-APACHE) and [NOTICE](NOTICE) remain in force for their stated scope. A future source-available distribution requires specific reviewed license terms and third-party rights; previous grants are not revoked. Paper versions and historical results are preserved. Research questions and reproducibility findings can be discussed through the repository issue tracker. No sponsorship arrangement or commercial permission beyond the actual license is implied.

@@ -1,0 +1,64 @@
+#!/usr/bin/env python3
+"""Clean-source compiler and bounded CPU tests from a separate native bootstrap."""
+import argparse, hashlib, json, os, pathlib, subprocess, sys, tempfile
+ROOT=pathlib.Path(__file__).resolve().parents[1]
+NATIVE=ROOT/"runtime-doc"
+POLICIES=(
+ ("effects_policy.doc","effects_policy_generated.h","F_effect_",3),
+ ("epoch_authority.doc","epoch_policy_generated.h","F_life_",4),
+ ("graph_generation.doc","graph_generation_generated.h","F_graph_",3),
+ ("placed_policy.doc","placed_policy_generated.h","F_placed_",5),
+ ("placement_policy.doc","placement_policy_generated.h","F_place_",4),
+ ("recurrence_policy.doc","recurrence_policy_generated.h","F_rec_",6),
+)
+sys.path.insert(0,str(NATIVE/"compiler"))
+from doc_build import bundle, emit
+def run(argv,cwd=ROOT,timeout=1200):
+    print("+", " ".join(map(str,argv)),flush=True)
+    subprocess.run(list(map(str,argv)),cwd=cwd,check=True,timeout=timeout)
+def sha(path):
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+def main():
+    p=argparse.ArgumentParser()
+    p.add_argument("--bootstrap",type=pathlib.Path,required=True)
+    p.add_argument("--bootstrap-sha256",required=True)
+    p.add_argument("--scanner",type=pathlib.Path,required=True)
+    p.add_argument("--scanner-sha256",required=True)
+    p.add_argument("--evidence",type=pathlib.Path,required=True)
+    a=p.parse_args()
+    boot=a.bootstrap.resolve();scanner=a.scanner.resolve();out=a.evidence.resolve()
+    assert sha(boot)==a.bootstrap_sha256 and sha(scanner)==a.scanner_sha256
+    assert not (ROOT/"runtime-rust").exists() and not (ROOT/"runtime-goose").exists()
+    headers=NATIVE/"runtime"
+    assert not list(headers.glob("*_generated.h")),"requires pristine candidate"
+    out.mkdir(parents=True,exist_ok=True)
+    for source,generated,prefix,count in POLICIES:
+        code=emit([boot],(headers/source).read_bytes()+b"\nsource marker:int=0\n")
+        lines=[line for line in code.splitlines() if line.startswith(("#define "+prefix).encode())]
+        assert len(lines)==count,(source,len(lines))
+        (headers/generated).write_bytes(b"\n".join(lines)+b"\n")
+    run([sys.executable,NATIVE/"tests/test_self_reproduction.py","--native",boot,"--evidence",out/"self"])
+    stage2=out/"self/stage2"; stage2.chmod(0o755)
+    def tool(src, name, scan, stream):
+        code=emit([stage2],bundle([scan],NATIVE/"compiler"/src,stream=stream),stream=True)
+        c=out/(name+".c"); c.write_bytes(code); exe=out/name
+        run(["cc","-std=gnu11","-O1","-pthread","-I",headers,c,"-o",exe])
+        return exe
+    scan2=tool("module_scan.doc","scanner2",scanner,False)
+    reactive=tool("managed_reactive.doc","reactive2",scan2,True)
+    for name,args in (
+        ("test_placement_policy.py",["--managed",stage2]),
+        ("test_epoch_authority.py",["--managed",stage2,"--reactive",reactive]),
+        ("test_allocation_failure.py",["--reactive",reactive]),
+        ("test_graph_generation.py",["--managed",stage2,"--reactive",reactive]),
+        ("test_recurrence_policy.py",["--managed",stage2,"--reactive",reactive]),
+    ):
+        run([sys.executable,NATIVE/"tests"/name,*args])
+    for name in ("scalable_scratch_test","name_index_test","scale_resource_boundary"):
+        exe=out/name
+        run(["cc","-std=gnu11","-O1","-g","-pthread","-fsanitize=address,undefined","-fno-sanitize-recover=all","-fno-pie","-no-pie","-I",headers,NATIVE/"tests"/(name+".c"),"-o",exe])
+        run([exe])
+    (out/"native-hashes.json").write_text(json.dumps({str(f.relative_to(out)):sha(f) for f in (stage2,out/"self/stage3",scan2,reactive)},indent=2)+"\n")
+    print("DOC14_CLEAN_CPU_CANDIDATE_PASS: separate native bootstrap, no reference evaluator in candidate")
+if __name__=="__main__":
+    main()

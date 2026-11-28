@@ -4,7 +4,7 @@ Historical witness: code 27a0139643237bfcaf05c71155fd137f297f6a53, data 8d3d647e
 
 | Campaign | Run / artifact | Digest (SHA-256) |
 |---|---|---|
-| Native integrated prime earlier four-worker | 46032762791 / 15215840294 | see preserved original evidence |
+| Native integrated prime earlier four-worker | 46032762791 / historical artifact identifier not independently reverified | see preserved original evidence |
 | Final native two-worker prime | 46053929420 / 15225438430 | 52ea07cf37b2f09ef76a2d2296b1d21c65143ff0127c4460d0b6515210479c84 |
 | Physical preflight | 46053188589 / 15226800551 | 50a6b7c5da1cb7d11e7ceb484237c523daf1fb196aab709fcda8e8ce7e2b4e16 |
 | Final physical | 46052437755 / 15227957875 | aeaf10e30d72c2cee5aaa5c2a09316586923a7eb1ad5d1a17f4dd20e10399f91 |
@@ -12,7 +12,7 @@ Historical witness: code 27a0139643237bfcaf05c71155fd137f297f6a53, data 8d3d647e
 
 Previous development repository migration may make historic artifact URLs unavailable. IDs and digests identify existing evidence, not a promise of public download. A durable DOC-only source/data artifact with rights and access verified remains a release requirement.
 
-Harness: runtime-doc/tests/build_autonomous_scale.py, runtime-doc/tests/verify_autonomous_evidence.py and production compiler/runtime at the pinned revision. Workloads: addition and polynomial maps (64–4,194,304 lanes), modular map (4,096–262,144 lanes; 32 modular recurrence steps per lane), staged bitonic sort and balanced reduction (1,024–65,536). Exact inputs, generated sources/shaders, independent numeric oracles and raw process/epoch/dispatch records are in the retained archives. The 40-leaf prime workload tests 1,000,000 candidate occurrences and returns 76,216. The earlier four-worker source campaign uses means, final two-worker regression uses medians; do not pool them. Historical C++20 timings retain their original meaning.
+Current retained source: development commit `4f0e8e6b33f9fcb9843be3104a5969ddbccf856c` preserves the exact runtime and compiler trees above; historical workflow source objects and download links may reside only in original repository history. Harness: runtime-doc/tests/build_autonomous_scale.py, runtime-doc/tests/verify_autonomous_evidence.py and production compiler/runtime at the pinned revision. Workloads: addition and polynomial maps (64–4,194,304 lanes), modular map (4,096–262,144 lanes; 32 modular recurrence steps per lane), staged bitonic sort and balanced reduction (1,024–65,536). Exact inputs, generated sources/shaders, independent numeric oracles and raw process/epoch/dispatch records are in the retained archives. The 40-leaf prime workload tests 1,000,000 candidate occurrences and returns 76,216. The earlier four-worker source campaign uses means, final two-worker regression uses medians; do not pool them. Historical C++20 timings retain their original meaning.
 
 Final physical host: four affinity CPUs/four-CPU quota, one selected Tesla T4, NVIDIA driver 580.178.04, 15,360 MiB per listed device; no multi-GPU or software GPU timing. Three processes per setting; warm epoch/epoch-sum excludes initial round, device initialization, input construction and oracle, includes source ingress, evaluation and publication. Staged sort/reduction host orchestration is separately measured. Strict GPU and automatic backend are distinct. Complete final 19-size matrix (ms, rounded to five decimals), selected directly from final production ledger:
 
