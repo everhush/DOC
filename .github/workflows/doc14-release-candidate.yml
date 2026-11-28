@@ -154,6 +154,42 @@ jobs:
           test ! -e clean/runtime-rust
           test ! -e clean/runtime-goose
           python3 -u clean/release/rebuild_native.py --bootstrap bootstrap-evidence/managed --bootstrap-sha256 "$(awk '$2=="managed"{print $1}' bootstrap-evidence/SHA256SUMS)" --scanner bootstrap-evidence/module_scan --scanner-sha256 "$(awk '$2=="module_scan"{print $1}' bootstrap-evidence/SHA256SUMS)" --evidence clean-evidence 2>&1 | tee clean-evidence/rebuild.log
+          # Exercise the actual installation helper rather than only manually copied tools.
+          mkdir -p clean-evidence/native-install
+          manifest_hash="$(sha256sum clean-evidence/native-hashes.json | cut -d' ' -f1)"
+          install_args=(--source-commit "$GITHUB_SHA" --native-evidence clean-evidence --native-manifest-sha256 "$manifest_hash")
+          prefix="$(mktemp -d "$RUNNER_TEMP/doc14-install.XXXXXX")"
+          python3 clean/release/install_native.py --prefix "$prefix/original" "${install_args[@]}" | tee clean-evidence/native-install/install.log
+          mv "$prefix/original" "$prefix/relocated"
+          cp "$prefix/relocated/install-manifest.json" clean-evidence/native-install/
+          work="$prefix/work"
+          mkdir "$work"
+          printf 'source a:int=9\nderive b:int(a)=mul(a,2)\n' > "$work/sample.doc"
+          printf 'source a:int=2\nderive b:int(a)=add(a,3)\n' > "$work/react.doc"
+          (
+            cd "$work"
+            "$prefix/relocated/bin/doc" sample.doc -o sample
+            DOC_REGION_METRICS=1 ./sample > "$prefix/sample.stdout" 2> "$prefix/sample.stderr"
+            printf 'a: 9\nb: 18\n' > "$prefix/sample.expected"
+            cmp "$prefix/sample.stdout" "$prefix/sample.expected"
+            grep -F 'DOC11_REGIONS: live=0 ' "$prefix/sample.stderr"
+            "$prefix/relocated/bin/doc" react.doc -o react --reactive
+            DOC_REGION_METRICS=1 ./react --next a=5 > "$prefix/react.stdout" 2> "$prefix/react.stderr"
+            printf 'epoch: 0\na: 2\nb: 5\nepoch: 1\na: 5\nb: 8\n' > "$prefix/react.expected"
+            cmp "$prefix/react.stdout" "$prefix/react.expected"
+            grep -F 'DOC11_REGIONS: live=0 ' "$prefix/react.stderr"
+            before="$(sha256sum sample)"
+            printf 'source a:int=true\n' > bad.doc
+            if "$prefix/relocated/bin/doc" bad.doc -o sample; then exit 1; fi
+            test "$before" = "$(sha256sum sample)"
+            if "$prefix/relocated/bin/doc" react.doc -o badgpu --wgpu-root absent; then exit 1; fi
+            test ! -e badgpu
+          )
+          if python3 clean/release/install_native.py --prefix "$prefix/relocated" "${install_args[@]}"; then exit 1; fi
+          if python3 clean/release/install_native.py --prefix "$prefix/bad-hash" "${install_args[@]}" --native-manifest-sha256 "$(printf %064d 0)"; then exit 1; fi
+          test ! -e "$prefix/bad-hash"
+          cp "$prefix/"*.stdout "$prefix/"*.stderr "$prefix/"*.expected clean-evidence/native-install/
+          echo DOC14_RELOCATABLE_INSTALL_PASS | tee -a clean-evidence/native-install/install.log
           git --version > clean-evidence/git-version.txt
           cc --version > clean-evidence/cc-version.txt
           find clean-evidence -type f ! -name SHA256SUMS -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > clean-evidence/SHA256SUMS

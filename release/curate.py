@@ -16,7 +16,7 @@ EXACT = {
     "paper-latex/dependency-oriented-computation.tex",
     "paper-latex/manuscript-body.tex", "paper-latex/manuscript-preamble.tex",
     "paper-latex/references.bib",
-    "release/README.md", "release/rebuild_native.py", "release/verify_candidate.py", "release/test_install.py", "release/test_gpu_candidate.py", "release/physical_gpu.py",
+    "release/README.md", "release/rebuild_native.py", "release/verify_candidate.py", "release/test_install.py", "release/test_gpu_candidate.py", "release/physical_gpu.py", "release/install_native.py",
 }
 TESTS = {
     "test_self_reproduction.py", "test_epoch_authority.py",
