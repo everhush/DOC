@@ -1,0 +1,11 @@
+{
+  "source_commit": "2a251298e0f8bf9bdc62f51645a3441ade716531",
+  "run_id": 46106999905,
+  "job_id": 140866704983,
+  "artifact_id": 15249125386,
+  "artifact_sha256": "feccf548a5a0b5db3708f319dc7663e4f3ee08dd4cf0656887f481c51be522e7",
+  "frozen_reference_tree": "a95a38bc6e9300aae815f83b570db5f99d32f221",
+  "lock_sha256": "e1b60aca7f477425698a7247d50c2575cfffe39a592ebda664e43952c400407e",
+  "lock_git_blob": "619049d06ad88cae1c97dc6ca6c70f2313e6dff5",
+  "lock_bytes": 57000
+}

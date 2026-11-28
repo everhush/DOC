@@ -2,7 +2,7 @@ name: DOC14 source-only release candidate
 on:
   push:
     branches: [master]
-    paths: ['release/**', '.github/workflows/doc14-release-candidate.yml']
+    paths: ['release/**', 'ci/bootstrap/**', '.github/workflows/doc14-release-candidate.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -14,7 +14,6 @@ jobs:
     if: github.repository_id == '1317169134' && github.ref_name == 'master'
     permissions:
       contents: read
-      actions: read
       id-token: write
       attestations: write
     runs-on: ubuntu-24.04
@@ -41,18 +40,13 @@ jobs:
       - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # observed stable action revision
         with:
           toolchain: "1.100.1"
-      - name: Retrieve exact previously reviewed bootstrap dependency lock
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Verify permanently retained bootstrap dependency lock
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p lock-input
-          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/15249125386" > lock-input/artifact.json
-          jq -e '.id == 15249125386 and .expired == false and .name == "doc14-internal-native-bootstrap" and .digest == "sha256:feccf548a5a0b5db3708f319dc7663e4f3ee08dd4cf0656887f481c51be522e7" and .workflow_run.id == 46106999905 and .workflow_run.head_sha == "2a251298e0f8bf9bdc62f51645a3441ade716531"' lock-input/artifact.json
-          gh run download 46106999905 --repo "$GITHUB_REPOSITORY" --name doc14-internal-native-bootstrap --dir lock-input
-          test "$(cat lock-input/source-sha.txt)" = 2a251298e0f8bf9bdc62f51645a3441ade716531
-          echo 'e1b60aca7f477425698a7247d50c2575cfffe39a592ebda664e43952c400407e  lock-input/Cargo.lock' | sha256sum -c -
+          test "$(git rev-parse HEAD:ci/bootstrap/doc14.Cargo.lock)" = 619049d06ad88cae1c97dc6ca6c70f2313e6dff5
+          echo 'e1b60aca7f477425698a7247d50c2575cfffe39a592ebda664e43952c400407e  ci/bootstrap/doc14.Cargo.lock' | sha256sum -c -
+          jq -e '.lock_git_blob == "619049d06ad88cae1c97dc6ca6c70f2313e6dff5" and .lock_sha256 == "e1b60aca7f477425698a7247d50c2575cfffe39a592ebda664e43952c400407e" and .frozen_reference_tree == "a95a38bc6e9300aae815f83b570db5f99d32f221" and .artifact_id == 15249125386' ci/bootstrap/doc14-lock-origin.json
       - name: Internal frozen bootstrap (separate from candidate)
         run: |
           set -euo pipefail
@@ -60,8 +54,8 @@ jobs:
           mkdir -p bootstrap-evidence
           rustc -Vv > bootstrap-evidence/rustc-version.txt
           cargo -V > bootstrap-evidence/cargo-version.txt
-          cp lock-input/Cargo.lock runtime-rust/Cargo.lock
-          cp lock-input/artifact.json bootstrap-evidence/lock-origin.json
+          cp ci/bootstrap/doc14.Cargo.lock runtime-rust/Cargo.lock
+          cp ci/bootstrap/doc14-lock-origin.json bootstrap-evidence/lock-origin.json
           cargo build --locked --no-default-features --release --manifest-path runtime-rust/Cargo.toml --bin doc-compile
           echo 'e1b60aca7f477425698a7247d50c2575cfffe39a592ebda664e43952c400407e  runtime-rust/Cargo.lock' | sha256sum -c -
           cp runtime-rust/Cargo.lock bootstrap-evidence/Cargo.lock
