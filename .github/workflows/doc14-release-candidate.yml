@@ -12,6 +12,10 @@ concurrency:
 jobs:
   stage:
     if: github.repository_id == '1317169134' && github.ref_name == 'master'
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -54,9 +58,33 @@ jobs:
             readelf -d "bootstrap-evidence/$stage" > "bootstrap-evidence/$stage-linkage.txt"
           done
           cd bootstrap-evidence
-          sha256sum managed module_scan Cargo.lock rustc-version.txt cargo-version.txt cargo-tree.txt > SHA256SUMS
           git rev-parse HEAD > source-sha.txt
           cc --version > cc-version.txt
+          sha256sum managed module_scan Cargo.lock rustc-version.txt cargo-version.txt cargo-tree.txt source-sha.txt cc-version.txt managed-linkage.txt module_scan-linkage.txt > SHA256SUMS
+      - name: Attest exact source and native bootstrap build inputs
+        id: provenance
+        uses: actions/attest-build-provenance@977bb373ede98d70efdf65b84cb5f73e068dcc2a # v3
+        with:
+          subject-path: |
+            candidate-evidence/candidate.tar
+            candidate-evidence/source-manifest.json
+            candidate-evidence/verify_candidate.py
+            bootstrap-evidence/managed
+            bootstrap-evidence/module_scan
+            bootstrap-evidence/SHA256SUMS
+      - name: Preserve signed provenance bundle
+        env:
+          ATTESTATION_BUNDLE: ${{ steps.provenance.outputs.bundle-path }}
+        run: |
+          set -euo pipefail
+          mkdir provenance-evidence
+          test -s "$ATTESTATION_BUNDLE"
+          cp "$ATTESTATION_BUNDLE" provenance-evidence/attestation.jsonl
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # observed v4
+        with:
+          name: doc14-build-provenance
+          path: provenance-evidence/attestation.jsonl
+          if-no-files-found: error
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # observed v4
         with:
           name: doc14-internal-native-bootstrap
@@ -73,6 +101,9 @@ jobs:
             bootstrap-evidence/cargo-tree.txt
   clean-cpu:
     needs: stage
+    permissions:
+      contents: read
+      attestations: read
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -84,6 +115,22 @@ jobs:
         with:
           name: doc14-internal-native-bootstrap
           path: bootstrap-evidence
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # resolved v4
+        with:
+          name: doc14-build-provenance
+          path: provenance-evidence
+      - name: Verify signed source and bootstrap subjects before executing downloaded code
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p clean-evidence/provenance
+          gh --version > clean-evidence/provenance/gh-version.txt
+          for subject in candidate-evidence/candidate.tar candidate-evidence/source-manifest.json candidate-evidence/verify_candidate.py bootstrap-evidence/managed bootstrap-evidence/module_scan bootstrap-evidence/SHA256SUMS; do
+            gh attestation verify "$subject" --bundle provenance-evidence/attestation.jsonl --repo "$GITHUB_REPOSITORY" --source-ref refs/heads/master --source-digest "$GITHUB_SHA" --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/doc14-release-candidate.yml" --deny-self-hosted-runners --format json > "clean-evidence/provenance/$(basename "$subject").json"
+          done
+          cp provenance-evidence/attestation.jsonl clean-evidence/provenance/
       - name: Verify and rebuild without development checkout
         shell: bash
         run: |
@@ -96,7 +143,7 @@ jobs:
           python3 candidate-evidence/verify_candidate.py --archive candidate-evidence/candidate.tar --manifest candidate-evidence/source-manifest.json --commit "$GITHUB_SHA" --output clean | tee clean-evidence/manifest-verification.log
           test ! -e clean/runtime-rust
           test ! -e clean/runtime-goose
-          python3 -u clean/release/rebuild_native.py --bootstrap bootstrap-evidence/managed --bootstrap-sha256 "$(awk '$2=="managed"{print $1}' bootstrap-evidence/SHA256SUMS)" --scanner bootstrap-evidence/module_scan --scanner-sha256 "$(awk '$2=="module_scan"{print $1}' bootstrap-evidence/SHA256SUMS)" --evidence clean-evidence | tee clean-evidence/rebuild.log
+          python3 -u clean/release/rebuild_native.py --bootstrap bootstrap-evidence/managed --bootstrap-sha256 "$(awk '$2=="managed"{print $1}' bootstrap-evidence/SHA256SUMS)" --scanner bootstrap-evidence/module_scan --scanner-sha256 "$(awk '$2=="module_scan"{print $1}' bootstrap-evidence/SHA256SUMS)" --evidence clean-evidence 2>&1 | tee clean-evidence/rebuild.log
           git --version > clean-evidence/git-version.txt
           cc --version > clean-evidence/cc-version.txt
           find clean-evidence -type f ! -name SHA256SUMS -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > clean-evidence/SHA256SUMS
