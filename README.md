@@ -16,12 +16,12 @@ In the final production campaign, all six validation jobs passed, including actu
 
 - [Computation-model preprint source](paper/dependency-oriented-computation.typ) — semantics, metatheory, conditional dynamic dependency generation and empirical evaluation.
 - [Finite calculus source](paper-calculus/dependency-oriented-calculus.typ) — typed expressions and finite-family elaboration.
-- [Independent implementation](runtime-doc/README.md), [current execution contract](BACKEND-EXECUTION-CONTRACT.md), [claim/evidence map](CLAIM-EVIDENCE-MAP.md).
+- [Independent implementation](https://github.com/everhush/DOC/blob/9491ca31303579b2ce223e344dee9b8b5354214f/runtime-doc/README.md), [current execution contract](BACKEND-EXECUTION-CONTRACT.md), [claim/evidence map](https://github.com/everhush/DOC/blob/9491ca31303579b2ce223e344dee9b8b5354214f/CLAIM-EVIDENCE-MAP.md).
 - [Native compiler validation](https://github.com/everhush/DOC/issues/11), [performance evidence](https://github.com/everhush/DOC/issues/9), [release readiness](https://github.com/everhush/DOC/issues/14).
 
 ## Development and release status
 
-This is the canonical development repository, not the separately curated release specified in #14. Master retains the immutable reference/bootstrap implementation and historical evidence; the retired Goose implementation is not part of the planned product. Native compiler/source-only release-candidate work is tracked in [the release readiness register](docs/RELEASE-READINESS.md). The development bootstrap may use the frozen reference; a distributed release must instead use a separately trusted native bootstrap and rebuild its DOC-authored compiler. No public installable compiler release or production support promise is implied.
+This is the canonical development repository, not the separately curated release specified in #14. Master retains the immutable reference/bootstrap implementation and historical evidence; the retired Goose implementation is not part of the planned product. Native compiler/source-only release-candidate work is tracked in [the release readiness register](https://github.com/everhush/DOC/blob/master/docs/RELEASE-READINESS.md). The development bootstrap may use the frozen reference; a distributed release must instead use a separately trusted native bootstrap and rebuild its DOC-authored compiler. No public installable compiler release or production support promise is implied.
 
 The source-level [candidate validation guide](release/README.md) describes the clean-source build being qualified. Its artifact is a development review candidate, not a released distribution.
 
