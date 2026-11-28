@@ -8,7 +8,7 @@ import xml.etree.ElementTree as ET
 
 NS = "{http://www.w3.org/1999/xhtml}"
 ROOT = Path(sys.argv[1])
-for name in ("preprint-model", "preprint-calculus"):
+for name in ("preprint-model",):
     pdf = ROOT / (name + ".pdf")
     if not pdf.is_file() or not pdf.stat().st_size:
         raise ValueError(f"{name}: missing PDF")

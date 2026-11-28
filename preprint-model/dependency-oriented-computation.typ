@@ -353,6 +353,8 @@ where
 $ f_d: V_(s_1) times dots.h.c times V_(s_k) arrow.r V_d $
 is a local transformation satisfying the standing finite-kernel assumptions in @sec:assumptions.]) <def:local-definition>
 
+Appendix @app:typed-instance gives a concrete finite expression-language instance of these abstract typed transformations. Its syntax is illustrative, not an additional restriction on the DOC model.
+
 The conclusion is the map key $d$ itself. No separate computation identity, output map, source flag, or producer map is required. Zero-premise definitions represent constant derived states. Thus $P_d$ is notation for the premise sequence stored in $Delta(d)$; it is not an additional program component.
 
 Let
@@ -770,7 +772,7 @@ One finite local `Step` definition performs the instruction selected by the prog
 
 Map each machine configuration to one epoch state and the finite instruction table to finite case analysis inside `Step`. Define the halt configuration as absorbing, or stop demand before requesting its successor. Induction on $t$ then shows that epoch $t$ denotes the machine configuration after $t$ steps. A halting machine yields a finite observed prefix; a non-halting machine demands an unbounded sequence and diverges.
 
-#boundary([Recurrence evidence], [The witness checks demand-driven finite-prefix materialization, forward carry bindings, bounded stopping predicates, retention windows, and a deterministic two-counter-machine prefix against a direct interpreter. This validates the executable recurrence construction used by the universality argument; it is not a second proof of universality. A finite test cannot complete a non-halting run, and same-epoch fixed points remain a separate semantic problem.])
+#boundary([Recurrence evidence], [The witness checks demand-driven finite-prefix materialization, forward carry bindings, bounded stopping predicates, retention windows, and a deterministic two-counter-machine prefix against a direct interpreter. This validates the executable recurrence construction used by the universality argument; it is not a second proof of universality. A finite test cannot complete a non-halting run, and same-epoch fixed points remain a separate semantic problem. The finite expression instance in @app:typed-instance has neither recurrence nor unbounded iteration and does not itself establish this universality result.])
 
 == Immutable graph-version change
 
@@ -790,10 +792,10 @@ Consider a derived state with stable name `tax`, one premise `income`, and decla
 
 If the policy changes to 22%, the builder assigns a different key such as `tax-rule-v4`; `tax` is then affected and its dependent region is repaired before commit. If the builder cannot establish compatibility—for example because a host function changed and no trusted equivalence certificate is available—the safe action is the same: treat the definition as changed and do not reuse its derived value. DOC therefore does not solve arbitrary function equivalence. The semantic key is an externally justified certificate identifier whose practical burden belongs to the compiler, build description, or application that creates graph versions.
 
-#theorem([Conditional graph-version commit agreement], [Under the stated compatibility contract, every successful commit to $G_(k+1)$ has the same stable values as constructing $G_(k+1)$ from the carried current source facts and evaluating it completely from scratch. Retained compatible values change cost, not meaning.]) <thm:graph-commit>
+#theorem([Conditional graph-version commit agreement], [Under the stated compatibility contract, every successful commit to $G_(k+1)$ has the same stable values as constructing $G_(k+1)$ from its complete validated candidate source environment (including compatible carried facts and explicitly supplied new or changed facts) and evaluating it completely from scratch. Retained compatible values change cost, not meaning.]) <thm:graph-commit>
 
 #proof([
-Let $mu^*$ be complete from-scratch evaluation of $G_(k+1)$ from the carried candidate source facts. Same-role compatible sources have exactly those values in the private candidate seed. Consider an inactive retained derived state in candidate topological order. The compatibility contract permits it to remain inactive only when its authority role, declared domain and equality, equivalence-bearing semantic key, ordered premise identities, and every premise are compatible and unaffected. Its source premises therefore equal $mu^*$, and its earlier retained derived premises equal $mu^*$ by induction. Boundary equivalence of the retained definition then makes its retained conclusion equal $mu^*$ as well. Hence every inactive candidate state is already materialized and locally satisfied; every state not justified by this induction is active. The private seed is repair-admissible.
+Let $mu^*$ be complete from-scratch evaluation of $G_(k+1)$ from its complete validated candidate source environment. Every candidate source has exactly its assigned value in the private seed; a changed or newly introduced source fact activates its affected user region. Consider an inactive retained derived state in candidate topological order. The compatibility contract permits it to remain inactive only when its authority role, declared domain and equality, equivalence-bearing semantic key, ordered premise identities, and every premise are compatible and unaffected. Its source premises therefore equal $mu^*$, and its earlier retained derived premises equal $mu^*$ by induction. Boundary equivalence of the retained definition then makes its retained conclusion equal $mu^*$ as well. Hence every inactive candidate state is already materialized and locally satisfied; every state not justified by this induction is active. The private seed is repair-admissible.
 
 @thm:finite-stabilization on the candidate graph now terminates at its unique stable valuation, which @lem:canonical identifies with $mu^*$. Atomic generation commit exposes only that stable candidate, and generation rejection prevents an older in-flight result from changing it. Retained compatible values therefore reduce repair work without changing from-scratch meaning.
 ])
@@ -940,7 +942,7 @@ A currently admitted publication is either one legal singleton frontier transiti
 
 #definition([Recoverable placed profile], [Source facts acknowledged as recoverable are durably committed by one declared authority. Pure derived materializations are reconstructible caches. After a finite fail-stop loss, the realization invalidates every lost role generation, assigns the roles to surviving or newly joined resources, restores authoritative source facts, marks every lost derived state and its transitive user region as repair obligations, and stabilizes again.]) <def:recoverable-placement>
 
-#theorem([Finite fail-stop reconstruction], [For a finite acyclic pure DOC graph, if authoritative source facts survive and remain fixed during the final recovery interval, at least one valid execution resource eventually remains or joins, generation invalidation rejects late failed work, transport eventually succeeds, and no further failure occurs during that interval, reconstruction reaches the same observable stable valuation as local evaluation from those source facts.]) <thm:fail-stop>
+#theorem([Finite fail-stop reconstruction], [For a finite acyclic pure DOC graph, if authoritative source facts survive and remain fixed during the final recovery interval, sufficient valid execution resources eventually remain or join, generation invalidation rejects late failed work, required transport and admitted evaluations eventually complete, and no further failure occurs during that interval, reconstruction reaches the same observable stable valuation as local evaluation from those source facts.]) <thm:fail-stop>
 
 The replacement execution begins from the same sources as complete reevaluation. Every lost derived state and its transitive user region is active, so the recovery seed is repair-admissible even when a lost premise was previously used by a retained descendant. @thm:finite-stabilization gives termination and unique values; placement generations prevent obsolete candidates from replacing them. Checkpoints of expensive derived state may reduce work but are not required for correctness.
 
@@ -1065,11 +1067,11 @@ Application graphs never specify a worker count. Experimental limits are imposed
 
 === Verification scope
 
-The native runtime suite contains 36 named conformance suites and a separate benchmark-generator equivalence test. Its randomized differential component checks 9,600 update epochs against complete reevaluation, including randomized legal frontier-subset schedules. Twenty repeated optimized runs of the two native test executables completed successfully.
+The historical C++20 runtime suite contains 36 named conformance suites and a separate benchmark-generator equivalence test. Its randomized differential component checks 9,600 update epochs against complete reevaluation, including randomized legal frontier-subset schedules. Twenty repeated optimized runs of the two native test executables completed successfully.
 
 Five independent bounded checkers cover complementary state spaces. The ordinary finite checker enumerates 2,520 Boolean DAGs and 40,320 source epochs. The repair checker covers 512 graphs, 59,904 admissible seeds, 239,616 continued source updates, and 521,584 unique explored configurations. The graph-version checker covers 64 graph shapes and 15,360 commits, including source/derived authority transitions. The duplicate-premise checker covers 84 graphs and 2,592 admissible configurations. The demand/recurrence checker covers 364 demand templates, 21,840 demanded subsets, 364 recurrence templates, 17,472 finite prefixes, 2,912 stopping cases, and duplicate-carry rejection.
 
-These finite enumerations check initialization, repair admissibility, continued source batches, every nonempty legal subset of each bounded ready frontier, exact and conservative cutoff, locality, schedule agreement, demand restriction, recurrence support, graph-role changes, graph-local identifier reorderings, and replacement agreement. Bounded checking is executable counterexample search over the stated finite spaces; it is not a proof of universal correctness.
+These historical bounded enumerations check initialization, repair admissibility, continued source batches, every nonempty legal subset of each bounded ready frontier, exact and conservative cutoff, locality, schedule agreement, demand restriction, recurrence support, graph-role changes, graph-local identifier reorderings, and replacement agreement. Bounded checking is executable counterexample search over the stated finite spaces; it is not a proof of universal correctness.
 
 #boundary([Historical executable coverage], [The original high-performance active-set evaluator is specialized to scalar values; typed immutable objects, eviction, and reconstruction were checked in a separate safe-realization profile rather than a fully integrated generic evaluator. The placed runtime uses real transport but remains a bounded single-coordinator witness rather than a production multi-host platform. The finite metatheory is mathematically argued and bounded-exhaustively checked, not yet mechanized in a proof assistant. These limits concern evidence and engineering maturity, not hidden additions to the logical core.])
 
@@ -1371,7 +1373,7 @@ For a fixed settled input $x$, $Phi(x)=(G_x,sigma_x)$ constructs a finite well-f
 
 == A.9 Recoverable placement profile
 
-A non-discarded derived candidate is admissible only when its conclusion is currently active and in $R(A)$, it was evaluated from the committed logical pre-valuation of its source epoch, and its expected role and placement generation remain current. Finite join, graceful drain, and fail-stop reconstruction preserve logical observations when authoritative source facts survive and remain fixed during the final recovery interval, required resources and transport eventually become available, and that interval is free of further failures.
+A non-discarded derived candidate is admissible only when its conclusion is currently active and in $R(A)$, it was evaluated from the committed logical pre-valuation of its source epoch, and its expected role and placement generation remain current. Finite join, graceful drain, and fail-stop reconstruction preserve logical observations when authoritative source facts survive and remain fixed during the final recovery interval, sufficient resources eventually become available, required transport and admitted evaluations eventually complete, and that interval is free of further failures.
 
 == A.10 Realization conformance
 
@@ -1411,6 +1413,69 @@ The sequence is a meta-level conformance test, not stored history or logical con
 
 #set text(size: 10.2pt)
 #set table(inset: 5.5pt)
+
+
+= Appendix C. A finite typed expression instance <app:typed-instance>
+
+This appendix makes the abstract local transformation of @def:local-definition concrete. It is a small first-order pure expression instance, not a new definition of DOC, a complete programming-language specification, or a restriction on the general state domains. The same program representation, repair configuration and frontier-subset transition remain unchanged. The purpose is to show how a local definition can be admitted without treating its implementation as an opaque callback.
+
+== C.1 Syntax, typing, and evaluation
+
+Let the types be $T in {upright("Int"), upright("Bool")}$, interpreted as the mathematical integers and the two Boolean values. The finite expression grammar is:
+
+```text
+T ::= Int | Bool
+e ::= n | true | false | x
+    | add(e,e) | sub(e,e) | mul(e,e)
+    | eq(e,e) | if(e,e,e)
+```
+
+Here `n` is an integer literal and `x` names a premise variable. A finite context $Gamma$ maps distinct premise-variable names to types. In a local definition with ordered premise sequence $P_d=(s_1,dots.h,s_k)$, let distinct formal names $x_1,dots.h,x_k$ have the types of the corresponding premise domains; these names denote argument positions, even when the same state occurs at multiple positions. A typed environment $rho$ assigns a value in the declared domain to every variable of $Gamma$. The judgment `Gamma |- e : T` means that expression `e` has type `T` under that context.
+
+#figure(
+  table(
+    columns: (1.0fr, 2.5fr, 1.35fr),
+    table.header([*Expression*], [*Typing premises in the same context*], [*Result type*]),
+    [Integer literal], [The literal denotes a mathematical integer.], [`Int`],
+    [Boolean literal], [The literal is `true` or `false`.], [`Bool`],
+    [Variable `x`], [`Gamma(x) = T`.], [`T`],
+    [`add`, `sub`, `mul`], [Both operands have type `Int`.], [`Int`],
+    [`eq`], [Both operands have the same type `T`.], [`Bool`],
+    [`if(g,a,b)`], [`g : Bool`; `a : T` and `b : T`.], [`T`],
+  ),
+  caption: [Syntax-directed typing rules for the illustrative finite expression instance. Each operand judgment uses the same premise context.],
+) <tab:expression-typing>
+
+The evaluation judgment `rho |- e ⇓ v` means that `e` evaluates to `v` in the typed premise environment. Its rules are structural: literals evaluate to themselves; a variable evaluates to its assigned value; the arithmetic operators evaluate both operands and apply ordinary integer addition, subtraction or multiplication; equality evaluates both operands and returns their semantic equality in the common type. A conditional evaluates its guard and then only the selected branch, returning that branch's value. Both branches must be well typed, even though only one is evaluated. No rule reads an undeclared variable, changes a premise or performs an external effect.
+
+#lemma([Expression totality and type safety], [If `Gamma |- e : T` and $rho$ supplies a value of the declared type for every variable of $Gamma$, evaluation terminates with exactly one value of type `T`.]) <lem:expression-safety>
+
+#proof([
+Proceed by structural induction on the finite expression. Literals and variables have unique values in their declared domains by construction. For an arithmetic expression, both proper subexpressions terminate uniquely with integer values by the induction hypotheses; mathematical integer arithmetic is total, deterministic and closed. For equality, the hypotheses give two unique values in the same domain and semantic equality returns one Boolean. For a conditional, the guard terminates with exactly one Boolean; the selected proper subexpression terminates uniquely with the common branch type by induction. These cases exhaust the grammar. Purity follows from the rules, which only inspect the supplied environment and construct values.
+])
+
+This argument uses mathematical integers, not unchecked machine arithmetic. An implementation using checked fixed-width integers may fail on an out-of-range result. It must either admit only operations proved total on its chosen domain, represent failure explicitly in a suitable result-valued domain, or reject the failed private attempt without publication. A machine exception is not an ordinary value covered by @lem:expression-safety. The expression fragment has no recursion, general iteration, hidden state, memory or effect operations.
+
+== C.2 Embedding in the finite DOC kernel
+
+For each derived state, bind its ordered premise values to the formal variables of its well-typed expression and use the unique evaluated value as $f_d$. Require the expression's result type to agree with $V_d$. Sources have explicitly assigned typed values; every referenced state must exist; the induced declared dependency graph must be finite and acyclic. Even a premise used only in one branch remains a declared premise. A change of selected branch is not a graph-version change.
+
+#corollary([Finite expression-instance agreement], [For an admitted graph of these definitions, every maximal legal repair schedule from a repair-admissible seed terminates at the same stable valuation as complete expression evaluation in topological order.]) <cor:expression-instance>
+
+#proof([
+By @lem:expression-safety each well-typed local expression denotes a pure total deterministic transformation of its ordered premise tuple. These functions and the admitted graph satisfy @sec:assumptions. Apply @thm:finite-stabilization directly; no additional frontier rule or language-specific scheduler is required.
+])
+
+For the running example in the core semantics, an integer source pair `a=2` and `b=3` supplies `add(a,b)` to a derived state `sum`. The expression `mul(sum,2)` defines `doubled` with the single premise `sum`. Initial stabilization yields `sum=5` and `doubled=10`. An atomic update to `a=4` and `b=1` re-evaluates `sum`; exact equality retains 5, so no new repair obligation reaches `doubled`. A later update to `b=2` changes `sum` to 6 and activates `doubled`, which becomes 12. This is the existing source-batch and frontier relation, not a new expression-level incremental reduction rule.
+
+== C.3 Conditional finite-family elaboration
+
+The finite input-dependent generation construction in @sec:dynamic-generation also admits this expression instance. Separately extend the value domains to finite ordered sequences `Seq(T)`. Let a settled snapshot contain `items : Seq(U)` with finite admitted length `n` and fixed typed premises in $Gamma$. A member expression `e` with typing judgment `Gamma, y : U |- e : T` determines a pointwise result sequence of type `Seq(T)`.
+
+For that admitted snapshot, elaborate into typed element facts, distinct fresh internal member-result identities indexed by position, one local definition per member using the element and fixed premises, and a pure total collector reading member results in index order. A zero-length family has a collector with no member premises and returns the empty sequence. Member evaluation is total by @lem:expression-safety, and the collector yields precisely the pointwise result, independent of evaluation order. The elaboration is finite and acyclic and has the same boundary value as the pointwise transformation; @thm:expansion and @thm:finite-stabilization apply within the admitted fixed candidate.
+
+When the input changes, a new candidate is constructed from the settled snapshot according to @def:dynamic-generation. Fresh member identities are unique within a version; reuse across versions requires the full compatibility contract of @def:graph-commit, not equality of indices alone. No arbitrary graph-generating recursion, persistent per-member caching, unbounded storage, or general effect semantics follows. Recurrence, graph replacement, physical placement and external effects remain the separately stated extensions and realization contracts of the model.
+
 
 #heading(level: 1, numbering: none, outlined: true)[Declarations]
 

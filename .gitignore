@@ -13,5 +13,4 @@ preprint-model/*.svg
 /validation-logs/
 local-evidence/release/*.tar.gz
 
-/preprint-calculus/dependency-oriented-calculus.pdf
 /manuscript-output/

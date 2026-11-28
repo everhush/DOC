@@ -2,7 +2,7 @@ name: DOC14 manuscript review
 on:
   push:
     branches: [master]
-    paths: ['preprint-model/**', 'preprint-calculus/**', '.github/workflows/doc14-manuscript-review.yml', 'verification/check_preprint_layout.py']
+    paths: ['preprint-model/**', '.github/workflows/doc14-manuscript-review.yml', 'verification/check_preprint_layout.py']
   workflow_dispatch:
 permissions:
   contents: read
@@ -22,13 +22,12 @@ jobs:
           curl -fsSL --retry 3 https://github.com/typst/typst/releases/download/v0.13.1/typst-x86_64-unknown-linux-musl.tar.xz | tar -xJ -C /tmp
           sudo install /tmp/typst-x86_64-unknown-linux-musl/typst /usr/local/bin/typst
           typst --version
-      - name: Render both Typst preprints
+      - name: Render consolidated Typst preprint
         run: |
           set -euo pipefail
           mkdir -p manuscript-output
           git rev-parse HEAD > manuscript-output/source-sha.txt
           typst compile --root . preprint-model/dependency-oriented-computation.typ manuscript-output/preprint-model.pdf 2> manuscript-output/preprint.log
-          typst compile --root . preprint-calculus/dependency-oriented-calculus.typ manuscript-output/preprint-calculus.pdf 2> manuscript-output/calculus.log
           for pdf in manuscript-output/*.pdf; do
             pdfinfo "$pdf" > "$pdf.info"
             pdffonts "$pdf" > "$pdf.fonts"
@@ -39,7 +38,7 @@ jobs:
           for pdf in manuscript-output/*.pdf; do
             if grep -Eiq '(^|[^[:alnum:]_])(HVM2?|Bend)([^[:alnum:]_]|$)' "$pdf.txt"; then exit 1; fi
           done
-          echo 'Typst preprints only; previous Computing page-limit review is historical, not submission approval.' > manuscript-output/venue-review.txt
+          echo 'Consolidated Typst preprint only; previous Computing page-limit review is historical, not submission approval.' > manuscript-output/venue-review.txt
       - name: Preflight page geometry and retain visual review images
         run: |
           set -euo pipefail

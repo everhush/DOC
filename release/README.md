@@ -1,6 +1,6 @@
 # Source-only release candidate validation
 
-**Current manuscript layout:** the maintained Typst sources are in `preprint-model/` and `preprint-calculus/`. The former LaTeX folder is no longer in master or the source-only export. The explicit current inventory is 86 paths (90 minus four LaTeX files); earlier counts and stage results below describe historical snapshots. Manuscript rendering now covers the two Typst preprints. Prior submissions and render evidence are immutable; venue and rights approval remain outstanding.
+**Current manuscript layout:** the single maintained Typst manuscript is in `preprint-model/`; its Appendix C incorporates the finite typed expression instance. Former LaTeX and standalone calculus folders are excluded from master and the source-only export. The explicit inventory is now 85 paths (86 minus the separate calculus source). Earlier counts, render results and stage results below describe historical snapshots. Prior submitted versions and evidence remain immutable; venue and rights approval remain outstanding.
 
 This directory prepares a **development candidate**, not a public release. The candidate is exported into a clean directory from an exact Git commit. It excludes Rust/Goose evaluators, old CI, comparative investigations, historical evidence, generated policy headers, publisher class files pending permission review and the optional game distribution. The game has already been validated on development source; omission from this initial core candidate does not remove its release acceptance prerequisite.
 
