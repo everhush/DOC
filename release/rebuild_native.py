@@ -13,6 +13,30 @@ POLICIES=(
 )
 sys.path.insert(0,str(NATIVE/"compiler"))
 from doc_build import bundle, emit
+CPU_INPUTS = (
+    'compiler/doc_build.py', 'compiler/managed.doc', 'compiler/module_scan.doc',
+    'compiler/managed_reactive.doc', 'compiler/lexer_core.doc', 'compiler/parser_core.doc',
+    'compiler/common_core.doc', 'compiler/general_core.doc', 'compiler/managed_core.doc',
+    'compiler/managed_reactive_core.doc', 'compiler/module_scan_core.doc',
+    'tests/test_self_reproduction.py', 'tests/test_placement_policy.py',
+    'tests/test_epoch_authority.py', 'tests/test_allocation_failure.py',
+    'tests/test_graph_generation.py', 'tests/test_recurrence_policy.py',
+    'tests/recurrence_authority_host.c', 'tests/scalable_scratch_test.c',
+    'tests/name_index_test.c', 'tests/scale_resource_boundary.c',
+    'runtime/effects_policy.doc', 'runtime/epoch_authority.doc',
+    'runtime/graph_generation.doc', 'runtime/placed_policy.doc',
+    'runtime/placement_policy.doc', 'runtime/recurrence_policy.doc',
+    'runtime/value_primitives.h', 'runtime/reactive_values.h',
+    'runtime/checkpoint_io.h', 'runtime/epoch_authority.h', 'runtime/graph_reader_slots.h',
+    'runtime/graph_host.h', 'runtime/graph_variant_abi.h', 'runtime/graph_variant_adapter.h',
+    'runtime/placed_epoch.h', 'runtime/placed_transport.h', 'runtime/placed_authority.h',
+    'runtime/recurrence_values.h',
+)
+def check_cpu_inputs(native):
+    missing = [path for path in CPU_INPUTS if not (native/path).is_file() or (native/path).is_symlink()]
+    if missing:
+        raise ValueError('missing or nonregular clean CPU inputs: ' + ', '.join(missing))
+    print(f'DOC14_CPU_INPUTS_PASS: {len(CPU_INPUTS)} required source inputs', flush=True)
 def run(argv,cwd=ROOT,timeout=1200):
     print("+", " ".join(map(str,argv)),flush=True)
     subprocess.run(list(map(str,argv)),cwd=cwd,check=True,timeout=timeout)
@@ -26,6 +50,7 @@ def main():
     p.add_argument("--scanner-sha256",required=True)
     p.add_argument("--evidence",type=pathlib.Path,required=True)
     a=p.parse_args()
+    check_cpu_inputs(NATIVE)
     boot=a.bootstrap.resolve();scanner=a.scanner.resolve();out=a.evidence.resolve()
     assert sha(boot)==a.bootstrap_sha256 and sha(scanner)==a.scanner_sha256
     assert not (ROOT/"runtime-rust").exists() and not (ROOT/"runtime-goose").exists()

@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # observed v4
         with:
           persist-credentials: false
       - name: Export fresh text source candidate
@@ -23,31 +23,41 @@ jobs:
           set -euo pipefail
           mkdir -p candidate-evidence
           python3 release/curate.py --commit "$GITHUB_SHA" --output candidate --manifest candidate-evidence/source-manifest.json
+          python3 -B -c 'import sys; sys.path.insert(0, "candidate/release"); from rebuild_native import check_cpu_inputs, NATIVE; check_cpu_inputs(NATIVE)'
           tar -cf candidate-evidence/candidate.tar -C candidate .
           python3 release/verify_candidate.py --archive candidate-evidence/candidate.tar --manifest candidate-evidence/source-manifest.json --commit "$GITHUB_SHA"
           cp release/verify_candidate.py candidate-evidence/verify_candidate.py
           sha256sum candidate-evidence/candidate.tar > candidate-evidence/candidate.sha256
           git rev-parse HEAD > candidate-evidence/source-sha.txt
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # observed v4
         with:
           name: doc14-source-candidate
           path: candidate-evidence/
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@39008827e6b4319a349e9a42dfc90579dd25f1ca # observed stable action revision
+        with:
+          toolchain: "1.100.1"
       - name: Internal frozen bootstrap (separate from candidate)
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD:runtime-rust)" = a95a38bc6e9300aae815f83b570db5f99d32f221
-          cargo build --release --manifest-path runtime-rust/Cargo.toml --bin doc-compile
           mkdir -p bootstrap-evidence
+          rustc -Vv > bootstrap-evidence/rustc-version.txt
+          cargo -V > bootstrap-evidence/cargo-version.txt
+          cargo generate-lockfile --manifest-path runtime-rust/Cargo.toml
+          cp runtime-rust/Cargo.lock bootstrap-evidence/Cargo.lock
+          cargo build --locked --release --manifest-path runtime-rust/Cargo.toml --bin doc-compile
+          cargo tree --locked --manifest-path runtime-rust/Cargo.toml --edges normal --no-default-features > bootstrap-evidence/cargo-tree.txt
+          test "$(git rev-parse HEAD:runtime-rust)" = a95a38bc6e9300aae815f83b570db5f99d32f221
+          git diff --exit-code -- runtime-rust
           for stage in managed module_scan; do
             runtime-rust/target/release/doc-compile "runtime-doc/compiler/$stage.doc" --emit-c "bootstrap-evidence/$stage.c" --emit-ir "bootstrap-evidence/$stage.ir" --out "bootstrap-evidence/$stage"
             readelf -d "bootstrap-evidence/$stage" > "bootstrap-evidence/$stage-linkage.txt"
           done
           cd bootstrap-evidence
-          sha256sum managed module_scan > SHA256SUMS
+          sha256sum managed module_scan Cargo.lock rustc-version.txt cargo-version.txt cargo-tree.txt > SHA256SUMS
           git rev-parse HEAD > source-sha.txt
           cc --version > cc-version.txt
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # observed v4
         with:
           name: doc14-internal-native-bootstrap
           path: |
@@ -57,16 +67,20 @@ jobs:
             bootstrap-evidence/*-linkage.txt
             bootstrap-evidence/source-sha.txt
             bootstrap-evidence/cc-version.txt
+            bootstrap-evidence/Cargo.lock
+            bootstrap-evidence/rustc-version.txt
+            bootstrap-evidence/cargo-version.txt
+            bootstrap-evidence/cargo-tree.txt
   clean-cpu:
     needs: stage
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # resolved v4
         with:
           name: doc14-source-candidate
           path: candidate-evidence
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # resolved v4
         with:
           name: doc14-internal-native-bootstrap
           path: bootstrap-evidence
@@ -86,7 +100,7 @@ jobs:
           git --version > clean-evidence/git-version.txt
           cc --version > clean-evidence/cc-version.txt
           find clean-evidence -type f ! -name SHA256SUMS -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > clean-evidence/SHA256SUMS
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # observed v4
         if: always()
         with:
           name: doc14-clean-cpu-evidence

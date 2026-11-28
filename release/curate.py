@@ -21,7 +21,7 @@ EXACT = {
 TESTS = {
     "test_self_reproduction.py", "test_epoch_authority.py",
     "test_placement_policy.py", "test_allocation_failure.py",
-    "test_graph_generation.py", "test_recurrence_policy.py",
+    "test_graph_generation.py", "test_recurrence_policy.py", "recurrence_authority_host.c",
     "scalable_scratch_test.c", "name_index_test.c", "scale_resource_boundary.c",
 }
 DENIED = re.compile(r"(^|/)(?:runtime-rust|runtime-goose|local-evidence|__pycache__|target|\.git|\.github)(/|$)|(?:_generated\.h|\.(?:pdf|zip|tar|gz|so|a|o|exe|bin|spv|png|jpg|wav|log|pyc))$", re.I)
@@ -72,7 +72,7 @@ def main():
         dst.write_bytes(data)
         dst.chmod(0o755 if mode=="100755" else 0o644)
         entries.append(dict(path=path,git_blob=oid,sha256=hashlib.sha256(data).hexdigest(),bytes=len(data),mode=mode))
-    assert EXACT <= {x["path"] for x in entries}
+    assert (EXACT | {"runtime-doc/tests/"+name for name in TESTS}) <= {x["path"] for x in entries}
     assert all("runtime-rust/" not in x["path"] and "runtime-goose/" not in x["path"] for x in entries)
     assert not list(out.rglob("*_generated.h"))
     assert {p.relative_to(out).as_posix() for p in out.rglob("*") if p.is_file()} == {x["path"] for x in entries}
