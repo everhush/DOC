@@ -1,14 +1,14 @@
 name: DOC14 manuscript review
 on:
   push:
-    branches: [doc14-manuscript-review]
+    branches: [master]
     paths: ['paper/**', 'paper-calculus/**', 'paper-latex/**', '.github/workflows/doc14-manuscript-review.yml']
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
   render:
-    if: github.repository_id == '1317169134' && github.ref_name == 'doc14-manuscript-review'
+    if: github.repository_id == '1317169134' && github.ref_name == 'master'
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
