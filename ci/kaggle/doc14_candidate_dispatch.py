@@ -10,6 +10,7 @@ import time
 from bundle import create_private_dataset
 from dispatch import auth_environment, gpu_remaining_hours, kaggle, prepare_kernel, status_from_cli
 from independent_bundle import pack
+from scale_evidence import extract_scale, audit_coverage
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
@@ -18,7 +19,7 @@ from physical_gpu import FILES, check_build, verify
 
 MARKER = '__DOC14_PHYSICAL_SPEC__'
 KERNEL = '''
-import os, sys, time, subprocess
+import os, sys, time, subprocess, tarfile
 SPEC = __DOC14_PHYSICAL_SPEC__
 LOGS = Path('/kaggle/working')
 ENV = {**os.environ, "DEBIAN_FRONTEND":"noninteractive", "APT_LISTCHANGES_FRONTEND":"none", "NEEDRESTART_MODE":"a"}
@@ -34,6 +35,22 @@ def main():
     sys.path.insert(0, str(root))
     from physical_gpu import execute
     execute(root, SPEC['sha'], SPEC['run_id'], SPEC['bundle_sha256'], LOGS/'doc14-physical.json')
+    results = Path('/tmp/doc14-scale-results'); results.mkdir()
+    env = {k:v for k,v in os.environ.items() if not k.startswith('DOC_')}
+    env.update(DOC_REQUIRE_PHYSICAL_GPU='1', LD_LIBRARY_PATH=str(root)+':'+env.get('LD_LIBRARY_PATH',''))
+    for exe in (root/'scale').rglob('bench'): exe.chmod(0o700)
+    try:
+        for category,script,flags in (
+                ('families','benchmark_autonomous_family.py',['--epochs','6']),
+                ('algorithms','benchmark_autonomous_algorithms.py',[])):
+            with (results/(category+'.log')).open('wb') as log:
+                subprocess.run([sys.executable,'-u',str(root/script),'--root',str(root/'scale'/category),'--out',str(results/category),'--physical','--samples','3',*flags],cwd=root,env=env,stdout=log,stderr=subprocess.STDOUT,check=True,timeout=7200)
+        (results/'summary.json').write_text(json.dumps(dict(sha=SPEC['sha'],run_id=SPEC['run_id'],bundle_sha256=SPEC['bundle_sha256'],hardware=True,result='pass'))+'\n')
+    finally:
+        with tarfile.open(LOGS/'doc9-autonomous-results.tar.gz','w:gz') as archive:
+            for item in sorted(results.rglob('*')):
+                if item.is_file() and not item.is_symlink():
+                    archive.add(item,arcname='doc9-autonomous-evidence/'+item.relative_to(results).as_posix(),recursive=False)
 if __name__=='__main__': main()
 '''
 
@@ -53,6 +70,18 @@ def main():
     provision = ast.get_source_segment(host,node)
     files = {name:build/name for name in (*FILES,'build.json')}
     files.update({name:ROOT/'release'/name for name in ('physical_gpu.py','test_gpu_candidate.py')})
+    for name in ('benchmark_autonomous_family.py','benchmark_autonomous_algorithms.py','benchmark_scale_pipeline.py'):
+        files[name] = ROOT/'runtime-doc/tests'/name
+    for category,keys in (('families',('production/add','production/poly')),('algorithms',('stress','sort','reduce'))):
+        scale_root = build/'scale'/category
+        manifest = json.loads((scale_root/'build.json').read_text())
+        if set(manifest)!=set(keys): raise ValueError('incomplete scale build')
+        files['scale/'+category+'/build.json']=scale_root/'build.json'
+        for key in keys:
+            exe = scale_root/key/'bench'
+            from independent_bundle import digest
+            if digest(exe)!=manifest[key]['sha256']: raise ValueError('scale executable hash mismatch')
+            files['scale/'+category+'/'+key+'/bench']=exe
     with tempfile.TemporaryDirectory(prefix='doc14-private-') as temp:
         td = Path(temp)
         template = td/'kernel-template.py'
@@ -63,7 +92,7 @@ def main():
         dataset = td/'dataset'; dataset.mkdir()
         checksum, manifest = pack(files,dataset/'doc-gpu-bundle.bin',sha,rid)
         spec.update(bundle_sha256=checksum,bundle_dataset=create_private_dataset(dataset,owner,rid,attempt,env,readiness_attempts=40))
-        (out/'provenance.json').write_text(json.dumps({'sha':sha,'run_id':rid,'attempt':attempt,'bundle_sha256':checksum,'manifest':manifest},indent=2)+'\n')
+        (out/'provenance.json').write_text(json.dumps({'spec':{k:spec[k] for k in ('sha','run_id','attempt','accelerator','bundle_sha256')},'manifest':manifest},indent=2)+'\n')
         kernel = td/'kernel'
         name = prepare_kernel(kernel,template,spec,owner,placeholder=MARKER)
         kaggle(['kernels','push','-p',str(kernel),'--accelerator',spec['accelerator']],env,timeout=180)
@@ -85,6 +114,15 @@ def main():
         if len(reports)!=1 or reports[0].stat().st_size>4*1024*1024:
             raise ValueError('missing, ambiguous or oversized physical report')
         verify(json.loads(reports[0].read_text()),record,sha,rid,checksum)
+        archives=list(remote.rglob('doc9-autonomous-results.tar.gz'))
+        if len(archives)!=1: raise ValueError('missing or ambiguous scaling evidence archive')
+        extracted=extract_scale(archives[0],remote)
+        sys.path.insert(0,str(ROOT/'runtime-doc/tests'))
+        from verify_autonomous_evidence import verify as verify_scale
+        verified=verify_scale(out,build,sha,rid)
+        tails=audit_coverage(extracted)
+        (out/'scale-verified.json').write_text(json.dumps({'verified':verified,'descriptive_warm_tails':tails},indent=2)+'\n')
+        print('DOC14_PHYSICAL_SCALE_VERIFIED:',json.dumps(verified,sort_keys=True),flush=True)
 
 
 if __name__=='__main__': main()

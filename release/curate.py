@@ -23,6 +23,9 @@ TESTS = {
     "test_placement_policy.py", "test_allocation_failure.py",
     "test_graph_generation.py", "test_recurrence_policy.py", "recurrence_authority_host.c",
     "scalable_scratch_test.c", "name_index_test.c", "scale_resource_boundary.c",
+    "build_autonomous_scale.py", "benchmark_gpu_family_host.c", "scale_algorithm_host.c",
+    "benchmark_autonomous_family.py", "benchmark_autonomous_algorithms.py",
+    "benchmark_scale_pipeline.py", "verify_autonomous_evidence.py",
 }
 COMPILER_FILES = {
     "common_core.doc",
