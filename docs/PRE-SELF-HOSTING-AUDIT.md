@@ -4,7 +4,7 @@
 
 INITIAL REVIEW IN PROGRESS; zero of four clean independent passes credited. Source baseline 11e22c484a35a183ed9f77a2125afa5f22746c41, accepted #24, exact Linux 45535169012 and physical 45535910015. This review finds an actionable typed admission defect and contradictory historical documentation; this patch requires fresh exact-head CI and resets the four-pass counter. No freeze, no self-hosting, no manuscript changes. This is not a claim that all manuscript clauses have been audited.
 
-Authority: paper/dependency-oriented-computation.typ (lines below), finite typed calculus, current #7/#9/#13/#17/#21/#22/#24/#11/#14 decisions. Distinguish mathematical finite-total assumptions, conditional realization profiles, empirical witnesses, and production architecture. C++20 witness/campaign in paper §§1001–1193 is historical, not the current Rust code or benchmarks. No extrapolation of performance. The pre-#11 scope is Linux x86_64 reference and minimal foundations, not every distributed deployment or driver.
+Authority: preprint-model/dependency-oriented-computation.typ (lines below), finite typed calculus, current #7/#9/#13/#17/#21/#22/#24/#11/#14 decisions. Distinguish mathematical finite-total assumptions, conditional realization profiles, empirical witnesses, and production architecture. C++20 witness/campaign in paper §§1001–1193 is historical, not the current Rust code or benchmarks. No extrapolation of performance. The pre-#11 scope is Linux x86_64 reference and minimal foundations, not every distributed deployment or driver.
 
 ## Initial source-linked review register
 

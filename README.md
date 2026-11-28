@@ -238,10 +238,22 @@ DOC source does not select native GPU APIs or driver-specific hardware. The prov
 
 DOC investigates the conditions under which dependency-oriented computation stabilizes, agrees with complete reevaluation, is independent of valid schedules and permits sound equality cutoff. The finite acyclic model gives conditional mathematical arguments under explicit typing, totality, determinism and graph assumptions; these are not proof-assistant mechanized. Input-dependent finite graph generation, recurrence across epochs and physical scheduling are distinct constructions.
 
-- [Computation-model preprint](paper/dependency-oriented-computation.typ) — semantics, metatheory, conditional dynamic dependency generation and evaluation.
-- [Finite calculus](paper-calculus/dependency-oriented-calculus.typ) — typed expressions and finite-family elaboration.
-- [Synchronized LaTeX manuscript](paper-latex/dependency-oriented-computation.tex) and [DOC-only reproducibility supplement](paper/REPRODUCIBILITY-NATIVE.md).
+- [Computation-model preprint](preprint-model/dependency-oriented-computation.typ) — semantics, metatheory, conditional dynamic dependency generation and evaluation.
+- [Finite calculus](preprint-calculus/dependency-oriented-calculus.typ) — typed expressions and finite-family elaboration.
+- [DOC-only reproducibility supplement](preprint-model/REPRODUCIBILITY-NATIVE.md).
 - [Claim/evidence map](https://github.com/everhush/DOC/blob/master/CLAIM-EVIDENCE-MAP.md) and [autonomous scaling audit](https://github.com/everhush/DOC/blob/master/verification/AUTONOMOUS-SCALING-AUDIT.md).
+
+### Build the preprints
+
+Install [Typst](https://typst.app/) (the manuscript workflow uses v0.13.1) and the required fonts. From the repository root, build both editable manuscripts:
+
+```sh
+mkdir -p manuscript-output
+typst compile --root . preprint-model/dependency-oriented-computation.typ manuscript-output/preprint-model.pdf
+typst compile --root . preprint-calculus/dependency-oriented-calculus.typ manuscript-output/preprint-calculus.pdf
+```
+
+The two Typst preprints are the maintained manuscripts. The former LaTeX folder was removed from master; its [historical sources](https://github.com/everhush/DOC/tree/ffc93d672b404179d1bd2c8ee0e5a4527b81cd3a/paper-latex) and prior submissions remain intact in Git history. Generated PDFs are build artifacts, not tracked sources. See the [manuscript review workflow](https://github.com/everhush/DOC/actions/workflows/doc14-manuscript-review.yml).
 
 In the earlier final production development campaign, all six validation jobs passed, including actual Tesla T4 execution. Automatic two-worker CPU prime-counting achieved 1.741-fold speedup (87.0% efficiency); representative same-session warm modular work achieved 13.85-fold automatic-backend speedup over one CPU worker. Cheap work, small reductions and device startup can be slower. These are specific measurements under documented methods, not universal acceleration, optimal scheduling, distributed scalability or unbounded memory claims. They do not substitute for physical acceptance of the separately curated source.
 
@@ -253,7 +265,7 @@ In the earlier final production development campaign, all six validation jobs pa
 | `runtime-doc/runtime/` | DOC-owned runtime policy and portable/platform substrate. |
 | `runtime-doc/tests/` | Compiler reproduction, independent oracles, authority, region, GPU and scaling regressions. |
 | `release/` | Text-only candidate verification, clean rebuild, native installer and bounded physical fixture tools. |
-| `paper/`, `paper-calculus/`, `paper-latex/` | Research and manuscript sources. |
+| `preprint-model/`, `preprint-calculus/` | Research and manuscript sources. |
 | `runtime-rust/` | Frozen reference and internal bootstrap; excluded from the curated product source. |
 | `runtime-goose/` | Deprecated historical implementation; excluded from the curated product source. |
 

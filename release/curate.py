@@ -10,12 +10,9 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 EXACT = {
     "README.md", "LICENSE", "LICENSE-APACHE", "NOTICE", ".gitignore",
     "BACKEND-EXECUTION-CONTRACT.md",
-    "paper/dependency-oriented-computation.typ", "paper/references.bib",
-    "paper/REPRODUCIBILITY-NATIVE.md",
-    "paper-calculus/dependency-oriented-calculus.typ",
-    "paper-latex/dependency-oriented-computation.tex",
-    "paper-latex/manuscript-body.tex", "paper-latex/manuscript-preamble.tex",
-    "paper-latex/references.bib",
+    "preprint-model/dependency-oriented-computation.typ", "preprint-model/references.bib",
+    "preprint-model/REPRODUCIBILITY-NATIVE.md",
+    "preprint-calculus/dependency-oriented-calculus.typ",
     "release/README.md", "release/rebuild_native.py", "release/verify_candidate.py", "release/test_install.py", "release/test_gpu_candidate.py", "release/physical_gpu.py", "release/install_native.py",
 }
 TESTS = {
@@ -83,7 +80,7 @@ RUNTIME_FILES = {
 REQUIRED = (EXACT | {"runtime-doc/compiler/"+name for name in COMPILER_FILES}
             | {"runtime-doc/runtime/"+name for name in RUNTIME_FILES}
             | {"runtime-doc/tests/"+name for name in TESTS})
-DENIED = re.compile(r"(^|/)(?:runtime-rust|runtime-goose|local-evidence|__pycache__|target|\.git|\.github)(/|$)|(?:_generated\.h|\.(?:pdf|zip|tar|gz|so|a|o|exe|bin|spv|png|jpg|wav|log|pyc))$", re.I)
+DENIED = re.compile(r"(^|/)(?:runtime-rust|runtime-goose|paper-latex|local-evidence|__pycache__|target|\.git|\.github)(/|$)|(?:_generated\.h|\.(?:pdf|zip|tar|gz|so|a|o|exe|bin|spv|png|jpg|wav|log|pyc))$", re.I)
 
 def admitted(path):
     return path in REQUIRED

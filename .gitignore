@@ -5,9 +5,9 @@
 **/__pycache__/
 *.pyc
 *.pyo
-paper/*.png
-paper/*.svg
-/paper/dependency-oriented-computation.pdf
+preprint-model/*.png
+preprint-model/*.svg
+/preprint-model/dependency-oriented-computation.pdf
 /runtime-rust/target/
 /runtime-rust/Cargo.lock
 /validation-logs/
