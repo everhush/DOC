@@ -2,7 +2,7 @@ name: DOC14 source-only release candidate
 on:
   push:
     branches: [master]
-    paths: ['release/**', 'ci/bootstrap/**', '.github/workflows/doc14-release-candidate.yml']
+    paths: ['release/**', 'ci/bootstrap/**', 'runtime-doc/**', 'preprint-model/**', 'README.md', 'BACKEND-EXECUTION-CONTRACT.md', '.gitignore', 'LICENSE', 'LICENSE-APACHE', 'NOTICE', '.github/workflows/doc14-release-candidate.yml']
   workflow_dispatch:
 permissions:
   contents: read
