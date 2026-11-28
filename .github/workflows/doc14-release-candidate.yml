@@ -24,6 +24,8 @@ jobs:
           mkdir -p candidate-evidence
           python3 release/curate.py --commit "$GITHUB_SHA" --output candidate --manifest candidate-evidence/source-manifest.json
           tar -cf candidate-evidence/candidate.tar -C candidate .
+          python3 release/verify_candidate.py --archive candidate-evidence/candidate.tar --manifest candidate-evidence/source-manifest.json --commit "$GITHUB_SHA"
+          cp release/verify_candidate.py candidate-evidence/verify_candidate.py
           sha256sum candidate-evidence/candidate.tar > candidate-evidence/candidate.sha256
           git rev-parse HEAD > candidate-evidence/source-sha.txt
       - uses: actions/upload-artifact@v4
@@ -76,11 +78,10 @@ jobs:
           test "$(cat bootstrap-evidence/source-sha.txt)" = "$GITHUB_SHA"
           sha256sum -c candidate-evidence/candidate.sha256
           (cd bootstrap-evidence && sha256sum -c SHA256SUMS && chmod +x managed module_scan)
-          mkdir clean
-          tar -xf candidate-evidence/candidate.tar -C clean
+          mkdir -p clean-evidence
+          python3 candidate-evidence/verify_candidate.py --archive candidate-evidence/candidate.tar --manifest candidate-evidence/source-manifest.json --commit "$GITHUB_SHA" --output clean | tee clean-evidence/manifest-verification.log
           test ! -e clean/runtime-rust
           test ! -e clean/runtime-goose
-          mkdir -p clean-evidence
           python3 -u clean/release/rebuild_native.py --bootstrap bootstrap-evidence/managed --bootstrap-sha256 "$(awk '$2=="managed"{print $1}' bootstrap-evidence/SHA256SUMS)" --scanner bootstrap-evidence/module_scan --scanner-sha256 "$(awk '$2=="module_scan"{print $1}' bootstrap-evidence/SHA256SUMS)" --evidence clean-evidence | tee clean-evidence/rebuild.log
           git --version > clean-evidence/git-version.txt
           cc --version > clean-evidence/cc-version.txt
