@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PDF=${1:-paper/dependency-oriented-computation.pdf}
+PDF=${1:-preprint-model/dependency-oriented-computation.pdf}
 if [[ ! -s "$PDF" ]]; then
   echo "PDF preflight failed: missing or empty $PDF" >&2
   exit 1

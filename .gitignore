@@ -12,3 +12,6 @@ preprint-model/*.svg
 /runtime-rust/Cargo.lock
 /validation-logs/
 local-evidence/release/*.tar.gz
+
+/preprint-calculus/dependency-oriented-calculus.pdf
+/manuscript-output/
